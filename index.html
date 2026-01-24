@@ -3,572 +3,568 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>user@home:~/projects</title>
+    <title>ROOT // DIRECTORY</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts: JetBrains Mono (Nerdy) & Inter (UI) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-color: #0d1117; /* GitHub Dark Dimmed */
-            --text-color: #c9d1d9;
-            --accent-color: #58a6ff; /* Blue */
-            --dir-color: #79c0ff; /* Light Blue */
-            --file-color: #d2a8ff; /* Purple */
-            --success-color: #3fb950; /* Green */
-            --error-color: #ff7b72; /* Red */
-            --glow: 0 0 10px rgba(88, 166, 255, 0.2);
-        }
-
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Fira Code', monospace;
-            overflow: hidden; /* Prevent body scroll, handle in terminal */
-            height: 100vh;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-
-        /* CRT Scanline Effect */
-        .scanlines {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: linear-gradient(
-                to bottom,
-                rgba(255, 255, 255, 0),
-                rgba(255, 255, 255, 0) 50%,
-                rgba(0, 0, 0, 0.1) 50%,
-                rgba(0, 0, 0, 0.1)
-            );
-            background-size: 100% 4px;
-            pointer-events: none;
-            z-index: 50;
-            opacity: 0.6;
-        }
-
-
-        .crt-flicker {
-            animation: flicker 0.15s infinite;
-        }
-
-
-        @keyframes flicker {
-            0% { opacity: 0.97; }
-            5% { opacity: 0.99; }
-            10% { opacity: 0.96; }
-            100% { opacity: 0.98; }
-        }
-
-
-        /* Terminal Window */
-        #terminal {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: #30363d transparent;
-            font-size: 16px;
-            line-height: 1.5;
-        }
-
-
-        #terminal::-webkit-scrollbar {
-            width: 8px;
-        }
-        #terminal::-webkit-scrollbar-thumb {
-            background-color: #30363d;
-            border-radius: 4px;
-        }
-
-
-        .prompt {
-            color: var(--success-color);
-            font-weight: bold;
-        }
-       
-        .path {
-            color: var(--accent-color);
-            font-weight: bold;
-        }
-
-
-        .command-input {
-            background: transparent;
-            border: none;
-            color: var(--text-color);
-            font-family: 'Fira Code', monospace;
-            font-size: 16px;
-            width: 100%;
-            outline: none;
-            caret-color: var(--accent-color);
-        }
-
-
-        /* Directory Listing Styles */
-        .ls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-
-        .item {
-            cursor: pointer;
-            padding: 2px 8px;
-            border-radius: 4px;
-            transition: background 0.2s;
-        }
-
-
-        .item:hover {
-            background-color: rgba(177, 186, 196, 0.1);
-        }
-
-
-        .is-dir { color: var(--dir-color); font-weight: bold; }
-        .is-file { color: var(--file-color); }
-        .is-link { color: var(--success-color); text-decoration: underline; }
-
-
-        /* Boot Screen */
-        #boot-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            color: #3fb950;
-            z-index: 100;
-            padding: 20px;
-            font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-        }
-
-
-        .hidden { display: none !important; }
-    </style>
-</head>
-<body class="crt-flicker" onclick="focusInput()">
-
-
-    <div class="scanlines"></div>
-
-
-    <!-- Boot Sequence Overlay -->
-    <div id="boot-screen">
-        <div id="boot-text"></div>
-    </div>
-
-
-    <!-- Main Terminal Area -->
-    <div id="terminal">
-        <div id="output"></div>
-       
-        <!-- Input Line -->
-        <div class="flex items-center gap-2 mt-2">
-            <span class="prompt">guest@github</span><span class="text-gray-500">:</span><span class="path" id="current-path">~</span><span class="text-gray-500">$</span>
-            <input type="text" id="cmd" class="command-input" autocomplete="off" spellcheck="false" autofocus>
-        </div>
-    </div>
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script>
-        // --- CONFIGURATION: EDIT THIS FOR YOUR PROJECTS ---
-        const fileSystem = {
-            "root": {
-                type: "dir",
-                children: {
-                    "projects": {
-                        type: "dir",
-                        children: {
-                            "ai-experiments": {
-                                type: "dir",
-                                children: {
-                                    "neural-net-js": { type: "link", url: "https://github.com/yourusername/neural-net" },
-                                    "chatbot-ui": { type: "link", url: "https://github.com/yourusername/chatbot" }
-                                }
-                            },
-                            "web-tools": {
-                                type: "dir",
-                                children: {
-                                    "json-parser": { type: "link", url: "https://github.com/yourusername/json-parser" },
-                                    "css-grid-generator": { type: "link", url: "https://github.com/yourusername/grid-gen" }
-                                }
-                            },
-                            "portfolio-v1": { type: "link", url: "https://v1.yourwebsite.com" }
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                        sans: ['"Inter"', 'sans-serif'],
+                    },
+                    colors: {
+                        term: {
+                            bg: '#09090b',       /* Zinc 950 */
+                            card: 'rgba(24, 24, 27, 0.6)', /* Zinc 900 / 60% */
+                            border: 'rgba(63, 63, 70, 0.4)', /* Zinc 700 / 40% */
+                            accent: '#22d3ee',   /* Cyan 400 */
+                            dim: '#a1a1aa',      /* Zinc 400 */
+                            success: '#4ade80',  /* Green 400 */
                         }
                     },
-                    "site": {
-                      type: "link",
-                      url:"https://sashoksubbiah.github.io/blog/research-paper/GFS/"
-               }
-        //             "about.md": {
-        //                 type: "file",
-        //                 content: "Hi! I'm a developer who loves CLI tools.\nThis site is built with vanilla HTML/JS to mimic a terminal.\nType 'help' to see available commands."
-        //             },
-        //             "contact.txt": {
-        //                 type: "file",
-        //                 content: "Email: dev@example.com\nTwitter: @yourhandle\nGitHub: github.com/yourusername"
-        //             },
-        //             "resume.pdf": {
-        //                 type: "link",
-        //                 url: "/assets/resume.pdf"
-        //             }
-               }
-            }
-         };
-
-
-        // --- STATE MANAGEMENT ---
-        let currentPath = []; // Empty array means root
-        let commandHistory = [];
-        let historyIndex = -1;
-        const terminalOutput = document.getElementById('output');
-        const cmdInput = document.getElementById('cmd');
-        const pathDisplay = document.getElementById('current-path');
-
-
-        // --- BOOT SEQUENCE ---
-        const bootText = [
-            "Initializing Kernel...",
-            "Loading modules.......... [OK]",
-            "Mounting file system..... [OK]",
-            "Starting network services [OK]",
-            "Verifying user credentials...",
-            "Welcome to GitHub Pages OS v1.0.0"
-        ];
-
-
-        async function runBootSequence() {
-            const bootScreen = document.getElementById('boot-screen');
-            const bootContent = document.getElementById('boot-text');
-           
-            for (let line of bootText) {
-                const p = document.createElement('div');
-                p.textContent = line;
-                bootContent.appendChild(p);
-                await new Promise(r => setTimeout(r, Math.random() * 300 + 100));
-            }
-           
-            await new Promise(r => setTimeout(r, 800));
-            bootScreen.classList.add('hidden');
-            cmdInput.focus();
-            printWelcomeMessage();
-        }
-
-
-        // --- CORE TERMINAL FUNCTIONS ---
-
-
-        function focusInput() {
-            // Don't focus if user is selecting text
-            if (!window.getSelection().toString()) {
-                cmdInput.focus();
-            }
-        }
-
-
-        function getCurrentDir() {
-            let dir = fileSystem.root;
-            for (const p of currentPath) {
-                dir = dir.children[p];
-            }
-            return dir;
-        }
-
-
-        function updatePathDisplay() {
-            pathDisplay.textContent = currentPath.length === 0 ? '~' : '~/' + currentPath.join('/');
-        }
-
-
-        function printToTerminal(html, isRaw = false) {
-            const div = document.createElement('div');
-            if (isRaw) {
-                div.innerHTML = html;
-            } else {
-                div.textContent = html;
-            }
-            div.className = "mb-1 text-gray-300 whitespace-pre-wrap break-words";
-            terminalOutput.appendChild(div);
-            window.scrollTo(0, document.body.scrollHeight);
-            // Also scroll terminal div specifically
-            const terminal = document.getElementById('terminal');
-            terminal.scrollTop = terminal.scrollHeight;
-        }
-
-
-        function printWelcomeMessage() {
-            const date = new Date().toLocaleString();
-            printToTerminal(`Last login: ${date} on ttys001`);
-            printToTerminal(`Type 'help' for a list of commands.`);
-            printToTerminal(`\n`);
-        }
-
-
-        function printHelp() {
-            printToTerminal(`<span class="text-yellow-400">Available commands:</span>
-  <span class="font-bold text-white">ls</span>        List directory contents
-  <span class="font-bold text-white">cd [dir]</span>  Change directory (.. to go back)
-  <span class="font-bold text-white">cat [file]</span> Display file contents
-  <span class="font-bold text-white">open [url]</span> Open link in new tab
-  <span class="font-bold text-white">clear</span>     Clear terminal screen
-  <span class="font-bold text-white">whoami</span>    Display user info`, true);
-        }
-
-
-        function handleCommand(cmdRaw) {
-            const trimmed = cmdRaw.trim();
-            if (!trimmed) {
-                printCommandRow("");
-                return;
-            }
-
-
-            // Add to history
-            commandHistory.push(trimmed);
-            historyIndex = commandHistory.length;
-
-
-            printCommandRow(trimmed);
-
-
-            const args = trimmed.split(/\s+/);
-            const cmd = args[0].toLowerCase();
-            const param = args[1];
-
-
-            switch(cmd) {
-                case 'help':
-                    printHelp();
-                    break;
-               
-                case 'clear':
-                    terminalOutput.innerHTML = '';
-                    printHelp();
-                    break;
-
-
-                case 'ls':
-                    listDirectory();
-                    break;
-
-
-                case 'cd':
-                    changeDirectory(param);
-                    break;
-               
-                case 'cat':
-                    readFile(param);
-                    break;
-
-
-                case 'open':
-                    openLink(param);
-                    break;
-
-
-                case 'whoami':
-                    printToTerminal('guest');
-                    break;
-
-
-                default:
-                    printToTerminal(`Command not found: ${cmd}. Type 'help' for assistance.`, false);
-            }
-        }
-
-
-        function printCommandRow(cmd) {
-            const path = currentPath.length === 0 ? '~' : '~/' + currentPath.join('/');
-            const promptHtml = `<div class="mb-1">
-                <span class="prompt">guest@github</span><span class="text-gray-500">:</span><span class="path">${path}</span><span class="text-gray-500">$</span> ${cmd}
-            </div>`;
-            printToTerminal(promptHtml, true);
-        }
-
-
-        // --- FILESYSTEM OPERATIONS ---
-
-
-        function listDirectory() {
-            const dir = getCurrentDir();
-            if (!dir.children) {
-                printToTerminal("");
-                return;
-            }
-
-
-            const grid = document.createElement('div');
-            grid.className = 'ls-grid';
-
-
-            Object.entries(dir.children).forEach(([name, data]) => {
-                const item = document.createElement('div');
-                item.className = 'item';
-               
-                if (data.type === 'dir') {
-                    item.classList.add('is-dir');
-                    item.innerHTML = `${name}/`;
-                    item.onclick = () => {
-                        cmdInput.value = `cd ${name}`;
-                        handleCommand(cmdInput.value);
-                        cmdInput.value = '';
-                    };
-                } else if (data.type === 'link') {
-                    item.classList.add('is-link');
-                    item.innerHTML = `${name} ↗`;
-                    item.onclick = () => window.open(data.url, '_blank');
-                } else {
-                    item.classList.add('is-file');
-                    item.innerHTML = name;
-                    item.onclick = () => {
-                        cmdInput.value = `cat ${name}`;
-                        handleCommand(cmdInput.value);
-                        cmdInput.value = '';
-                    };
-                }
-                grid.appendChild(item);
-            });
-
-
-            terminalOutput.appendChild(grid);
-           
-            // Auto scroll
-            const terminal = document.getElementById('terminal');
-            terminal.scrollTop = terminal.scrollHeight;
-        }
-
-
-        function changeDirectory(target) {
-            if (!target) {
-                currentPath = [];
-                updatePathDisplay();
-                return;
-            }
-
-
-            if (target === '..') {
-                if (currentPath.length > 0) currentPath.pop();
-                updatePathDisplay();
-                return;
-            }
-
-
-            const currentDir = getCurrentDir();
-            if (currentDir.children && currentDir.children[target] && currentDir.children[target].type === 'dir') {
-                currentPath.push(target);
-                updatePathDisplay();
-            } else {
-                printToTerminal(`cd: no such directory: ${target}`);
-            }
-        }
-
-
-        function readFile(filename) {
-            if (!filename) {
-                printToTerminal("Usage: cat [filename]");
-                return;
-            }
-           
-            const currentDir = getCurrentDir();
-            const file = currentDir.children ? currentDir.children[filename] : null;
-
-
-            if (file) {
-                if (file.type === 'file') {
-                    printToTerminal(file.content);
-                } else if (file.type === 'link') {
-                    printToTerminal(`Error: ${filename} is a link. Use 'open' or click it.`);
-                } else if (file.type === 'dir') {
-                    printToTerminal(`Error: ${filename} is a directory.`);
-                }
-            } else {
-                printToTerminal(`cat: ${filename}: No such file`);
-            }
-        }
-
-
-        function openLink(linkName) {
-            const currentDir = getCurrentDir();
-            const file = currentDir.children ? currentDir.children[linkName] : null;
-           
-            if (file && file.type === 'link') {
-                printToTerminal(`Opening ${file.url}...`);
-                window.open(file.url, '_blank');
-            } else {
-                printToTerminal(`open: ${linkName}: Not a valid link`);
-            }
-        }
-
-
-        // --- INPUT HANDLING ---
-
-
-        cmdInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const val = cmdInput.value;
-                cmdInput.value = '';
-                handleCommand(val);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    cmdInput.value = commandHistory[historyIndex];
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    cmdInput.value = commandHistory[historyIndex];
-                } else {
-                    historyIndex = commandHistory.length;
-                    cmdInput.value = '';
-                }
-            } else if (e.key === 'Tab') {
-                e.preventDefault();
-                const val = cmdInput.value.trim();
-                const args = val.split(' ');
-                const partial = args[args.length - 1];
-               
-                // Simple tab completion logic
-                if (partial) {
-                    const currentDir = getCurrentDir();
-                    if (!currentDir.children) return;
-                   
-                    const matches = Object.keys(currentDir.children).filter(k => k.startsWith(partial));
-                   
-                    if (matches.length === 1) {
-                        args[args.length - 1] = matches[0];
-                        cmdInput.value = args.join(' ');
-                    } else if (matches.length > 1) {
-                        // Print matches if multiple
-                        printCommandRow(val);
-                        printToTerminal(matches.join('  '));
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'spin-slow': 'spin 3s linear infinite',
                     }
                 }
             }
-        });
+        }
+    </script>
 
+    <style>
+        body {
+            background-color: #050505;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(34, 211, 238, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.05) 0px, transparent 50%);
+            color: #e4e4e7;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(10, 10, 12, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(34, 211, 238, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px -10px rgba(34, 211, 238, 0.1);
+            background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+        }
+
+        /* Scanline Effect */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(34, 211, 238, 0.1);
+            opacity: 0.4;
+            animation: scan 6s linear infinite;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        @keyframes scan {
+            0% { top: -10%; }
+            100% { top: 110%; }
+        }
+
+        /* Iframe Container */
+        .preview-container {
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #22d3ee; }
+    </style>
+</head>
+<body class="font-sans antialiased h-screen flex flex-col overflow-hidden selection:bg-term-accent selection:text-black">
+
+    <div class="scanline"></div>
+
+    <!-- Header / HUD -->
+    <header class="h-16 flex-none glass z-40 px-6 flex items-center justify-between border-b border-white/10">
+        <div class="flex items-center space-x-4">
+            <div class="w-8 h-8 rounded bg-term-accent/10 flex items-center justify-center border border-term-accent/20">
+                <i class="fa-solid fa-terminal text-term-accent text-sm"></i>
+            </div>
+            <div class="flex flex-col">
+                <h1 class="font-mono font-bold text-sm tracking-widest text-white leading-none">SYS.ROOT_DIR</h1>
+                <span class="text-[10px] text-term-dim uppercase mt-1" id="repo-label">Connecting...</span>
+            </div>
+        </div>
+
+        <!-- Breadcrumbs -->
+        <div class="hidden md:flex items-center px-4 py-1.5 rounded-full bg-white/5 border border-white/5 font-mono text-xs text-term-dim space-x-2" id="breadcrumb-container">
+            <span class="text-term-accent hover:text-white cursor-pointer transition-colors" onclick="resetToRoot()">~/</span>
+        </div>
+
+        <div class="flex items-center space-x-4 text-xs font-mono">
+            <div class="flex items-center text-term-success">
+                <span class="w-2 h-2 rounded-full bg-term-success mr-2 animate-pulse"></span>
+                ONLINE
+            </div>
+            <a href="#" id="github-link" target="_blank" class="hover:text-term-accent transition-colors"><i class="fa-brands fa-github text-lg"></i></a>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex relative overflow-hidden">
+        
+        <!-- File Grid Area -->
+        <section class="flex-1 p-6 md:p-10 overflow-y-auto relative z-10" id="main-view">
+            
+            <!-- Loading State -->
+            <div id="loading" class="absolute inset-0 flex items-center justify-center bg-[#050505] z-20 hidden">
+                <div class="flex flex-col items-center">
+                    <i class="fa-solid fa-circle-notch fa-spin text-4xl text-term-accent mb-4"></i>
+                    <span class="font-mono text-xs text-term-dim animate-pulse">FETCHING DATA STREAMS...</span>
+                </div>
+            </div>
+
+            <!-- Empty State / Error -->
+            <div id="error-msg" class="hidden flex flex-col items-center justify-center h-full text-term-dim">
+                <i class="fa-solid fa-triangle-exclamation text-3xl mb-4 text-red-500"></i>
+                <p class="font-mono text-sm" id="error-text">Connection Failed</p>
+                <button onclick="window.location.reload()" class="mt-4 px-4 py-2 border border-white/10 hover:bg-white/5 rounded text-xs">RETRY</button>
+            </div>
+
+            <!-- Dynamic Grid -->
+            <div id="file-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
+                <!-- JS Injects content here -->
+            </div>
+
+        </section>
+
+        <!-- Preview Overlay (Iframe) -->
+        <div id="preview-overlay" class="absolute inset-0 bg-[#050505] z-30 transform translate-y-full transition-transform duration-500 flex flex-col">
+            <!-- Preview Header -->
+            <div class="h-12 border-b border-white/10 bg-[#09090b] flex items-center justify-between px-4 flex-none">
+                <div class="flex items-center space-x-3">
+                    <button onclick="closePreview()" class="text-term-dim hover:text-white transition-colors">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <span class="font-mono text-xs text-white" id="preview-title">PROJECT_PREVIEW.HTML</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <a id="preview-external-link" href="#" target="_blank" class="text-xs font-mono text-term-accent hover:underline">
+                        OPEN IN NEW TAB <i class="fa-solid fa-up-right-from-square ml-1"></i>
+                    </a>
+                    <button onclick="closePreview()" class="text-xs font-mono text-term-dim hover:text-red-400">
+                        CLOSE
+                    </button>
+                </div>
+            </div>
+            <!-- The Iframe -->
+            <iframe id="preview-frame" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+        </div>
+
+    </main>
+
+    <!-- Footer Status Bar -->
+    <footer class="h-8 bg-[#09090b] border-t border-white/10 flex items-center justify-between px-4 text-[10px] font-mono text-term-dim select-none z-40">
+        <div class="flex items-center space-x-4">
+            <span id="status-items">0 ITEMS</span>
+            <span id="status-size">-- KB</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span>UTF-8</span>
+            <span>JAVASCRIPT: ENABLED</span>
+            <span class="text-term-accent">V.2.0.4</span>
+        </div>
+    </footer>
+
+    <script>
+        /**
+         * CONFIGURATION
+         * * By default, the script tries to detect your username and repo from the URL.
+         * If you are running locally or want to override, set these values manually.
+         * Example:
+         * const MANUAL_USERNAME = 'your-username';
+         * const MANUAL_REPO = 'your-repo-name';
+         */
+        const MANUAL_USERNAME = null; 
+        const MANUAL_REPO = null;
+
+        // --- State ---
+        let currentPath = ''; // Root
+        let repoDetails = { user: '', repo: '' };
+        let cache = {}; // Simple cache to prevent re-fetching
+
+        // --- DOM Elements ---
+        const grid = document.getElementById('file-grid');
+        const loader = document.getElementById('loading');
+        const errorView = document.getElementById('error-msg');
+        const breadcrumbContainer = document.getElementById('breadcrumb-container');
+        const previewOverlay = document.getElementById('preview-overlay');
+        const previewFrame = document.getElementById('preview-frame');
+
+        // --- Initialization ---
+        async function init() {
+            detectRepoDetails();
+            
+            // If we are on localhost and no manual config, load demo data
+            if ((!repoDetails.user || !repoDetails.repo) && window.location.hostname === 'localhost' && !MANUAL_USERNAME) {
+                console.warn('Localhost detected with no config. Loading demo data.');
+                loadDemoData();
+                return;
+            }
+
+            if (!repoDetails.user || !repoDetails.repo) {
+                showError('Could not detect GitHub repository. Please configure MANUAL_USERNAME in source code.');
+                return;
+            }
+
+            // Update UI
+            document.getElementById('repo-label').textContent = `${repoDetails.user}/${repoDetails.repo}`;
+            document.getElementById('github-link').href = `https://github.com/${repoDetails.user}/${repoDetails.repo}`;
+
+            // Load Root
+            await loadPath('');
+        }
+
+        function detectRepoDetails() {
+            if (MANUAL_USERNAME && MANUAL_REPO) {
+                repoDetails = { user: MANUAL_USERNAME, repo: MANUAL_REPO };
+                return;
+            }
+
+            const hostname = window.location.hostname; // e.g., username.github.io
+            const pathname = window.location.pathname; // e.g., /repo-name/ or /repo-name/index.html
+
+            if (hostname.includes('github.io')) {
+                repoDetails.user = hostname.split('.')[0];
+                // Repo is usually the first segment of path
+                const pathParts = pathname.split('/').filter(p => p);
+                if (pathParts.length > 0) {
+                    repoDetails.repo = pathParts[0];
+                }
+            }
+        }
+
+        // --- Core Logic ---
+
+        async function loadPath(path) {
+            currentPath = path;
+            updateBreadcrumbs();
+            showLoading(true);
+            errorView.classList.add('hidden');
+
+            try {
+                let data;
+                
+                // Check Cache
+                if (cache[path]) {
+                    data = cache[path];
+                } else {
+                    // Fetch from API
+                    const apiUrl = `https://api.github.com/repos/${repoDetails.user}/${repoDetails.repo}/contents/${path}`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        if (response.status === 403) throw new Error('API Rate Limit Exceeded. Try again later.');
+                        if (response.status === 404) throw new Error('Directory not found.');
+                        throw new Error('Failed to fetch data.');
+                    }
+                    
+                    data = await response.json();
+                    
+                    // Sort: Folders first, then files
+                    if (Array.isArray(data)) {
+                        data.sort((a, b) => {
+                            if (a.type === b.type) return a.name.localeCompare(b.name);
+                            return a.type === 'dir' ? -1 : 1;
+                        });
+                        cache[path] = data; // Save to cache
+                    }
+                }
+
+                renderGrid(data);
+
+            } catch (err) {
+                console.error(err);
+                showError(err.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderGrid(items) {
+            grid.innerHTML = '';
+            
+            if (!Array.isArray(items)) {
+                // It's a single file (shouldn't happen with current logic but handle it)
+                return; 
+            }
+
+            // Filter out index.html (the homepage itself) if we are in root
+            const filteredItems = items.filter(item => {
+                if (currentPath === '' && item.name === 'index.html') return false;
+                if (item.name.startsWith('.')) return false; // Hide dotfiles
+                return true;
+            });
+
+            document.getElementById('status-items').textContent = `${filteredItems.length} OBJECTS`;
+
+            if (filteredItems.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-12 text-term-dim font-mono">
+                        <i class="fa-solid fa-folder-open mb-2 text-2xl"></i><br>
+                        DIRECTORY EMPTY
+                    </div>
+                `;
+                return;
+            }
+
+            // Back Button if not root
+            if (currentPath !== '') {
+                const backCard = createCard({
+                    name: '..',
+                    type: 'back'
+                });
+                grid.appendChild(backCard);
+            }
+
+            filteredItems.forEach(item => {
+                const card = createCard(item);
+                grid.appendChild(card);
+            });
+        }
+
+        function createCard(item) {
+            const el = document.createElement('div');
+            
+            // Back Button Style
+            if (item.type === 'back') {
+                el.className = 'glass-card p-4 rounded cursor-pointer group flex items-center justify-center h-32 border-dashed border-white/20 hover:border-white/50';
+                el.innerHTML = `
+                    <div class="text-center">
+                        <i class="fa-solid fa-turn-up text-xl text-term-dim group-hover:text-white mb-2 transition-colors"></i>
+                        <div class="font-mono text-xs text-term-dim group-hover:text-white">PARENT_DIR</div>
+                    </div>
+                `;
+                el.onclick = () => {
+                    const parts = currentPath.split('/');
+                    parts.pop();
+                    loadPath(parts.join('/'));
+                };
+                return el;
+            }
+
+            // Standard Item Style
+            el.className = 'glass-card p-5 rounded cursor-pointer group relative overflow-hidden flex flex-col justify-between h-40';
+            
+            // Icon Logic
+            let iconClass = 'fa-file text-term-dim';
+            let colorClass = 'text-term-dim';
+            
+            if (item.type === 'dir') {
+                iconClass = 'fa-folder';
+                colorClass = 'text-term-accent';
+            } else if (item.name.endsWith('.html')) {
+                iconClass = 'fa-brands fa-html5';
+                colorClass = 'text-orange-400';
+            } else if (item.name.endsWith('.js')) {
+                iconClass = 'fa-brands fa-js';
+                colorClass = 'text-yellow-400';
+            } else if (item.name.endsWith('.css')) {
+                iconClass = 'fa-brands fa-css3-alt';
+                colorClass = 'text-blue-400';
+            } else if (item.name.endsWith('.md')) {
+                iconClass = 'fa-brands fa-markdown';
+                colorClass = 'text-white';
+            }
+
+            el.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <i class="fa-solid ${iconClass} text-3xl ${colorClass} group-hover:scale-110 transition-transform duration-300"></i>
+                    <div class="w-2 h-2 rounded-full ${item.type === 'dir' ? 'bg-term-accent' : 'bg-term-dim'} opacity-50"></div>
+                </div>
+                
+                <div class="z-10">
+                    <h3 class="font-mono text-sm font-bold text-gray-200 truncate group-hover:text-term-accent transition-colors">${item.name}</h3>
+                    <p class="font-mono text-[10px] text-term-dim uppercase mt-1">
+                        ${item.type === 'dir' ? 'DIRECTORY' : (item.size ? formatBytes(item.size) : 'FILE')}
+                    </p>
+                </div>
+
+                <!-- Hover Decor -->
+                <div class="absolute -bottom-4 -right-4 text-6xl opacity-5 group-hover:opacity-10 transition-opacity text-white select-none pointer-events-none">
+                    ${item.name.charAt(0).toUpperCase()}
+                </div>
+            `;
+
+            el.onclick = () => handleItemClick(item);
+
+            return el;
+        }
+
+        async function handleItemClick(item) {
+            if (item.type === 'dir') {
+                // CRITICAL REQUIREMENT: Check contents for index.html
+                showLoading(true);
+                try {
+                    const nextPath = currentPath ? `${currentPath}/${item.name}` : item.name;
+                    
+                    // Fetch contents of this directory
+                    const apiUrl = `https://api.github.com/repos/${repoDetails.user}/${repoDetails.repo}/contents/${nextPath}`;
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    if (Array.isArray(data)) {
+                        // Check if index.html exists
+                        const hasIndex = data.find(f => f.name === 'index.html');
+                        
+                        if (hasIndex) {
+                            // Render Content (Open Preview)
+                            // Construct GitHub Pages URL
+                            const pageUrl = `https://${repoDetails.user}.github.io/${repoDetails.repo}/${nextPath}/`;
+                            openPreview(item.name, pageUrl);
+                            
+                            // Cache this data anyway to save bandwidth if they navigate manually later
+                            cache[nextPath] = data;
+                        } else {
+                            // No index.html, navigate normally
+                            loadPath(nextPath);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error peeking folder', e);
+                    // Fallback to just trying to load it normally
+                    loadPath(currentPath ? `${currentPath}/${item.name}` : item.name);
+                } finally {
+                    showLoading(false);
+                }
+
+            } else {
+                // It's a file
+                if (item.name.endsWith('.html')) {
+                    const pageUrl = `https://${repoDetails.user}.github.io/${repoDetails.repo}/${currentPath ? currentPath + '/' : ''}${item.name}`;
+                    openPreview(item.name, pageUrl);
+                } else {
+                    // Open source in new tab
+                    window.open(item.html_url, '_blank');
+                }
+            }
+        }
+
+        // --- Preview Logic ---
+        function openPreview(title, url) {
+            document.getElementById('preview-title').textContent = title.toUpperCase();
+            previewFrame.src = url;
+            document.getElementById('preview-external-link').href = url;
+            previewOverlay.classList.remove('translate-y-full');
+        }
+
+        function closePreview() {
+            previewOverlay.classList.add('translate-y-full');
+            // Clear src after animation to stop audio/video
+            setTimeout(() => {
+                previewFrame.src = 'about:blank';
+            }, 500);
+        }
+
+        // --- Helpers ---
+
+        function updateBreadcrumbs() {
+            const parts = currentPath.split('/').filter(p => p);
+            breadcrumbContainer.innerHTML = `<span class="text-term-accent hover:text-white cursor-pointer transition-colors" onclick="loadPath('')">~/</span>`;
+            
+            let accum = '';
+            parts.forEach((part, index) => {
+                accum += (index === 0 ? '' : '/') + part;
+                const pathRef = accum;
+                const isLast = index === parts.length - 1;
+                
+                breadcrumbContainer.innerHTML += `
+                    <span class="text-term-dim">/</span>
+                    <span class="${isLast ? 'text-white font-bold' : 'text-term-dim hover:text-white cursor-pointer transition-colors'}" 
+                          onclick="${!isLast ? `loadPath('${pathRef}')` : ''}">${part}</span>
+                `;
+            });
+        }
+
+        function resetToRoot() {
+            loadPath('');
+        }
+
+        function showLoading(isLoading) {
+            if(isLoading) loader.classList.remove('hidden');
+            else loader.classList.add('hidden');
+        }
+
+        function showError(msg) {
+            errorView.classList.remove('hidden');
+            document.getElementById('error-text').textContent = msg;
+            grid.innerHTML = '';
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        // --- Demo Data for Localhost ---
+        function loadDemoData() {
+            document.getElementById('repo-label').textContent = "DEMO/MODE";
+            const demoItems = [
+                { name: 'Project-Alpha', type: 'dir' },
+                { name: 'Portfolio-V1', type: 'dir' },
+                { name: 'Experiment-Labs', type: 'dir' },
+                { name: 'README.md', type: 'file', size: 2048, html_url: '#' },
+                { name: 'style.css', type: 'file', size: 1024, html_url: '#' }
+            ];
+            
+            // Mock the fetch behavior for demo
+            window.fetch = async (url) => {
+                // Simulate delay
+                await new Promise(r => setTimeout(r, 600));
+                
+                // If checking inside a folder in demo mode
+                if (url.includes('Project-Alpha')) {
+                    return { ok: true, json: async () => [{ name: 'index.html', type: 'file' }, { name: 'app.js', type: 'file' }] };
+                }
+                
+                return { ok: true, json: async () => demoItems };
+            };
+            
+            loadPath('');
+        }
 
         // Start
-        runBootSequence();
-
+        window.addEventListener('DOMContentLoaded', init);
 
     </script>
 </body>
 </html>
-
