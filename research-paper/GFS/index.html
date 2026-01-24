@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GFS: The Visual Guide</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gfsDark: '#0f172a',
+                        gfsCard: '#1e293b',
+                        gfsCyan: '#06b6d4',
+                        gfsPurple: '#a855f7',
+                        gfsGreen: '#22c55e',
+                        gfsYellow: '#eab308',
+                        gfsRed: '#ef4444',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code&display=swap');
+        
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Architecture Diagram Styles */
+        .arch-container {
+            position: relative;
+            background-image: radial-gradient(#334155 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .arch-node {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            z-index: 20;
+            cursor: default;
+        }
+        
+        .arch-node.active {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+            border-color: #06b6d4;
+        }
+
+        .arch-node.primary-active {
+            border-color: #a855f7;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+        }
+
+        .connection-line {
+            fill: none;
+            stroke: #334155;
+            stroke-width: 2;
+            stroke-linecap: round;
+            transition: stroke 0.3s ease;
+        }
+
+        .connection-line.active-path {
+            stroke: #06b6d4;
+            stroke-width: 3;
+            filter: drop-shadow(0 0 3px #06b6d4);
+        }
+        
+        .connection-line.control-path {
+            stroke: #a855f7;
+            stroke-dasharray: 5,5;
+        }
+        
+        .connection-line.control-path.active-path {
+            stroke: #a855f7;
+            filter: drop-shadow(0 0 3px #a855f7);
+        }
+
+        .packet {
+            fill: #fff;
+            r: 4;
+            opacity: 0;
+            filter: drop-shadow(0 0 2px rgba(255,255,255,0.8));
+        }
+
+        /* 3D Card Effect */
+        .card-3d-wrapper {
+            perspective: 1000px;
+        }
+        .card-3d {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .card-3d.flipped {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+            position: absolute;
+            inset: 0;
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <!-- Header -->
+    <header class="max-w-7xl mx-auto mb-10 text-center">
+        <h1 class="text-4xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gfsCyan to-gfsPurple mb-4">
+            The Google File System
+        </h1>
+    </header>
+
+    <!-- INTERACTIVE OPERATIONS LAB -->
+    <section class="max-w-7xl mx-auto mb-16">
+        
+        <!-- Controls Header -->
+        <div class="flex flex-col md:flex-row items-center justify-between mb-4 bg-gfsCard p-4 rounded-t-xl border-b border-gray-700">
+            <div class="flex items-center gap-4 mb-4 md:mb-0">
+                <i class="fa-solid fa-flask text-gfsCyan text-xl"></i>
+                <div class="h-6 w-px bg-gray-600 mx-2"></div>
+                <!-- Scenario Tabs -->
+                <div class="flex bg-gray-900 rounded-lg p-1">
+                    <button onclick="setScenario('read')" id="tab-read" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-gfsCyan text-white">Read Flow</button>
+                    <button onclick="setScenario('write')" id="tab-write" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-gray-400 hover:text-white">Write Flow</button>
+                    <button onclick="setScenario('append')" id="tab-append" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-gray-400 hover:text-white">Record Append</button>
+                </div>
+            </div>
+
+            <!-- Playback Controls -->
+            <div class="flex gap-2">
+                <button onclick="resetSim()" class="px-4 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-white text-sm transition-all">
+                    <i class="fa-solid fa-rotate-left mr-2"></i>Reset
+                </button>
+                <button onclick="nextStep()" id="nextBtn" class="px-6 py-2 rounded-lg bg-gfsGreen text-white font-bold text-sm shadow-lg shadow-green-900/20 hover:bg-green-500 hover:scale-105 transition-all">
+                    Next Step <i class="fa-solid fa-forward ml-2"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- LEFT: The Diagram Canvas -->
+            <div class="lg:col-span-2 bg-gfsCard rounded-b-xl border border-gray-700 h-[500px] arch-container overflow-hidden relative" id="canvas-container">
+                
+                <!-- SVG Layer for Links & Packets -->
+                <svg id="main-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10">
+                    <defs>
+                        <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" />
+                        </marker>
+                        <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#a855f7" />
+                        </marker>
+                    </defs>
+                    <!-- Paths injected by JS -->
+                </svg>
+
+                <!-- NODES (Injected by JS based on View) -->
+                <div id="nodes-layer" class="w-full h-full relative z-20 p-4">
+                    <!-- JS will populate this -->
+                </div>
+
+                <!-- View Label -->
+                <div class="absolute top-4 left-4 bg-black/50 backdrop-blur px-3 py-1 rounded text-xs text-gray-400 border border-gray-700 font-mono z-0">
+                    VIEW: <span id="view-label" class="text-gfsCyan">CLUSTER</span>
+                </div>
+            </div>
+
+            <!-- RIGHT: System Log & Explainer -->
+            <div class="bg-black rounded-xl border border-gray-700 p-0 flex flex-col h-[500px] shadow-2xl">
+                <div class="p-3 border-b border-gray-800 bg-gray-900/50 rounded-t-xl flex justify-between items-center">
+                    <span class="text-xs font-mono text-gray-500"><i class="fa-solid fa-terminal mr-2"></i>SYSTEM_LOG</span>
+                    <span id="step-indicator" class="text-xs font-bold text-gfsCyan">STEP 0/0</span>
+                </div>
+                
+                <!-- Log Content -->
+                <div id="console-output" class="flex-grow p-4 font-mono text-sm overflow-y-auto space-y-3">
+                    <div class="text-gray-500 italic">> Initialize GFS Simulation...</div>
+                    <div class="text-gray-500 italic">> Select a mode to begin.</div>
+                </div>
+
+                <!-- Legend -->
+                <div class="p-4 border-t border-gray-800 bg-gray-900/30 text-xs text-gray-400 grid grid-cols-2 gap-2">
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsCyan"></div> Data Flow</div>
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsPurple"></div> Control/Meta</div>
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsGreen"></div> Primary</div>
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gray-500"></div> Replica</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 2: Design Decisions (Cards) -->
+    <section class="max-w-7xl mx-auto mb-16">
+        <div class="flex items-center gap-3 mb-6">
+            <i class="fa-solid fa-scale-balanced text-gfsPurple text-2xl"></i>
+            <h2 class="text-3xl font-bold text-white">Critical Design Decisions</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Card 1: Failures -->
+            <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
+                <div class="relative w-full h-full card-3d">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Constraint</div>
+                            <h3 class="text-xl font-bold text-white">Failures are the Norm</h3>
+                            <p class="text-gray-400 text-sm mt-2">Thousands of cheap commodity parts means something is <em>always</em> broken.</p>
+                        </div>
+                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                    </div>
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-check"></i> Decision</div>
+                            <h3 class="text-xl font-bold text-white">Replication & Monitoring</h3>
+                            <p class="text-gray-300 text-sm mt-2">3x Replication. Fast Recovery (Cloning). Checksums on every block.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Metadata -->
+             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
+                <div class="relative w-full h-full card-3d">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-database"></i> Problem</div>
+                            <h3 class="text-xl font-bold text-white">Metadata Overhead</h3>
+                            <p class="text-gray-400 text-sm mt-2">Billions of small files would fill the Master's RAM instantly.</p>
+                        </div>
+                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                    </div>
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-cube"></i> Decision</div>
+                            <h3 class="text-xl font-bold text-white">64 MB Chunks</h3>
+                            <p class="text-gray-300 text-sm mt-2">Huge chunks = Fewer metadata entries. Keeps all metadata in RAM.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+             <!-- Card 3: Consistency -->
+             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
+                <div class="relative w-full h-full card-3d">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-pen-to-square"></i> Workload</div>
+                            <h3 class="text-xl font-bold text-white">Concurrent Appends</h3>
+                            <p class="text-gray-400 text-sm mt-2">Hundreds of producers appending simultaneously. Locks are too slow.</p>
+                        </div>
+                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                    </div>
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-list-ol"></i> Decision</div>
+                            <h3 class="text-xl font-bold text-white">Relaxed Consistency</h3>
+                            <p class="text-gray-300 text-sm mt-2">Atomic Record Append. GFS picks the offset. "Append at least once."</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4: Bandwidth -->
+             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
+                <div class="relative w-full h-full card-3d">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-network-wired"></i> Bottleneck</div>
+                            <h3 class="text-xl font-bold text-white">Single Master</h3>
+                            <p class="text-gray-400 text-sm mt-2">One machine cannot handle the data throughput of 1000s of clients.</p>
+                        </div>
+                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                    </div>
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-route"></i> Decision</div>
+                            <h3 class="text-xl font-bold text-white">Decoupled Flows</h3>
+                            <p class="text-gray-300 text-sm mt-2">Master only says "Where". Chunkservers handle "What" (Data) directly.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="max-w-7xl mx-auto text-center text-gray-500 py-8 border-t border-gray-800">
+        <p>Visual Guide generated based on <em>"The Google File System" (SOSP 2003)</em></p>
+        <p class="text-xs mt-2">Ghemawat, Gobioff, and Leung</p>
+    </footer>
+
+    <!-- LOGIC SCRIPT -->
+    <script>
+        // --- DATA & STATE ---
+        let currentScenario = 'read';
+        let currentStep = 0;
+        let animationFrame = null;
+
+        // --- SCENARIO DEFINITIONS ---
+        // Each step defines: text, which paths are active, which nodes flash, packet animation
+        const scenarios = {
+            read: {
+                view: 'cluster',
+                steps: [
+                    { 
+                        text: "APP: calls Read('/home/user/log.txt', offset: 10MB). Client calculates Chunk Index: 0.", 
+                        highlightNode: ['client'], 
+                        resetPaths: true 
+                    },
+                    { 
+                        text: "REQ: Client sends ('/home/user/log.txt', 0) to Master [10.0.0.1].", 
+                        highlightNode: ['client', 'master'], 
+                        packet: {from: 'client', to: 'master', color: '#a855f7'} 
+                    },
+                    { 
+                        text: "META: Master returns Handle '8af2' & Replicas [192.168.1.10, 192.168.1.11, 192.168.1.12].", 
+                        highlightNode: ['master', 'client'], 
+                        packet: {from: 'master', to: 'client', color: '#a855f7'} 
+                    },
+                    { 
+                        text: "REQ: Client caches meta. Requests Handle '8af2' from closest Replica (CS2).", 
+                        highlightNode: ['client', 'cs2'], 
+                        packet: {from: 'client', to: 'cs2', color: '#06b6d4'} 
+                    },
+                    { 
+                        text: "DATA: CS2 reads disk block at offset 10MB and streams 64KB packet to Client.", 
+                        highlightNode: ['cs2', 'client'], 
+                        packet: {from: 'cs2', to: 'client', color: '#06b6d4'} 
+                    },
+                    { 
+                        text: "DONE: 64KB data delivered to App buffer.", 
+                        highlightNode: ['client'], 
+                        complete: true 
+                    }
+                ]
+            },
+            write: {
+                view: 'pipeline',
+                steps: [
+                    { 
+                        text: "META: Client asks Master: 'Who is Primary for Chunk 3c9b?'", 
+                        highlightNode: ['client', 'master'], 
+                        packet: {from: 'client', to: 'master', color: '#a855f7'} 
+                    },
+                    { 
+                        text: "REPLY: Master says: 'Replica A [10.2.1.1] is Primary. Secondaries: B, C.'", 
+                        highlightNode: ['master', 'client'], 
+                        packet: {from: 'master', to: 'client', color: '#a855f7'} 
+                    },
+                    { 
+                        text: "DATA PUSH: Client pushes 'PAYLOAD_XYZ' to closest Replica (B). Saved in LRU Buffer.", 
+                        highlightNode: ['client', 'repB'], 
+                        packet: {from: 'client', to: 'repB', color: '#06b6d4'} 
+                    },
+                    { 
+                        text: "CHAIN: Replica B forwards 'PAYLOAD_XYZ' to Primary A.", 
+                        highlightNode: ['repB', 'primary'], 
+                        packet: {from: 'repB', to: 'primary', color: '#06b6d4'} 
+                    },
+                    { 
+                        text: "CHAIN: Primary A forwards 'PAYLOAD_XYZ' to Replica C. All buffers full.", 
+                        highlightNode: ['primary', 'repC'], 
+                        packet: {from: 'primary', to: 'repC', color: '#06b6d4'} 
+                    },
+                    { 
+                        text: "CONTROL: Client sends 'Write Request' to Primary. 'Commit PAYLOAD_XYZ!'", 
+                        highlightNode: ['client', 'primary'], 
+                        packet: {from: 'client', to: 'primary', color: '#a855f7', dashed: true} 
+                    },
+                    { 
+                        text: "ORDER: Primary assigns Serial #551. Tells B & C: 'Write at #551'.", 
+                        highlightNode: ['primary', 'repB', 'repC'], 
+                        packet: {from: 'primary', to: ['repB', 'repC'], color: '#a855f7', dashed: true} 
+                    },
+                    { 
+                        text: "ACK: Secondaries write to disk and Ack success to Primary.", 
+                        highlightNode: ['repB', 'repC', 'primary'], 
+                        packet: {from: ['repB', 'repC'], to: 'primary', color: '#a855f7', dashed: true} 
+                    },
+                    { 
+                        text: "SUCCESS: Primary replies to Client. Data is Consistent & Defined.", 
+                        highlightNode: ['primary', 'client'], 
+                        packet: {from: 'primary', to: 'client', color: '#a855f7', dashed: true} 
+                    }
+                ]
+            },
+            append: {
+                view: 'pipeline',
+                steps: [
+                     { 
+                        text: "SETUP: Client pushes 'LOG_ENTRY_101' to all replicas (Daisy Chain complete).", 
+                        highlightNode: ['client', 'repB', 'primary', 'repC'], 
+                        resetPaths: true
+                    },
+                    { 
+                        text: "REQ: Client sends 'Record Append' to Primary.", 
+                        highlightNode: ['client', 'primary'], 
+                        packet: {from: 'client', to: 'primary', color: '#a855f7', dashed: true} 
+                    },
+                    { 
+                        text: "LOGIC: Primary checks chunk 3c9b size. 63MB used. 1MB fits? Yes.", 
+                        highlightNode: ['primary'], 
+                        special: "Checking Size..."
+                    },
+                    { 
+                        text: "COMMIT: Primary picks Offset 63MB. Writes locally. Sends Offset 63MB to B & C.", 
+                        highlightNode: ['primary', 'repB', 'repC'], 
+                        packet: {from: 'primary', to: ['repB', 'repC'], color: '#a855f7', dashed: true} 
+                    },
+                    { 
+                        text: "WRITE: Secondaries write 'LOG_ENTRY_101' at Offset 63MB. Ack to Primary.", 
+                        highlightNode: ['repB', 'repC', 'primary'], 
+                        packet: {from: ['repB', 'repC'], to: 'primary', color: '#a855f7', dashed: true} 
+                    },
+                    { 
+                        text: "SUCCESS: Primary tells Client 'Append Successful at Offset 63MB'.", 
+                        highlightNode: ['primary', 'client'], 
+                        packet: {from: 'primary', to: 'client', color: '#a855f7', dashed: true} 
+                    }
+                ]
+            }
+        };
+
+        // --- DOM ELEMENTS ---
+        const nodesLayer = document.getElementById('nodes-layer');
+        const svgLayer = document.getElementById('main-svg');
+        const consoleOut = document.getElementById('console-output');
+        const stepIndicator = document.getElementById('step-indicator');
+        const viewLabel = document.getElementById('view-label');
+
+        // --- INITIALIZATION ---
+        function setScenario(name) {
+            currentScenario = name;
+            currentStep = 0;
+            
+            // Update UI Tabs
+            ['read', 'write', 'append'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if(t === name) {
+                    btn.classList.add('bg-gfsCyan', 'text-white');
+                    btn.classList.remove('text-gray-400');
+                } else {
+                    btn.classList.remove('bg-gfsCyan', 'text-white');
+                    btn.classList.add('text-gray-400');
+                }
+            });
+
+            // Set View
+            const viewType = scenarios[name].view;
+            renderNodes(viewType);
+            viewLabel.innerText = viewType === 'cluster' ? "CLUSTER VIEW (General)" : "REPLICATION PIPELINE (Zoomed In)";
+            
+            // Reset Console
+            consoleOut.innerHTML = `<div class="text-gfsCyan font-bold">> Mode: ${name.toUpperCase()}</div><div class="text-gray-500 italic">> Ready. Click 'Next Step'.</div>`;
+            stepIndicator.innerText = `STEP 0/${scenarios[name].steps.length}`;
+            
+            // Clear SVG
+            svgLayer.innerHTML = `<defs>
+                <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" /></marker>
+                <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a855f7" /></marker>
+            </defs>`;
+        }
+
+        function renderNodes(view) {
+            nodesLayer.innerHTML = '';
+            
+            if (view === 'cluster') {
+                // Client
+                createNode('client', 'Client', '10%', '50%', 'border-gfsCyan');
+                // Master
+                createNode('master', 'Master', '50%', '15%', 'border-gfsPurple');
+                // Chunkservers
+                createNode('cs1', 'CS 1', '30%', '80%', 'border-gray-500');
+                createNode('cs2', 'CS 2', '50%', '80%', 'border-gray-500'); // Target
+                createNode('cs3', 'CS 3', '70%', '80%', 'border-gray-500');
+            } else {
+                // Pipeline View
+                createNode('client', 'Client', '10%', '50%', 'border-gfsCyan');
+                createNode('master', 'Master', '10%', '15%', 'border-gfsPurple'); // Small master reference
+                
+                // Replicas arranged for pipeline
+                createNode('repB', 'Replica B\n(Secondary)', '40%', '80%', 'border-gray-500'); // Closest
+                createNode('primary', 'Replica A\n(Primary)', '60%', '50%', 'border-gfsGreen', true); // Middle
+                createNode('repC', 'Replica C\n(Secondary)', '80%', '20%', 'border-gray-500'); // Furthest
+            }
+        }
+
+        function createNode(id, label, left, top, colorClass, isPrimary = false) {
+            const div = document.createElement('div');
+            div.id = `node-${id}`;
+            div.className = `arch-node w-24 h-24 rounded-lg border-2 bg-slate-800 flex items-center justify-center text-center text-xs font-bold text-gray-300 shadow-xl ${colorClass}`;
+            if(isPrimary) div.classList.add('primary-active');
+            div.style.left = left;
+            div.style.top = top;
+            div.innerText = label;
+            nodesLayer.appendChild(div);
+        }
+
+        // --- SIMULATION LOGIC ---
+        function nextStep() {
+            const scenData = scenarios[currentScenario];
+            if (currentStep >= scenData.steps.length) return;
+
+            const stepData = scenData.steps[currentStep];
+            
+            // Log
+            const logEntry = document.createElement('div');
+            logEntry.className = "border-l-2 border-gfsCyan pl-2 py-1 animate-pulse-slow";
+            logEntry.innerText = `[${currentStep + 1}] ${stepData.text}`;
+            consoleOut.appendChild(logEntry);
+            consoleOut.scrollTop = consoleOut.scrollHeight;
+
+            // Highlight Nodes
+            document.querySelectorAll('.arch-node').forEach(n => n.classList.remove('active', 'scale-110'));
+            if (stepData.highlightNode) {
+                stepData.highlightNode.forEach(id => {
+                    const el = document.getElementById(`node-${id}`);
+                    if(el) el.classList.add('active', 'scale-110');
+                });
+            }
+
+            // Animate Packet/Lines
+            if (stepData.packet) {
+                const { from, to, color, dashed } = stepData.packet;
+                const targets = Array.isArray(to) ? to : [to];
+                
+                targets.forEach(targetId => {
+                    animateConnection(from, targetId, color, dashed);
+                });
+            }
+
+            currentStep++;
+            stepIndicator.innerText = `STEP ${currentStep}/${scenData.steps.length}`;
+            
+            if (currentStep === scenData.steps.length) {
+                const done = document.createElement('div');
+                done.className = "text-gfsGreen font-bold mt-2";
+                done.innerText = ">> OPERATION COMPLETE";
+                consoleOut.appendChild(done);
+            }
+        }
+
+        function resetSim() {
+            setScenario(currentScenario);
+        }
+
+        // --- ANIMATION HELPERS ---
+        function getCenter(id) {
+            const el = document.getElementById(`node-${id}`);
+            if(!el) return {x:0, y:0};
+            return {
+                x: el.offsetLeft + el.offsetWidth/2,
+                y: el.offsetTop + el.offsetHeight/2
+            };
+        }
+
+        function animateConnection(fromId, toId, color, dashed) {
+            const start = getCenter(fromId);
+            const end = getCenter(toId);
+            
+            const pathId = `path-${fromId}-${toId}-${Date.now()}`;
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            
+            // Draw Curve
+            const cx = (start.x + end.x) / 2;
+            const cy = (start.y + end.y) / 2 - 20; // Slight arc
+            const d = `M${start.x},${start.y} Q${cx},${cy} ${end.x},${end.y}`;
+            
+            path.setAttribute("d", d);
+            path.setAttribute("class", "connection-line");
+            path.style.stroke = color;
+            if(dashed) path.style.strokeDasharray = "5,5";
+            path.setAttribute("marker-end", color === '#06b6d4' ? "url(#arrow-blue)" : "url(#arrow-purple)");
+            
+            svgLayer.appendChild(path);
+
+            // Create Packet
+            const packet = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            packet.setAttribute("class", "packet");
+            packet.style.fill = color;
+            svgLayer.appendChild(packet);
+
+            // Animate Packet
+            let progress = 0;
+            function step() {
+                progress += 0.02;
+                if (progress > 1) {
+                    packet.remove();
+                    // Keep line but fade it slightly? No, keep it history
+                    return;
+                }
+                
+                const point = path.getPointAtLength(progress * path.getTotalLength());
+                packet.setAttribute("cx", point.x);
+                packet.setAttribute("cy", point.y);
+                packet.style.opacity = 1;
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
+        // Init
+        window.addEventListener('load', () => setScenario('read'));
+
+    </script>
+</body>
+</html>
