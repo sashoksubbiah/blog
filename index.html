@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>user@home:~/projects</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d1117; /* GitHub Dark Dimmed */
+            --text-color: #c9d1d9;
+            --accent-color: #58a6ff; /* Blue */
+            --dir-color: #79c0ff; /* Light Blue */
+            --file-color: #d2a8ff; /* Purple */
+            --success-color: #3fb950; /* Green */
+            --error-color: #ff7b72; /* Red */
+            --glow: 0 0 10px rgba(88, 166, 255, 0.2);
+        }
+
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Fira Code', monospace;
+            overflow: hidden; /* Prevent body scroll, handle in terminal */
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+
+        /* CRT Scanline Effect */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(
+                to bottom,
+                rgba(255, 255, 255, 0),
+                rgba(255, 255, 255, 0) 50%,
+                rgba(0, 0, 0, 0.1) 50%,
+                rgba(0, 0, 0, 0.1)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.6;
+        }
+
+
+        .crt-flicker {
+            animation: flicker 0.15s infinite;
+        }
+
+
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.99; }
+            10% { opacity: 0.96; }
+            100% { opacity: 0.98; }
+        }
+
+
+        /* Terminal Window */
+        #terminal {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #30363d transparent;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+
+        #terminal::-webkit-scrollbar {
+            width: 8px;
+        }
+        #terminal::-webkit-scrollbar-thumb {
+            background-color: #30363d;
+            border-radius: 4px;
+        }
+
+
+        .prompt {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+       
+        .path {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+
+        .command-input {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 16px;
+            width: 100%;
+            outline: none;
+            caret-color: var(--accent-color);
+        }
+
+
+        /* Directory Listing Styles */
+        .ls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+
+        .item {
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+
+        .item:hover {
+            background-color: rgba(177, 186, 196, 0.1);
+        }
+
+
+        .is-dir { color: var(--dir-color); font-weight: bold; }
+        .is-file { color: var(--file-color); }
+        .is-link { color: var(--success-color); text-decoration: underline; }
+
+
+        /* Boot Screen */
+        #boot-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            color: #3fb950;
+            z-index: 100;
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="crt-flicker" onclick="focusInput()">
+
+
+    <div class="scanlines"></div>
+
+
+    <!-- Boot Sequence Overlay -->
+    <div id="boot-screen">
+        <div id="boot-text"></div>
+    </div>
+
+
+    <!-- Main Terminal Area -->
+    <div id="terminal">
+        <div id="output"></div>
+       
+        <!-- Input Line -->
+        <div class="flex items-center gap-2 mt-2">
+            <span class="prompt">guest@github</span><span class="text-gray-500">:</span><span class="path" id="current-path">~</span><span class="text-gray-500">$</span>
+            <input type="text" id="cmd" class="command-input" autocomplete="off" spellcheck="false" autofocus>
+        </div>
+    </div>
+
+
+    <script>
+        // --- CONFIGURATION: EDIT THIS FOR YOUR PROJECTS ---
+        const fileSystem = {
+            "root": {
+                type: "dir",
+                children: {
+                    "projects": {
+                        type: "dir",
+                        children: {
+                            "ai-experiments": {
+                                type: "dir",
+                                children: {
+                                    "neural-net-js": { type: "link", url: "https://github.com/yourusername/neural-net" },
+                                    "chatbot-ui": { type: "link", url: "https://github.com/yourusername/chatbot" }
+                                }
+                            },
+                            "web-tools": {
+                                type: "dir",
+                                children: {
+                                    "json-parser": { type: "link", url: "https://github.com/yourusername/json-parser" },
+                                    "css-grid-generator": { type: "link", url: "https://github.com/yourusername/grid-gen" }
+                                }
+                            },
+                            "portfolio-v1": { type: "link", url: "https://v1.yourwebsite.com" }
+                        }
+                    },
+                    "about.md": {
+                        type: "file",
+                        content: "Hi! I'm a developer who loves CLI tools.\nThis site is built with vanilla HTML/JS to mimic a terminal.\nType 'help' to see available commands."
+                    },
+                    "contact.txt": {
+                        type: "file",
+                        content: "Email: dev@example.com\nTwitter: @yourhandle\nGitHub: github.com/yourusername"
+                    },
+                    "resume.pdf": {
+                        type: "link",
+                        url: "/assets/resume.pdf"
+                    }
+                }
+            }
+        };
+
+
+        // --- STATE MANAGEMENT ---
+        let currentPath = []; // Empty array means root
+        let commandHistory = [];
+        let historyIndex = -1;
+        const terminalOutput = document.getElementById('output');
+        const cmdInput = document.getElementById('cmd');
+        const pathDisplay = document.getElementById('current-path');
+
+
+        // --- BOOT SEQUENCE ---
+        const bootText = [
+            "Initializing Kernel...",
+            "Loading modules.......... [OK]",
+            "Mounting file system..... [OK]",
+            "Starting network services [OK]",
+            "Verifying user credentials...",
+            "Welcome to GitHub Pages OS v1.0.0"
+        ];
+
+
+        async function runBootSequence() {
+            const bootScreen = document.getElementById('boot-screen');
+            const bootContent = document.getElementById('boot-text');
+           
+            for (let line of bootText) {
+                const p = document.createElement('div');
+                p.textContent = line;
+                bootContent.appendChild(p);
+                await new Promise(r => setTimeout(r, Math.random() * 300 + 100));
+            }
+           
+            await new Promise(r => setTimeout(r, 800));
+            bootScreen.classList.add('hidden');
+            cmdInput.focus();
+            printWelcomeMessage();
+        }
+
+
+        // --- CORE TERMINAL FUNCTIONS ---
+
+
+        function focusInput() {
+            // Don't focus if user is selecting text
+            if (!window.getSelection().toString()) {
+                cmdInput.focus();
+            }
+        }
+
+
+        function getCurrentDir() {
+            let dir = fileSystem.root;
+            for (const p of currentPath) {
+                dir = dir.children[p];
+            }
+            return dir;
+        }
+
+
+        function updatePathDisplay() {
+            pathDisplay.textContent = currentPath.length === 0 ? '~' : '~/' + currentPath.join('/');
+        }
+
+
+        function printToTerminal(html, isRaw = false) {
+            const div = document.createElement('div');
+            if (isRaw) {
+                div.innerHTML = html;
+            } else {
+                div.textContent = html;
+            }
+            div.className = "mb-1 text-gray-300 whitespace-pre-wrap break-words";
+            terminalOutput.appendChild(div);
+            window.scrollTo(0, document.body.scrollHeight);
+            // Also scroll terminal div specifically
+            const terminal = document.getElementById('terminal');
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+
+        function printWelcomeMessage() {
+            const date = new Date().toLocaleString();
+            printToTerminal(`Last login: ${date} on ttys001`);
+            printToTerminal(`Type 'help' for a list of commands.`);
+            printToTerminal(`\n`);
+        }
+
+
+        function printHelp() {
+            printToTerminal(`<span class="text-yellow-400">Available commands:</span>
+  <span class="font-bold text-white">ls</span>        List directory contents
+  <span class="font-bold text-white">cd [dir]</span>  Change directory (.. to go back)
+  <span class="font-bold text-white">cat [file]</span> Display file contents
+  <span class="font-bold text-white">open [url]</span> Open link in new tab
+  <span class="font-bold text-white">clear</span>     Clear terminal screen
+  <span class="font-bold text-white">whoami</span>    Display user info`, true);
+        }
+
+
+        function handleCommand(cmdRaw) {
+            const trimmed = cmdRaw.trim();
+            if (!trimmed) {
+                printCommandRow("");
+                return;
+            }
+
+
+            // Add to history
+            commandHistory.push(trimmed);
+            historyIndex = commandHistory.length;
+
+
+            printCommandRow(trimmed);
+
+
+            const args = trimmed.split(/\s+/);
+            const cmd = args[0].toLowerCase();
+            const param = args[1];
+
+
+            switch(cmd) {
+                case 'help':
+                    printHelp();
+                    break;
+               
+                case 'clear':
+                    terminalOutput.innerHTML = '';
+                    printHelp();
+                    break;
+
+
+                case 'ls':
+                    listDirectory();
+                    break;
+
+
+                case 'cd':
+                    changeDirectory(param);
+                    break;
+               
+                case 'cat':
+                    readFile(param);
+                    break;
+
+
+                case 'open':
+                    openLink(param);
+                    break;
+
+
+                case 'whoami':
+                    printToTerminal('guest');
+                    break;
+
+
+                default:
+                    printToTerminal(`Command not found: ${cmd}. Type 'help' for assistance.`, false);
+            }
+        }
+
+
+        function printCommandRow(cmd) {
+            const path = currentPath.length === 0 ? '~' : '~/' + currentPath.join('/');
+            const promptHtml = `<div class="mb-1">
+                <span class="prompt">guest@github</span><span class="text-gray-500">:</span><span class="path">${path}</span><span class="text-gray-500">$</span> ${cmd}
+            </div>`;
+            printToTerminal(promptHtml, true);
+        }
+
+
+        // --- FILESYSTEM OPERATIONS ---
+
+
+        function listDirectory() {
+            const dir = getCurrentDir();
+            if (!dir.children) {
+                printToTerminal("");
+                return;
+            }
+
+
+            const grid = document.createElement('div');
+            grid.className = 'ls-grid';
+
+
+            Object.entries(dir.children).forEach(([name, data]) => {
+                const item = document.createElement('div');
+                item.className = 'item';
+               
+                if (data.type === 'dir') {
+                    item.classList.add('is-dir');
+                    item.innerHTML = `${name}/`;
+                    item.onclick = () => {
+                        cmdInput.value = `cd ${name}`;
+                        handleCommand(cmdInput.value);
+                        cmdInput.value = '';
+                    };
+                } else if (data.type === 'link') {
+                    item.classList.add('is-link');
+                    item.innerHTML = `${name} ↗`;
+                    item.onclick = () => window.open(data.url, '_blank');
+                } else {
+                    item.classList.add('is-file');
+                    item.innerHTML = name;
+                    item.onclick = () => {
+                        cmdInput.value = `cat ${name}`;
+                        handleCommand(cmdInput.value);
+                        cmdInput.value = '';
+                    };
+                }
+                grid.appendChild(item);
+            });
+
+
+            terminalOutput.appendChild(grid);
+           
+            // Auto scroll
+            const terminal = document.getElementById('terminal');
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+
+        function changeDirectory(target) {
+            if (!target) {
+                currentPath = [];
+                updatePathDisplay();
+                return;
+            }
+
+
+            if (target === '..') {
+                if (currentPath.length > 0) currentPath.pop();
+                updatePathDisplay();
+                return;
+            }
+
+
+            const currentDir = getCurrentDir();
+            if (currentDir.children && currentDir.children[target] && currentDir.children[target].type === 'dir') {
+                currentPath.push(target);
+                updatePathDisplay();
+            } else {
+                printToTerminal(`cd: no such directory: ${target}`);
+            }
+        }
+
+
+        function readFile(filename) {
+            if (!filename) {
+                printToTerminal("Usage: cat [filename]");
+                return;
+            }
+           
+            const currentDir = getCurrentDir();
+            const file = currentDir.children ? currentDir.children[filename] : null;
+
+
+            if (file) {
+                if (file.type === 'file') {
+                    printToTerminal(file.content);
+                } else if (file.type === 'link') {
+                    printToTerminal(`Error: ${filename} is a link. Use 'open' or click it.`);
+                } else if (file.type === 'dir') {
+                    printToTerminal(`Error: ${filename} is a directory.`);
+                }
+            } else {
+                printToTerminal(`cat: ${filename}: No such file`);
+            }
+        }
+
+
+        function openLink(linkName) {
+            const currentDir = getCurrentDir();
+            const file = currentDir.children ? currentDir.children[linkName] : null;
+           
+            if (file && file.type === 'link') {
+                printToTerminal(`Opening ${file.url}...`);
+                window.open(file.url, '_blank');
+            } else {
+                printToTerminal(`open: ${linkName}: Not a valid link`);
+            }
+        }
+
+
+        // --- INPUT HANDLING ---
+
+
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = cmdInput.value;
+                cmdInput.value = '';
+                handleCommand(val);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    cmdInput.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    cmdInput.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    cmdInput.value = '';
+                }
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                const val = cmdInput.value.trim();
+                const args = val.split(' ');
+                const partial = args[args.length - 1];
+               
+                // Simple tab completion logic
+                if (partial) {
+                    const currentDir = getCurrentDir();
+                    if (!currentDir.children) return;
+                   
+                    const matches = Object.keys(currentDir.children).filter(k => k.startsWith(partial));
+                   
+                    if (matches.length === 1) {
+                        args[args.length - 1] = matches[0];
+                        cmdInput.value = args.join(' ');
+                    } else if (matches.length > 1) {
+                        // Print matches if multiple
+                        printCommandRow(val);
+                        printToTerminal(matches.join('  '));
+                    }
+                }
+            }
+        });
+
+
+        // Start
+        runBootSequence();
+
+
+    </script>
+</body>
+</html>
+
