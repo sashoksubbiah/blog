@@ -40,6 +40,7 @@
             background-color: #0f172a;
             color: #e2e8f0;
             font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
         }
 
         /* Architecture Diagram Styles */
@@ -54,50 +55,30 @@
             position: absolute;
             z-index: 20;
             cursor: default;
+            /* Center the node on its coordinate */
+            transform: translate(-50%, -50%);
         }
         
         .arch-node.active {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+            transform: translate(-50%, -50%) scale(1.1);
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.5);
             border-color: #06b6d4;
+            background-color: #0f172a;
         }
 
         .arch-node.primary-active {
             border-color: #a855f7;
-            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
         }
 
         .connection-line {
             fill: none;
-            stroke: #334155;
+            stroke: #475569;
             stroke-width: 2;
             stroke-linecap: round;
             transition: stroke 0.3s ease;
         }
-
-        .connection-line.active-path {
-            stroke: #06b6d4;
-            stroke-width: 3;
-            filter: drop-shadow(0 0 3px #06b6d4);
-        }
         
-        .connection-line.control-path {
-            stroke: #a855f7;
-            stroke-dasharray: 5,5;
-        }
-        
-        .connection-line.control-path.active-path {
-            stroke: #a855f7;
-            filter: drop-shadow(0 0 3px #a855f7);
-        }
-
-        .packet {
-            fill: #fff;
-            r: 4;
-            opacity: 0;
-            filter: drop-shadow(0 0 2px rgba(255,255,255,0.8));
-        }
-
         /* 3D Card Effect */
         .card-3d-wrapper {
             perspective: 1000px;
@@ -119,54 +100,54 @@
         }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-8">
+<body class="min-h-screen p-4 md:p-6 lg:p-8">
 
     <!-- Header -->
-    <header class="max-w-7xl mx-auto mb-10 text-center">
-        <h1 class="text-4xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gfsCyan to-gfsPurple mb-4">
+    <header class="max-w-7xl mx-auto mb-8 text-center">
+        <h1 class="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gfsCyan to-gfsPurple mb-2">
             The Google File System
         </h1>
     </header>
 
     <!-- INTERACTIVE OPERATIONS LAB -->
-    <section class="max-w-7xl mx-auto mb-16">
+    <section class="max-w-7xl mx-auto mb-12">
         
         <!-- Controls Header -->
-        <div class="flex flex-col md:flex-row items-center justify-between mb-4 bg-gfsCard p-4 rounded-t-xl border-b border-gray-700">
-            <div class="flex items-center gap-4 mb-4 md:mb-0">
-                <i class="fa-solid fa-flask text-gfsCyan text-xl"></i>
-                <div class="h-6 w-px bg-gray-600 mx-2"></div>
+        <div class="flex flex-col md:flex-row items-center justify-between mb-4 bg-gfsCard p-4 rounded-t-xl border-b border-gray-700 shadow-lg">
+            <div class="flex items-center gap-4 mb-4 md:mb-0 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                <i class="fa-solid fa-flask text-gfsCyan text-xl shrink-0"></i>
+                <div class="h-6 w-px bg-gray-600 mx-2 shrink-0"></div>
                 <!-- Scenario Tabs -->
-                <div class="flex bg-gray-900 rounded-lg p-1">
-                    <button onclick="setScenario('read')" id="tab-read" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-gfsCyan text-white">Read Flow</button>
-                    <button onclick="setScenario('write')" id="tab-write" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-gray-400 hover:text-white">Write Flow</button>
-                    <button onclick="setScenario('append')" id="tab-append" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-gray-400 hover:text-white">Record Append</button>
+                <div class="flex bg-gray-900 rounded-lg p-1 shrink-0">
+                    <button onclick="setScenario('read')" id="tab-read" class="px-4 py-2 rounded-md text-xs font-bold transition-all bg-gfsCyan text-white whitespace-nowrap">Read Flow</button>
+                    <button onclick="setScenario('write')" id="tab-write" class="px-4 py-2 rounded-md text-xs font-bold transition-all text-gray-400 hover:text-white whitespace-nowrap">Write Flow</button>
+                    <button onclick="setScenario('append')" id="tab-append" class="px-4 py-2 rounded-md text-xs font-bold transition-all text-gray-400 hover:text-white whitespace-nowrap">Record Append</button>
                 </div>
             </div>
 
             <!-- Playback Controls -->
-            <div class="flex gap-2">
-                <button onclick="resetSim()" class="px-4 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-white text-sm transition-all">
+            <div class="flex gap-2 shrink-0">
+                <button onclick="resetSim()" class="px-4 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-white text-xs font-bold transition-all">
                     <i class="fa-solid fa-rotate-left mr-2"></i>Reset
                 </button>
-                <button onclick="nextStep()" id="nextBtn" class="px-6 py-2 rounded-lg bg-gfsGreen text-white font-bold text-sm shadow-lg shadow-green-900/20 hover:bg-green-500 hover:scale-105 transition-all">
+                <button onclick="nextStep()" id="nextBtn" class="px-6 py-2 rounded-lg bg-gfsGreen text-white font-bold text-xs shadow-lg shadow-green-900/20 hover:bg-green-500 hover:scale-105 transition-all flex items-center">
                     Next Step <i class="fa-solid fa-forward ml-2"></i>
                 </button>
             </div>
         </div>
         
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto lg:h-[450px]">
             
             <!-- LEFT: The Diagram Canvas -->
-            <div class="lg:col-span-2 bg-gfsCard rounded-b-xl border border-gray-700 h-[500px] arch-container overflow-hidden relative" id="canvas-container">
+            <div class="lg:col-span-2 bg-gfsCard rounded-b-xl lg:rounded-bl-xl lg:rounded-br-none border border-gray-700 h-[400px] lg:h-full arch-container overflow-hidden relative shadow-inner" id="canvas-container">
                 
                 <!-- SVG Layer for Links & Packets -->
                 <svg id="main-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10">
                     <defs>
-                        <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                        <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                             <polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" />
                         </marker>
-                        <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                        <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                             <polygon points="0 0, 10 3.5, 0 7" fill="#a855f7" />
                         </marker>
                     </defs>
@@ -174,35 +155,35 @@
                 </svg>
 
                 <!-- NODES (Injected by JS based on View) -->
-                <div id="nodes-layer" class="w-full h-full relative z-20 p-4">
+                <div id="nodes-layer" class="w-full h-full relative z-20">
                     <!-- JS will populate this -->
                 </div>
 
                 <!-- View Label -->
-                <div class="absolute top-4 left-4 bg-black/50 backdrop-blur px-3 py-1 rounded text-xs text-gray-400 border border-gray-700 font-mono z-0">
-                    VIEW: <span id="view-label" class="text-gfsCyan">CLUSTER</span>
+                <div class="absolute top-4 left-4 bg-black/60 backdrop-blur px-3 py-1 rounded text-[10px] tracking-widest text-gray-300 border border-gray-700 font-mono z-0">
+                    VIEW: <span id="view-label" class="text-gfsCyan font-bold">CLUSTER</span>
                 </div>
             </div>
 
             <!-- RIGHT: System Log & Explainer -->
-            <div class="bg-black rounded-xl border border-gray-700 p-0 flex flex-col h-[500px] shadow-2xl">
-                <div class="p-3 border-b border-gray-800 bg-gray-900/50 rounded-t-xl flex justify-between items-center">
-                    <span class="text-xs font-mono text-gray-500"><i class="fa-solid fa-terminal mr-2"></i>SYSTEM_LOG</span>
-                    <span id="step-indicator" class="text-xs font-bold text-gfsCyan">STEP 0/0</span>
+            <div class="bg-black rounded-b-xl lg:rounded-bl-none lg:rounded-br-xl border border-gray-700 p-0 flex flex-col h-[300px] lg:h-full shadow-2xl">
+                <div class="p-3 border-b border-gray-800 bg-gray-900/80 flex justify-between items-center">
+                    <span class="text-xs font-mono text-gray-400 font-bold"><i class="fa-solid fa-terminal mr-2"></i>SYSTEM_LOG</span>
+                    <span id="step-indicator" class="text-[10px] font-bold bg-gray-800 px-2 py-1 rounded text-gfsCyan">READY</span>
                 </div>
                 
                 <!-- Log Content -->
-                <div id="console-output" class="flex-grow p-4 font-mono text-sm overflow-y-auto space-y-3">
-                    <div class="text-gray-500 italic">> Initialize GFS Simulation...</div>
-                    <div class="text-gray-500 italic">> Select a mode to begin.</div>
+                <div id="console-output" class="flex-grow p-4 font-mono text-xs overflow-y-auto space-y-3 scroll-smooth">
+                    <div class="text-gray-500 italic">> System initialized...</div>
+                    <div class="text-gray-500 italic">> Waiting for user input.</div>
                 </div>
 
                 <!-- Legend -->
-                <div class="p-4 border-t border-gray-800 bg-gray-900/30 text-xs text-gray-400 grid grid-cols-2 gap-2">
+                <div class="p-3 border-t border-gray-800 bg-gray-900/50 text-[10px] text-gray-500 grid grid-cols-2 gap-x-2 gap-y-1">
                     <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsCyan"></div> Data Flow</div>
                     <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsPurple"></div> Control/Meta</div>
                     <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsGreen"></div> Primary</div>
-                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gray-500"></div> Replica</div>
+                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-slate-500"></div> Replica</div>
                 </div>
             </div>
         </div>
@@ -212,27 +193,27 @@
     <section class="max-w-7xl mx-auto mb-16">
         <div class="flex items-center gap-3 mb-6">
             <i class="fa-solid fa-scale-balanced text-gfsPurple text-2xl"></i>
-            <h2 class="text-3xl font-bold text-white">Critical Design Decisions</h2>
+            <h2 class="text-2xl font-bold text-white">Critical Design Decisions</h2>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             
             <!-- Card 1: Failures -->
             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
                 <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
                         <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Constraint</div>
-                            <h3 class="text-xl font-bold text-white">Failures are the Norm</h3>
-                            <p class="text-gray-400 text-sm mt-2">Thousands of cheap commodity parts means something is <em>always</em> broken.</p>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-triangle-exclamation"></i> Constraint</div>
+                            <h3 class="text-lg font-bold text-white">Component Failure</h3>
+                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">With 1000s of disks, component failure is the norm, not the exception.</p>
                         </div>
-                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
                     </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
                         <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-check"></i> Decision</div>
-                            <h3 class="text-xl font-bold text-white">Replication & Monitoring</h3>
-                            <p class="text-gray-300 text-sm mt-2">3x Replication. Fast Recovery (Cloning). Checksums on every block.</p>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-check"></i> Solution</div>
+                            <h3 class="text-lg font-bold text-white">Constant Monitoring</h3>
+                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">3x Replication. Checksums on every block. Fast cloning for recovery.</p>
                         </div>
                     </div>
                 </div>
@@ -241,19 +222,19 @@
             <!-- Card 2: Metadata -->
              <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
                 <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
                         <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-database"></i> Problem</div>
-                            <h3 class="text-xl font-bold text-white">Metadata Overhead</h3>
-                            <p class="text-gray-400 text-sm mt-2">Billions of small files would fill the Master's RAM instantly.</p>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-database"></i> Constraint</div>
+                            <h3 class="text-lg font-bold text-white">Memory Overhead</h3>
+                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">Billions of KB-sized files would exhaust the Master's RAM.</p>
                         </div>
-                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
                     </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
                         <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-cube"></i> Decision</div>
-                            <h3 class="text-xl font-bold text-white">64 MB Chunks</h3>
-                            <p class="text-gray-300 text-sm mt-2">Huge chunks = Fewer metadata entries. Keeps all metadata in RAM.</p>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-cube"></i> Solution</div>
+                            <h3 class="text-lg font-bold text-white">64 MB Chunks</h3>
+                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">Large chunks reduce metadata size, allowing it to fit entirely in RAM.</p>
                         </div>
                     </div>
                 </div>
@@ -262,19 +243,19 @@
              <!-- Card 3: Consistency -->
              <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
                 <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
                         <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-pen-to-square"></i> Workload</div>
-                            <h3 class="text-xl font-bold text-white">Concurrent Appends</h3>
-                            <p class="text-gray-400 text-sm mt-2">Hundreds of producers appending simultaneously. Locks are too slow.</p>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-pen-to-square"></i> Workload</div>
+                            <h3 class="text-lg font-bold text-white">Concurrent Appends</h3>
+                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">Many clients appending to logs simultaneously. Locks are too slow.</p>
                         </div>
-                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
                     </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
                         <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-list-ol"></i> Decision</div>
-                            <h3 class="text-xl font-bold text-white">Relaxed Consistency</h3>
-                            <p class="text-gray-300 text-sm mt-2">Atomic Record Append. GFS picks the offset. "Append at least once."</p>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-list-ol"></i> Solution</div>
+                            <h3 class="text-lg font-bold text-white">Relaxed Consistency</h3>
+                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">Atomic Record Appends. "At least once" delivery logic.</p>
                         </div>
                     </div>
                 </div>
@@ -283,19 +264,19 @@
             <!-- Card 4: Bandwidth -->
              <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
                 <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between">
+                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
                         <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2"><i class="fa-solid fa-network-wired"></i> Bottleneck</div>
-                            <h3 class="text-xl font-bold text-white">Single Master</h3>
-                            <p class="text-gray-400 text-sm mt-2">One machine cannot handle the data throughput of 1000s of clients.</p>
+                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-network-wired"></i> Bottleneck</div>
+                            <h3 class="text-lg font-bold text-white">Master Throughput</h3>
+                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">A single master cannot pipe data for thousands of clients.</p>
                         </div>
-                        <div class="text-right text-xs text-gray-500">Click to flip <i class="fa-solid fa-rotate"></i></div>
+                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
                     </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between">
+                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
                         <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2"><i class="fa-solid fa-route"></i> Decision</div>
-                            <h3 class="text-xl font-bold text-white">Decoupled Flows</h3>
-                            <p class="text-gray-300 text-sm mt-2">Master only says "Where". Chunkservers handle "What" (Data) directly.</p>
+                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-route"></i> Solution</div>
+                            <h3 class="text-lg font-bold text-white">Decoupled Flows</h3>
+                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">Master handles Metadata (Control). Chunkservers handle Data.</p>
                         </div>
                     </div>
                 </div>
@@ -315,10 +296,9 @@
         // --- DATA & STATE ---
         let currentScenario = 'read';
         let currentStep = 0;
-        let animationFrame = null;
+        let drawnLines = []; // Store active lines to manage/clear them
 
         // --- SCENARIO DEFINITIONS ---
-        // Each step defines: text, which paths are active, which nodes flash, packet animation
         const scenarios = {
             read: {
                 view: 'cluster',
@@ -453,6 +433,7 @@
         function setScenario(name) {
             currentScenario = name;
             currentStep = 0;
+            drawnLines = [];
             
             // Update UI Tabs
             ['read', 'write', 'append'].forEach(t => {
@@ -475,45 +456,53 @@
             consoleOut.innerHTML = `<div class="text-gfsCyan font-bold">> Mode: ${name.toUpperCase()}</div><div class="text-gray-500 italic">> Ready. Click 'Next Step'.</div>`;
             stepIndicator.innerText = `STEP 0/${scenarios[name].steps.length}`;
             
-            // Clear SVG
-            svgLayer.innerHTML = `<defs>
-                <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" /></marker>
-                <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a855f7" /></marker>
-            </defs>`;
+            // Clear SVG paths but keep defs
+            clearSvgPaths();
+        }
+
+        function clearSvgPaths() {
+             const paths = svgLayer.querySelectorAll('path, circle');
+             paths.forEach(p => p.remove());
         }
 
         function renderNodes(view) {
             nodesLayer.innerHTML = '';
             
+            // Icons
+            const iconClient = '<i class="fa-solid fa-laptop-code text-2xl mb-1 text-gfsCyan"></i>';
+            const iconMaster = '<i class="fa-solid fa-brain text-2xl mb-1 text-gfsPurple"></i>';
+            const iconServer = '<i class="fa-solid fa-server text-2xl mb-1 text-gray-400"></i>';
+            const iconPrimary = '<i class="fa-solid fa-server text-2xl mb-1 text-gfsGreen"></i>';
+            
             if (view === 'cluster') {
-                // Client
-                createNode('client', 'Client', '10%', '50%', 'border-gfsCyan');
-                // Master
-                createNode('master', 'Master', '50%', '15%', 'border-gfsPurple');
-                // Chunkservers
-                createNode('cs1', 'CS 1', '30%', '80%', 'border-gray-500');
-                createNode('cs2', 'CS 2', '50%', '80%', 'border-gray-500'); // Target
-                createNode('cs3', 'CS 3', '70%', '80%', 'border-gray-500');
+                // Using percentages with translate(-50%, -50%) for center alignment
+                createNode('client', `Client`, '15%', '50%', 'border-gfsCyan', false, iconClient);
+                createNode('master', `Master`, '50%', '15%', 'border-gfsPurple', false, iconMaster);
+                createNode('cs1', `CS 1`, '20%', '85%', 'border-gray-500', false, iconServer);
+                createNode('cs2', `CS 2`, '50%', '85%', 'border-gray-500', false, iconServer); 
+                createNode('cs3', `CS 3`, '80%', '85%', 'border-gray-500', false, iconServer);
             } else {
-                // Pipeline View
-                createNode('client', 'Client', '10%', '50%', 'border-gfsCyan');
-                createNode('master', 'Master', '10%', '15%', 'border-gfsPurple'); // Small master reference
+                // Pipeline View - Linear flow for better mobile fit
+                createNode('client', `Client`, '10%', '50%', 'border-gfsCyan', false, iconClient);
+                createNode('master', `Master`, '10%', '15%', 'border-gfsPurple', false, iconMaster);
                 
-                // Replicas arranged for pipeline
-                createNode('repB', 'Replica B\n(Secondary)', '40%', '80%', 'border-gray-500'); // Closest
-                createNode('primary', 'Replica A\n(Primary)', '60%', '50%', 'border-gfsGreen', true); // Middle
-                createNode('repC', 'Replica C\n(Secondary)', '80%', '20%', 'border-gray-500'); // Furthest
+                // Daisy Chain: B -> A -> C
+                createNode('repB', `Replica B\n(Sec)`, '35%', '50%', 'border-gray-500', false, iconServer); 
+                createNode('primary', `Primary A\n(Lease)`, '60%', '50%', 'border-gfsGreen', true, iconPrimary); 
+                createNode('repC', `Replica C\n(Sec)`, '85%', '50%', 'border-gray-500', false, iconServer); 
             }
         }
 
-        function createNode(id, label, left, top, colorClass, isPrimary = false) {
+        function createNode(id, label, left, top, colorClass, isPrimary, iconHtml) {
             const div = document.createElement('div');
             div.id = `node-${id}`;
-            div.className = `arch-node w-24 h-24 rounded-lg border-2 bg-slate-800 flex items-center justify-center text-center text-xs font-bold text-gray-300 shadow-xl ${colorClass}`;
+            div.className = `arch-node w-24 h-24 rounded-xl border-2 bg-slate-800 flex flex-col items-center justify-center text-center text-[10px] font-bold text-gray-300 shadow-xl ${colorClass}`;
             if(isPrimary) div.classList.add('primary-active');
+            
             div.style.left = left;
             div.style.top = top;
-            div.innerText = label;
+            
+            div.innerHTML = `${iconHtml}<span>${label}</span>`;
             nodesLayer.appendChild(div);
         }
 
@@ -529,14 +518,23 @@
             logEntry.className = "border-l-2 border-gfsCyan pl-2 py-1 animate-pulse-slow";
             logEntry.innerText = `[${currentStep + 1}] ${stepData.text}`;
             consoleOut.appendChild(logEntry);
-            consoleOut.scrollTop = consoleOut.scrollHeight;
+            
+            // Auto-Scroll to bottom
+            requestAnimationFrame(() => {
+                consoleOut.scrollTop = consoleOut.scrollHeight;
+            });
+
+            // Reset SVG if needed
+            if (stepData.resetPaths) {
+                clearSvgPaths();
+            }
 
             // Highlight Nodes
-            document.querySelectorAll('.arch-node').forEach(n => n.classList.remove('active', 'scale-110'));
+            document.querySelectorAll('.arch-node').forEach(n => n.classList.remove('active'));
             if (stepData.highlightNode) {
                 stepData.highlightNode.forEach(id => {
                     const el = document.getElementById(`node-${id}`);
-                    if(el) el.classList.add('active', 'scale-110');
+                    if(el) el.classList.add('active');
                 });
             }
 
@@ -558,6 +556,9 @@
                 done.className = "text-gfsGreen font-bold mt-2";
                 done.innerText = ">> OPERATION COMPLETE";
                 consoleOut.appendChild(done);
+                requestAnimationFrame(() => {
+                    consoleOut.scrollTop = consoleOut.scrollHeight;
+                });
             }
         }
 
@@ -569,9 +570,10 @@
         function getCenter(id) {
             const el = document.getElementById(`node-${id}`);
             if(!el) return {x:0, y:0};
+            // Since we use translate(-50%, -50%), the offsetLeft/Top is the center point
             return {
-                x: el.offsetLeft + el.offsetWidth/2,
-                y: el.offsetTop + el.offsetHeight/2
+                x: el.offsetLeft,
+                y: el.offsetTop
             };
         }
 
@@ -582,9 +584,20 @@
             const pathId = `path-${fromId}-${toId}-${Date.now()}`;
             const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
             
-            // Draw Curve
-            const cx = (start.x + end.x) / 2;
-            const cy = (start.y + end.y) / 2 - 20; // Slight arc
+            // Draw Curve - dynamically calculated based on relative positions
+            const deltaX = end.x - start.x;
+            const deltaY = end.y - start.y;
+            
+            // If horizontal line, curve up/down slightly. If vertical, curve left/right.
+            let cx, cy;
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                cx = (start.x + end.x) / 2;
+                cy = Math.min(start.y, end.y) - 30; // Curve Upwards
+            } else {
+                cx = Math.min(start.x, end.x) - 30;
+                cy = (start.y + end.y) / 2;
+            }
+
             const d = `M${start.x},${start.y} Q${cx},${cy} ${end.x},${end.y}`;
             
             path.setAttribute("d", d);
@@ -604,21 +617,30 @@
             // Animate Packet
             let progress = 0;
             function step() {
-                progress += 0.02;
+                progress += 0.015; // Speed
                 if (progress > 1) {
                     packet.remove();
-                    // Keep line but fade it slightly? No, keep it history
                     return;
                 }
                 
-                const point = path.getPointAtLength(progress * path.getTotalLength());
-                packet.setAttribute("cx", point.x);
-                packet.setAttribute("cy", point.y);
-                packet.style.opacity = 1;
-                requestAnimationFrame(step);
+                try {
+                    const point = path.getPointAtLength(progress * path.getTotalLength());
+                    packet.setAttribute("cx", point.x);
+                    packet.setAttribute("cy", point.y);
+                    packet.style.opacity = 1;
+                    requestAnimationFrame(step);
+                } catch(e) {
+                    // Path might be removed on reset
+                }
             }
             requestAnimationFrame(step);
         }
+
+        // Handle Window Resize to keep lines correct
+        window.addEventListener('resize', () => {
+             // In a real app, we'd redraw lines. For this demo, simple reset is safer to avoid visual glitches.
+             resetSim();
+        });
 
         // Init
         window.addEventListener('load', () => setScenario('read'));
