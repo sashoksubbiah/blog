@@ -157,7 +157,8 @@
             </div>
 
             <!-- Dynamic Grid -->
-            <div id="file-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
+            <!-- The class here is set dynamically by JS based on view mode (Grid vs List) -->
+            <div id="file-grid">
                 <!-- JS Injects content here -->
             </div>
 
@@ -322,12 +323,20 @@
         function renderGrid(items) {
             grid.innerHTML = '';
             
+            // Layout Logic:
+            // Root = Grid view (Dashboard style)
+            // Nested = List view (Links style)
+            if (currentPath === '') {
+                grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20';
+            } else {
+                grid.className = 'flex flex-col gap-2 pb-20 max-w-4xl mx-auto';
+            }
+            
             if (!Array.isArray(items)) {
-                // It's a single file (shouldn't happen with current logic but handle it)
                 return; 
             }
 
-            // Filter out index.html (the homepage itself) if we are in root
+            // Filter out index.html if in root
             const filteredItems = items.filter(item => {
                 if (currentPath === '' && item.name === 'index.html') return false;
                 if (item.name.startsWith('.')) return false; // Hide dotfiles
@@ -365,14 +374,13 @@
             const el = document.createElement('div');
             const isRoot = currentPath === '';
             
-            // Back Button Style
+            // --- BACK BUTTON ---
             if (item.type === 'back') {
-                el.className = 'glass-card p-4 rounded cursor-pointer group flex items-center justify-center h-32 border-dashed border-white/20 hover:border-white/50';
+                // List View Back Button
+                el.className = 'p-3 rounded cursor-pointer group flex items-center text-term-dim hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 mb-2 font-mono text-xs';
                 el.innerHTML = `
-                    <div class="text-center">
-                        <i class="fa-solid fa-turn-up text-xl text-term-dim group-hover:text-white mb-2 transition-colors"></i>
-                        <div class="font-mono text-xs text-term-dim group-hover:text-white">PARENT_DIR</div>
-                    </div>
+                    <i class="fa-solid fa-turn-up text-sm mr-3"></i>
+                    <span>.. / BACK_TO_PARENT</span>
                 `;
                 el.onclick = () => {
                     const parts = currentPath.split('/');
@@ -382,58 +390,79 @@
                 return el;
             }
 
-            // Standard Item Style
-            el.className = 'glass-card p-5 rounded cursor-pointer group relative overflow-hidden flex flex-col justify-between h-40';
+            // --- STANDARD ITEMS ---
             
-            // Icon Logic
-            let iconClass = 'fa-file text-term-dim';
-            let colorClass = 'text-term-dim';
-            let typeLabel = item.size ? formatBytes(item.size) : 'FILE';
-            
-            if (item.type === 'dir') {
-                if (isRoot) {
-                    // Level 1: Looks like a Folder
-                    iconClass = 'fa-folder';
-                    colorClass = 'text-term-accent';
-                    typeLabel = 'DIRECTORY';
-                } else {
-                    // Level 2+: Looks like a Link/Project
+            if (isRoot) {
+                // *** ROOT: BOX / CARD LAYOUT ***
+                el.className = 'glass-card p-5 rounded cursor-pointer group relative overflow-hidden flex flex-col justify-between h-40';
+                
+                // Root Icons
+                let iconClass = 'fa-folder';
+                let colorClass = 'text-term-accent';
+                let typeLabel = 'DIRECTORY';
+
+                if (item.type !== 'dir') {
+                    // Files in root (if any)
+                    iconClass = 'fa-file';
+                    colorClass = 'text-term-dim';
+                    typeLabel = 'FILE';
+                }
+
+                el.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <i class="fa-solid ${iconClass} text-3xl ${colorClass} group-hover:scale-110 transition-transform duration-300"></i>
+                        <div class="w-2 h-2 rounded-full bg-term-accent opacity-50"></div>
+                    </div>
+                    
+                    <div class="z-10">
+                        <h3 class="font-mono text-sm font-bold text-gray-200 truncate group-hover:text-term-accent transition-colors">${item.name}</h3>
+                        <p class="font-mono text-[10px] text-term-dim uppercase mt-1">${typeLabel}</p>
+                    </div>
+
+                    <div class="absolute -bottom-4 -right-4 text-6xl opacity-5 group-hover:opacity-10 transition-opacity text-white select-none pointer-events-none">
+                        ${item.name.charAt(0).toUpperCase()}
+                    </div>
+                `;
+
+            } else {
+                // *** NESTED: LIST / LINK LAYOUT ***
+                el.className = 'glass p-3 rounded cursor-pointer group flex items-center justify-between hover:bg-white/5 transition-colors border border-transparent hover:border-white/10';
+                
+                // List Icons
+                let iconClass = 'fa-file text-term-dim';
+                let colorClass = 'text-term-dim';
+                let typeLabel = item.size ? formatBytes(item.size) : 'FILE';
+
+                if (item.type === 'dir') {
                     iconClass = 'fa-link'; 
                     colorClass = 'text-term-success';
-                    typeLabel = 'PROJECT LINK';
+                    typeLabel = 'PROJECT';
+                } else if (item.name.endsWith('.html')) {
+                    iconClass = 'fa-brands fa-html5';
+                    colorClass = 'text-orange-400';
+                } else if (item.name.endsWith('.js')) {
+                    iconClass = 'fa-brands fa-js';
+                    colorClass = 'text-yellow-400';
+                } else if (item.name.endsWith('.css')) {
+                    iconClass = 'fa-brands fa-css3-alt';
+                    colorClass = 'text-blue-400';
+                } else if (item.name.endsWith('.md')) {
+                    iconClass = 'fa-brands fa-markdown';
+                    colorClass = 'text-white';
                 }
-            } else if (item.name.endsWith('.html')) {
-                iconClass = 'fa-brands fa-html5';
-                colorClass = 'text-orange-400';
-            } else if (item.name.endsWith('.js')) {
-                iconClass = 'fa-brands fa-js';
-                colorClass = 'text-yellow-400';
-            } else if (item.name.endsWith('.css')) {
-                iconClass = 'fa-brands fa-css3-alt';
-                colorClass = 'text-blue-400';
-            } else if (item.name.endsWith('.md')) {
-                iconClass = 'fa-brands fa-markdown';
-                colorClass = 'text-white';
+
+                el.innerHTML = `
+                    <div class="flex items-center space-x-3 overflow-hidden">
+                        <div class="w-6 text-center"><i class="fa-solid ${iconClass} text-lg ${colorClass}"></i></div>
+                        <span class="font-mono text-sm text-gray-300 group-hover:text-white truncate transition-colors">${item.name}</span>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 pl-4 shrink-0">
+                        <span class="font-mono text-[10px] text-term-dim uppercase hidden sm:inline-block">${typeLabel}</span>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-term-dim opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1"></i>
+                    </div>
+                `;
             }
-
-            el.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <i class="fa-solid ${iconClass} text-3xl ${colorClass} group-hover:scale-110 transition-transform duration-300"></i>
-                    <div class="w-2 h-2 rounded-full ${item.type === 'dir' ? (isRoot ? 'bg-term-accent' : 'bg-term-success') : 'bg-term-dim'} opacity-50"></div>
-                </div>
-                
-                <div class="z-10">
-                    <h3 class="font-mono text-sm font-bold text-gray-200 truncate group-hover:text-term-accent transition-colors">${item.name}</h3>
-                    <p class="font-mono text-[10px] text-term-dim uppercase mt-1">
-                        ${typeLabel}
-                    </p>
-                </div>
-
-                <!-- Hover Decor -->
-                <div class="absolute -bottom-4 -right-4 text-6xl opacity-5 group-hover:opacity-10 transition-opacity text-white select-none pointer-events-none">
-                    ${item.name.charAt(0).toUpperCase()}
-                </div>
-            `;
 
             el.onclick = () => handleItemClick(item);
 
