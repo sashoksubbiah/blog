@@ -165,25 +165,28 @@
 
         <!-- Preview Overlay (Iframe) -->
         <div id="preview-overlay" class="absolute inset-0 bg-[#050505] z-30 transform translate-y-full transition-transform duration-500 flex flex-col">
-            <!-- Preview Header -->
-            <div class="h-12 border-b border-white/10 bg-[#09090b] flex items-center justify-between px-4 flex-none">
-                <div class="flex items-center space-x-3">
-                    <button onclick="closePreview()" class="text-term-dim hover:text-white transition-colors">
-                        <i class="fa-solid fa-arrow-left"></i>
-                    </button>
-                    <span class="font-mono text-xs text-white" id="preview-title">PROJECT_PREVIEW.HTML</span>
+            
+            <!-- Floating Controls (Absolute, transparent) -->
+            <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-50">
+                <!-- Title Pill -->
+                <div class="pointer-events-auto glass px-3 py-1.5 rounded-full flex items-center space-x-2 border border-white/10 bg-black/50 backdrop-blur-md shadow-lg">
+                     <span class="w-2 h-2 rounded-full bg-term-success animate-pulse"></span>
+                     <span class="font-mono text-[10px] text-white tracking-widest uppercase" id="preview-title">PREVIEW_MODE</span>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <a id="preview-external-link" href="#" target="_blank" class="text-xs font-mono text-term-accent hover:underline">
-                        OPEN IN NEW TAB <i class="fa-solid fa-up-right-from-square ml-1"></i>
+
+                <!-- Action Pills -->
+                <div class="flex space-x-2 pointer-events-auto">
+                    <a id="preview-external-link" href="#" target="_blank" class="glass w-9 h-9 rounded-full flex items-center justify-center text-term-dim hover:text-term-accent hover:border-term-accent/50 transition-all bg-black/50 backdrop-blur-md shadow-lg" title="Open in New Tab">
+                        <i class="fa-solid fa-up-right-from-square text-xs"></i>
                     </a>
-                    <button onclick="closePreview()" class="text-xs font-mono text-term-dim hover:text-red-400">
-                        CLOSE
+                    <button onclick="closePreview()" class="glass px-4 h-9 rounded-full flex items-center text-xs font-mono text-white hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-300 transition-all bg-black/50 backdrop-blur-md shadow-lg group">
+                        <i class="fa-solid fa-xmark mr-2 group-hover:rotate-90 transition-transform"></i> CLOSE
                     </button>
                 </div>
             </div>
-            <!-- The Iframe -->
-            <iframe id="preview-frame" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+
+            <!-- The Iframe (Full Height) -->
+            <iframe id="preview-frame" class="flex-1 w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
         </div>
 
     </main>
@@ -360,6 +363,7 @@
 
         function createCard(item) {
             const el = document.createElement('div');
+            const isRoot = currentPath === '';
             
             // Back Button Style
             if (item.type === 'back') {
@@ -384,10 +388,20 @@
             // Icon Logic
             let iconClass = 'fa-file text-term-dim';
             let colorClass = 'text-term-dim';
+            let typeLabel = item.size ? formatBytes(item.size) : 'FILE';
             
             if (item.type === 'dir') {
-                iconClass = 'fa-folder';
-                colorClass = 'text-term-accent';
+                if (isRoot) {
+                    // Level 1: Looks like a Folder
+                    iconClass = 'fa-folder';
+                    colorClass = 'text-term-accent';
+                    typeLabel = 'DIRECTORY';
+                } else {
+                    // Level 2+: Looks like a Link/Project
+                    iconClass = 'fa-link'; 
+                    colorClass = 'text-term-success';
+                    typeLabel = 'PROJECT LINK';
+                }
             } else if (item.name.endsWith('.html')) {
                 iconClass = 'fa-brands fa-html5';
                 colorClass = 'text-orange-400';
@@ -405,13 +419,13 @@
             el.innerHTML = `
                 <div class="flex justify-between items-start">
                     <i class="fa-solid ${iconClass} text-3xl ${colorClass} group-hover:scale-110 transition-transform duration-300"></i>
-                    <div class="w-2 h-2 rounded-full ${item.type === 'dir' ? 'bg-term-accent' : 'bg-term-dim'} opacity-50"></div>
+                    <div class="w-2 h-2 rounded-full ${item.type === 'dir' ? (isRoot ? 'bg-term-accent' : 'bg-term-success') : 'bg-term-dim'} opacity-50"></div>
                 </div>
                 
                 <div class="z-10">
                     <h3 class="font-mono text-sm font-bold text-gray-200 truncate group-hover:text-term-accent transition-colors">${item.name}</h3>
                     <p class="font-mono text-[10px] text-term-dim uppercase mt-1">
-                        ${item.type === 'dir' ? 'DIRECTORY' : (item.size ? formatBytes(item.size) : 'FILE')}
+                        ${typeLabel}
                     </p>
                 </div>
 
