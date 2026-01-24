@@ -325,11 +325,12 @@
             
             // Layout Logic:
             // Root = Grid view (Dashboard style)
-            // Nested = List view (Links style)
+            // Nested = Compact multi-column Link list
             if (currentPath === '') {
                 grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20';
             } else {
-                grid.className = 'flex flex-col gap-2 pb-20 max-w-4xl mx-auto';
+                // Use a dense grid for links: 1 col mobile, 2 cols tablet, 3 cols desktop
+                grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 pb-20 max-w-6xl mx-auto';
             }
             
             if (!Array.isArray(items)) {
@@ -376,11 +377,11 @@
             
             // --- BACK BUTTON ---
             if (item.type === 'back') {
-                // List View Back Button
-                el.className = 'p-3 rounded cursor-pointer group flex items-center text-term-dim hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 mb-2 font-mono text-xs';
+                // Compact Back Link
+                el.className = 'col-span-full mb-4 p-2 rounded cursor-pointer group flex items-center text-term-dim hover:text-white hover:bg-white/5 transition-colors border border-transparent border-dashed border-white/10 font-mono text-xs';
                 el.innerHTML = `
                     <i class="fa-solid fa-turn-up text-sm mr-3"></i>
-                    <span>.. / BACK_TO_PARENT</span>
+                    <span>.. / PARENT_DIRECTORY</span>
                 `;
                 el.onclick = () => {
                     const parts = currentPath.split('/');
@@ -425,18 +426,17 @@
                 `;
 
             } else {
-                // *** NESTED: LIST / LINK LAYOUT ***
-                el.className = 'glass p-3 rounded cursor-pointer group flex items-center justify-between hover:bg-white/5 transition-colors border border-transparent hover:border-white/10';
+                // *** NESTED: COMPACT LINK LAYOUT ***
+                // No glass box, minimal padding, focuses on text density
+                el.className = 'group flex items-center p-2 rounded hover:bg-white/5 transition-colors border border-transparent cursor-pointer';
                 
-                // List Icons
-                let iconClass = 'fa-file text-term-dim';
+                // Link Icons
+                let iconClass = 'fa-file';
                 let colorClass = 'text-term-dim';
-                let typeLabel = item.size ? formatBytes(item.size) : 'FILE';
-
+                
                 if (item.type === 'dir') {
                     iconClass = 'fa-link'; 
                     colorClass = 'text-term-success';
-                    typeLabel = 'PROJECT';
                 } else if (item.name.endsWith('.html')) {
                     iconClass = 'fa-brands fa-html5';
                     colorClass = 'text-orange-400';
@@ -452,15 +452,8 @@
                 }
 
                 el.innerHTML = `
-                    <div class="flex items-center space-x-3 overflow-hidden">
-                        <div class="w-6 text-center"><i class="fa-solid ${iconClass} text-lg ${colorClass}"></i></div>
-                        <span class="font-mono text-sm text-gray-300 group-hover:text-white truncate transition-colors">${item.name}</span>
-                    </div>
-                    
-                    <div class="flex items-center space-x-4 pl-4 shrink-0">
-                        <span class="font-mono text-[10px] text-term-dim uppercase hidden sm:inline-block">${typeLabel}</span>
-                        <i class="fa-solid fa-chevron-right text-[10px] text-term-dim opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1"></i>
-                    </div>
+                    <i class="fa-solid ${iconClass} text-sm ${colorClass} w-6 text-center mr-2 opacity-70 group-hover:opacity-100 transition-opacity"></i>
+                    <span class="font-mono text-sm text-term-dim group-hover:text-term-accent transition-colors truncate">${item.name}</span>
                 `;
             }
 
