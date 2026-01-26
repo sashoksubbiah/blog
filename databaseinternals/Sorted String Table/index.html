@@ -72,13 +72,13 @@
 
         // 1. Header Component
         const Header = () => (
-            <header className="py-12 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
-                <div className="max-w-5xl mx-auto text-center">
-                    <h1 className="text-4xl md:text-6xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 mb-4">
+            <header className="py-3 px-6 border-b border-slate-800 bg-slate-900/95 backdrop-blur-md sticky top-0 z-50 shadow-lg">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2 md:gap-8">
+                    <h1 className="text-xl md:text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 shrink-0">
                         Sorted String Tables
                     </h1>
-                    <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-                        An interactive deep dive into the immutable heart of modern storage engines like Cassandra, RocksDB, and Bigtable.
+                    <p className="text-xs md:text-sm text-slate-400 text-center md:text-right">
+                        An interactive deep dive into storage engines like Cassandra & RocksDB.
                     </p>
                 </div>
             </header>
@@ -233,6 +233,24 @@
             );
         };
 
+        // --- INFO BOX COMPONENT ---
+        const InfoToggle = ({ title, isOpen, onToggle, children }) => (
+            <div className="border-t border-slate-700 mt-4 pt-2">
+                <button 
+                    onClick={onToggle}
+                    className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white transition-colors w-full"
+                >
+                    <i data-lucide={isOpen ? "chevron-down" : "chevron-right"} className="w-4 h-4"></i>
+                    Technical Deep Dive: {title}
+                </button>
+                <div className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-[500px] opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+                    <div className="bg-slate-900/50 p-3 rounded text-xs text-slate-300 space-y-2 border-l-2 border-slate-600">
+                        {children}
+                    </div>
+                </div>
+            </div>
+        );
+
         // --- MAIN APP LOGIC ---
 
         const App = () => {
@@ -245,11 +263,14 @@
             const [searchResult, setSearchResult] = useState(null);
             const [isCompacting, setIsCompacting] = useState(false);
             const [logs, setLogs] = useState(["System initialized..."]);
+            
+            // Info Toggles
+            const [openInfo, setOpenInfo] = useState(null); // 'write', 'flush', 'read'
 
             // Icons
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-            }, [sstables, searchResult, isCompacting]);
+            }, [sstables, searchResult, isCompacting, openInfo]);
 
             // Add Log
             const addLog = (msg) => setLogs(prev => [`> ${msg}`, ...prev].slice(0, 5));
@@ -391,6 +412,8 @@
                 }, 2000);
             };
 
+            const toggleInfo = (id) => setOpenInfo(openInfo === id ? null : id);
+
             return (
                 <div className="min-h-screen pb-20">
                     <Header />
@@ -402,7 +425,7 @@
                         <div className="lg:col-span-4 space-y-8">
                             
                             {/* Write Module */}
-                            <section className="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700">
+                            <section className="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700 transition-all hover:border-amber-500/30">
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="p-2 bg-amber-500/10 rounded-lg">
                                         <i data-lucide="pen-tool" className="w-6 h-6 text-amber-500"></i>
@@ -431,10 +454,15 @@
                                         <i data-lucide="plus-circle" className="w-4 h-4"></i> Insert
                                     </button>
                                 </form>
+                                <InfoToggle title="How Writes Work" isOpen={openInfo === 'write'} onToggle={() => toggleInfo('write')}>
+                                    <p>1. <b>Write-Ahead Log (WAL):</b> Before touching RAM, data is appended to a log file on disk. This ensures durability if power fails. (Not visualized here).</p>
+                                    <p>2. <b>Memtable Insert:</b> Data is inserted into an in-memory structure (usually a Skip List or Red-Black Tree) which keeps data <b>sorted</b> instantly.</p>
+                                    <p>3. <b>Speed:</b> This makes writes O(1) or O(log N) in memory, which is nanoseconds compared to milliseconds for disk seeks.</p>
+                                </InfoToggle>
                             </section>
 
                             {/* Flush Module */}
-                            <section className="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700">
+                            <section className="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700 transition-all hover:border-blue-500/30">
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="p-2 bg-blue-500/10 rounded-lg">
                                         <i data-lucide="save" className="w-6 h-6 text-blue-500"></i>
@@ -451,10 +479,16 @@
                                 >
                                     <i data-lucide="hard-drive-download" className="w-4 h-4"></i> Flush to Disk
                                 </button>
+                                <InfoToggle title="Why Sorted?" isOpen={openInfo === 'flush'} onToggle={() => toggleInfo('flush')}>
+                                    <p><b>Sorted String Table (SSTable):</b> We don't just dump the RAM. We write it sequentially as a sorted file.</p>
+                                    <p><b>Benefit 1: Range Scans.</b> Because it's sorted, reading "Apple" to "Banana" is just reading one chunk of the file.</p>
+                                    <p><b>Benefit 2: Compression.</b> Sorted data compresses better (prefix compression) because adjacent keys are similar (e.g., "Apple", "Apricot").</p>
+                                    <p><b>Benefit 3: Compaction.</b> Merging two sorted files is very fast (O(N)), like the "merge" step in Merge Sort.</p>
+                                </InfoToggle>
                             </section>
 
                              {/* Read Module */}
-                             <section className="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700">
+                             <section className="bg-slate-800 rounded-xl p-6 shadow-xl border border-slate-700 transition-all hover:border-emerald-500/30">
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="p-2 bg-emerald-500/10 rounded-lg">
                                         <i data-lucide="search" className="w-6 h-6 text-emerald-500"></i>
@@ -486,6 +520,12 @@
                                         </div>
                                     </div>
                                 )}
+                                <InfoToggle title="The Search Chain" isOpen={openInfo === 'read'} onToggle={() => toggleInfo('read')}>
+                                    <p>1. <b>Memtable:</b> Check RAM first. If found, return immediately.</p>
+                                    <p>2. <b>Bloom Filter:</b> Before touching disk, check this probabilistic structure. If it says "No", the key is definitely not in that SSTable. Saves 95% of disk reads.</p>
+                                    <p>3. <b>Sparse Index:</b> If Bloom says "Maybe", we check the Index. It tells us roughly where the key is (e.g., "Between byte 100 and 200").</p>
+                                    <p>4. <b>Binary Search:</b> We load that specific block from disk and binary search it.</p>
+                                </InfoToggle>
                             </section>
 
                             {/* Logs */}
