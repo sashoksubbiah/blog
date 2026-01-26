@@ -3,487 +3,487 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MySQL Point Query Lifecycle Visualizer</title>
+    <title>MySQL Point Query: The Data Stack</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
-        /* --- CSS STYLING --- */
+        /* --- MODERN THEME & LAYOUT --- */
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --highlight: #38bdf8;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --text-main: #f1f5f9;
+            --text-dim: #94a3b8;
+        }
+
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0f172a; /* Slate 900 */
-            color: #e2e8f0; /* Slate 200 */
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
             margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            overflow: auto; 
+        }
+
+        /* --- SIDEBAR (Timeline) --- */
+        aside {
+            width: 300px;
+            min-width: 300px;
+            background: #020617;
+            border-right: 1px solid #334155;
             padding: 20px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            z-index: 10;
+            height: 100vh;
+            overflow: hidden; 
+            position: sticky;
+            top: 0;
         }
 
-        h1 {
-            color: #38bdf8; /* Sky 400 */
-            margin-bottom: 10px;
-            font-weight: 300;
+        h1 { 
+            font-size: 1.2rem; 
+            margin-bottom: 1.5rem; 
+            color: var(--highlight);
+            flex-shrink: 0; 
         }
-
-        .container {
-            width: 100%;
-            max-width: 1100px;
-            background: #1e293b; /* Slate 800 */
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        /* Controls Area */
-        .controls {
-            display: flex;
-            gap: 15px;
+        
+        .timeline { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0; 
             margin-bottom: 20px;
-            align-items: center;
-            background: #020617;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #334155;
+            flex-grow: 1; 
+            overflow-y: auto; 
+            padding-right: 5px; 
         }
+        
+        .timeline::-webkit-scrollbar { width: 6px; }
+        .timeline::-webkit-scrollbar-track { background: #0f172a; }
+        .timeline::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 
-        .query-box {
-            font-family: 'Courier New', monospace;
-            background: #0f172a;
-            color: #a5f3fc;
-            border: 1px solid #334155;
-            padding: 10px;
-            border-radius: 4px;
-            width: 300px;
-            font-size: 14px;
-        }
-
-        button {
-            padding: 10px 20px;
+        .timeline-item {
+            padding: 12px 15px;
+            margin-bottom: 8px;
             border-radius: 6px;
+            border-left: 3px solid #334155;
+            background: transparent;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        .timeline-item.active {
+            background: #1e293b;
+            border-left-color: var(--highlight);
+            color: var(--text-main);
+            font-weight: 600;
+            transform: translateX(5px);
+        }
+        .timeline-item.done { border-left-color: var(--success); opacity: 0.6; }
+
+        /* --- CONTROLS --- */
+        .controls-area {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 20px;
+            flex-shrink: 0; 
+        }
+        .control-btn {
+            width: 100%;
+            padding: 12px;
             border: none;
+            border-radius: 6px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
+            margin-bottom: 10px;
+            transition: 0.2s;
         }
+        .btn-primary { background: var(--highlight); color: #0f172a; }
+        .btn-primary:hover { background: #0ea5e9; }
+        .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+        .btn-reset { background: transparent; color: #ef4444; border: 1px solid #ef4444; }
+        .btn-reset:hover { background: rgba(239, 68, 68, 0.1); }
 
-        #btn-next { background-color: #3b82f6; color: white; }
-        #btn-next:hover { background-color: #2563eb; }
-        #btn-next:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.7; }
-
-        #btn-reset { background-color: #ef4444; color: white; }
-        #btn-reset:hover { background-color: #dc2626; }
-
-        /* Explanation Panel */
-        .info-panel {
-            background: #334155;
-            border-left: 5px solid #3b82f6;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            min-height: 80px;
-        }
-
-        .info-title { font-weight: bold; color: #38bdf8; margin-bottom: 5px; display: block; }
-        .info-text { font-size: 15px; line-height: 1.5; }
-        .tech-detail { font-size: 13px; color: #94a3b8; margin-top: 5px; font-style: italic; }
-
-        /* Visualization SVG */
-        #viz-container {
-            width: 100%;
-            height: 600px;
-            background: #020617;
-            border-radius: 8px;
-            border: 1px solid #334155;
+        /* --- MAIN STAGE --- */
+        main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
             position: relative;
+            height: 100vh;
             overflow: hidden;
         }
 
-        /* D3 Elements */
-        .phase-box rect { fill: #1e293b; stroke: #475569; stroke-width: 2px; rx: 6; }
-        .phase-box text { fill: #cbd5e1; font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+        /* Info Header */
+        .status-bar {
+            padding: 20px 40px;
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid #334155;
+            min-height: 80px;
+            flex-shrink: 0;
+        }
+        .status-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; color: var(--highlight); }
+        .status-desc { color: var(--text-dim); font-size: 0.95rem; line-height: 1.4; max-width: 800px; }
+
+        /* Visualization Area */
+        #viz-container {
+            flex-grow: 1;
+            position: relative;
+            background-image: radial-gradient(#1e293b 1px, transparent 1px);
+            background-size: 20px 20px;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        @media (max-width: 800px) {
+            body { flex-direction: column; overflow-y: auto; height: auto; }
+            aside { 
+                width: 100%; 
+                min-width: 0;
+                height: auto; 
+                border-right: none; 
+                border-bottom: 1px solid #334155;
+                position: relative;
+                overflow: visible; 
+            }
+            .timeline { overflow-y: visible; } 
+            main { height: 600px; overflow: visible; }
+        }
+
+        /* --- D3 STYLES --- */
+        /* Increased Font Sizes for Visibility */
+        .layer-rect { fill: var(--card-bg); stroke: #475569; stroke-width: 2px; rx: 8; }
+        .layer-label { fill: #94a3b8; font-weight: bold; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
         
-        .phase-active rect { stroke: #fbbf24; stroke-width: 3px; fill: #283547; filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.3)); }
-        .phase-active text { fill: #fbbf24; }
+        .layer-active .layer-rect { stroke: var(--highlight); stroke-width: 3px; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.2)); }
+        .layer-active .layer-label { fill: var(--highlight); }
 
-        .packet { fill: #38bdf8; filter: drop-shadow(0 0 4px #38bdf8); }
-        .packet-text { font-size: 10px; fill: #0f172a; font-weight: bold; text-anchor: middle; pointer-events: none; }
+        .packet-glow { fill: var(--highlight); filter: blur(4px); opacity: 0.6; }
+        .packet-core { fill: #fff; }
+        .packet-text { font-size: 14px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
 
-        /* B+ Tree Styling */
-        .node circle { fill: #1e293b; stroke: #64748b; stroke-width: 2px; }
-        .node text { font: 12px sans-serif; fill: #e2e8f0; pointer-events: none; }
-        .link { fill: none; stroke: #475569; stroke-width: 1.5px; opacity: 0.5; }
+        .pipe-line { stroke: #334155; stroke-width: 4px; stroke-dasharray: 8 4; }
 
-        .node-active circle { stroke: #fbbf24; stroke-width: 3px; fill: #334155; }
-        .node-found circle { stroke: #22c55e; stroke-width: 3px; fill: #14532d; }
-        .link-active { stroke: #fbbf24; stroke-width: 3px; opacity: 1; }
-
-        /* Page Directory Internal View */
-        .page-detail-g rect { fill: #0f172a; stroke: #fbbf24; stroke-width: 1px; stroke-dasharray: 4; }
-        .record-rect { fill: #334155; stroke: none; rx: 2; }
-        .record-found { fill: #22c55e; }
+        .tree-node circle { fill: #334155; stroke: #64748b; stroke-width: 2px; }
+        .tree-node text { fill: #e2e8f0; font-size: 14px; pointer-events: none; text-anchor: middle; }
+        .tree-link { fill: none; stroke: #475569; stroke-width: 1.5px; opacity: 0.4; }
         
+        .node-active circle { stroke: var(--accent); stroke-width: 3px; fill: #451a03; }
+        .node-found circle { stroke: var(--success); fill: #064e3b; }
+
+        .detail-bg { fill: #020617; stroke: var(--highlight); stroke-width: 1px; rx: 6; }
+        .detail-slot { fill: #1e293b; stroke: #475569; }
+        .detail-slot.found { fill: var(--success); stroke: var(--success); }
+
     </style>
 </head>
 <body>
 
-    <h1>MySQL Internal Lifecycle: Point Query</h1>
-
-    <div class="container">
+    <aside>
+        <h1>MySQL Deep Dive</h1>
+        
         <!-- Controls -->
-        <div class="controls">
-            <div class="query-box">SELECT * FROM users WHERE id=42</div>
-            <button id="btn-next" onclick="nextStep()">Start Execution ▶</button>
-            <button id="btn-reset" onclick="resetViz()">Reset ⟲</button>
+        <div class="controls-area">
+            <button id="btn-next" class="control-btn btn-primary" onclick="nextStep()">Start Journey ▶</button>
+            <button class="control-btn btn-reset" onclick="resetViz()">Reset</button>
         </div>
 
-        <!-- Explanation Area -->
-        <div class="info-panel">
-            <span class="info-title" id="info-title">Ready to Start</span>
-            <div class="info-text" id="info-text">Click "Start Execution" to trace the query `SELECT * FROM users WHERE id = 42` through the MySQL kernel.</div>
-            <div class="tech-detail" id="tech-detail"></div>
-        </div>
+        <ul class="timeline" id="timeline-list">
+            <!-- Populated by JS -->
+        </ul>
+    </aside>
 
-        <!-- Visualization Stage -->
+    <main>
+        <div class="status-bar">
+            <div id="status-title" class="status-title">Ready</div>
+            <div id="status-desc" class="status-desc">Click Start to trace `SELECT * FROM users WHERE id=42` down the stack.</div>
+        </div>
         <div id="viz-container"></div>
-    </div>
+    </main>
 
     <script>
-        // --- D3 SETUP ---
-        const width = 1000;
-        const height = 600;
-        const margin = { top: 50, right: 50, bottom: 50, left: 50 };
-        
-        const svg = d3.select("#viz-container")
-            .append("svg")
+        // --- CONFIGURATION ---
+        // CHANGED: Reduced Logical Resolution further to make elements appear larger
+        // Width: 540 (fits 500px boxes snugly)
+        // Height: 720 (reduced height to prevent vertical shrinking/letterboxing)
+        const width = 540;
+        const height = 720;
+        const centerX = width / 2;
+
+        const svg = d3.select("#viz-container").append("svg")
             .attr("viewBox", `0 0 ${width} ${height}`)
-            .attr("preserveAspectRatio", "xMidYMid meet");
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .style("width", "100%")
+            .style("height", "100%");
 
-        // --- DATA STRUCTURES ---
-
-        // 1. Pipeline Phases
-        const phases = [
-            { id: "client", label: "Client", x: 100, y: 80 },
-            { id: "conn", label: "Connection", x: 300, y: 80 },
-            { id: "parser", label: "Parser & Opt", x: 500, y: 80 },
-            { id: "innodb", label: "InnoDB Buffer", x: 700, y: 80 },
-            { id: "disk", label: "Disk Storage", x: 900, y: 80 }
+        // --- LAYERS DEFINITION (Vertical Stack) ---
+        // Compacted Y-coordinates to fit in 720px height
+        const layers = [
+            { id: "app", label: "Application Layer", y: 20, height: 80 },
+            { id: "server", label: "MySQL Server (Parser/Opt)", y: 130, height: 120 },
+            { id: "storage", label: "InnoDB Storage Engine", y: 280, height: 420 }, // Taller for clearer tree
         ];
 
-        // 2. B+ Tree Data (Simplified)
-        // Root: [10, 50] -> Children cover ranges <10, 10-50, >50
+        // --- STORYBOARD ---
+        const steps = [
+            { id: "conn", label: "Connection", desc: "App sends SQL via TCP. MySQL assigns a Thread.", targetLayer: "app" },
+            { id: "parse", label: "Parsing", desc: "Lexer tokens: SELECT, *, FROM... Parser builds AST.", targetLayer: "server" },
+            { id: "opt", label: "Optimization", desc: "Optimizer sees 'id' is PK. Plan: const lookup (Cost: 1.0).", targetLayer: "server" },
+            { id: "exec", label: "Execution Start", desc: "Executor calls InnoDB API handler::ha_index_read_map(42).", targetLayer: "storage" },
+            { id: "tree1", label: "B+ Tree: Root", desc: "Check Root Page (Pg 10). 42 is between 10 and 50.", targetLayer: "storage" },
+            { id: "tree2", label: "B+ Tree: Traversal", desc: "Follow pointer to Leaf Page (Pg 21). Skipping others.", targetLayer: "storage" },
+            { id: "tree3", label: "Leaf Page Scan", desc: "Page loaded. Binary search on Page Directory finds slot.", targetLayer: "storage" },
+            { id: "mvcc", label: "MVCC Visibility", desc: "Multi-Version Concurrency Control: MySQL checks if this row version is visible to your Transaction ID. If not, it follows the Undo Log pointer.", targetLayer: "storage" },
+            { id: "return", label: "Return Data", desc: "Data formatted to Text Protocol and sent back up.", targetLayer: "app" }
+        ];
+
+        // --- B+ TREE DATA ---
         const treeData = {
-            name: "Root Page (Pg 10)",
-            type: "internal",
-            keys: "Keys: [10, 50]",
+            name: "Root",
             children: [
-                { name: "Pg 20", type: "leaf", keys: "< 10", hidden: true }, 
-                { 
-                    name: "Pg 21", 
-                    type: "leaf", 
-                    keys: "10 <= id < 50", 
-                    isTarget: true,
-                    records: [12, 25, 42, 48] 
-                },
-                { name: "Pg 22", type: "leaf", keys: "> 50", hidden: true }
+                { name: "< 10", hidden: true },
+                { name: "Leaf Pg 21", target: true, records: [12, 25, 42, 48] },
+                { name: "> 50", hidden: true }
             ]
         };
 
-        // --- STATE MANAGEMENT ---
-        let stepIndex = 0;
-        const totalSteps = 9;
-        
-        // Define the storyboard
-        const storyboard = [
-            {
-                title: "Phase 1: Connection",
-                text: "The client sends the SQL packet via TCP/IP. The Connection Manager assigns a thread.",
-                tech: "Command: COM_QUERY (0x03). A new THD (Thread Descriptor) is initialized.",
-                action: () => {
-                    drawPipeline();
-                    animatePacket(phases[0], phases[1], "SQL");
-                    highlightPhase("conn");
-                }
-            },
-            {
-                title: "Phase 2: Parsing",
-                text: "The thread passes the SQL text to the Parser. It checks syntax and builds a Parse Tree.",
-                tech: "File: sql_yacc.yy. Output: SELECT_LEX structure (Abstract Syntax Tree).",
-                action: () => {
-                    animatePacket(phases[1], phases[2], "AST");
-                    highlightPhase("parser");
-                }
-            },
-            {
-                title: "Phase 3: Resolution & Optimization",
-                text: "The server resolves table names and decides the best way to execute the query.",
-                tech: "Optimizer sees 'WHERE id=42'. Since 'id' is Primary Key, it chooses Access Type: const (EQ_REF). Cost: ~1.0.",
-                action: () => {
-                    highlightPhase("parser"); // Stay on parser/opt
-                    // Flash effect to symbolize "Thinking"
-                    d3.select("#phase-parser rect")
-                        .transition().duration(200).style("fill", "#475569")
-                        .transition().duration(200).style("fill", "#283547");
-                }
-            },
-            {
-                title: "Phase 4: Execution Start",
-                text: "The Executor requests the row from the Storage Engine (InnoDB).",
-                tech: "Function call: handler::ha_index_read_map(key=42).",
-                action: () => {
-                    animatePacket(phases[2], phases[3], "Get 42");
-                    highlightPhase("innodb");
-                    drawTree(); // Show the tree now
-                }
-            },
-            {
-                title: "Phase 5: B+ Tree Root Search",
-                text: "InnoDB looks at the Root Page (cached in Buffer Pool). It compares 42 against keys [10, 50].",
-                tech: "42 > 10 and 42 < 50. The pointer indicates the child page is Page 21.",
-                action: () => {
-                    highlightNode(rootNode.descendants()[0]); // Root
-                }
-            },
-            {
-                title: "Phase 5: Tree Traversal",
-                text: "Following the pointer down to the Leaf Level.",
-                tech: "Skipping Page 20 and 22. This 'Index Selectivity' is why B-Trees are fast (O(log N)).",
-                action: () => {
-                    // Highlight link to middle child
-                    const link = d3.select("path.link[target-name='Pg 21']");
-                    link.attr("class", "link link-active");
-                }
-            },
-            {
-                title: "Phase 5: Leaf Page Search",
-                text: "We arrive at Leaf Page 21. This page contains the actual row data.",
-                tech: "Page loaded from Buffer Pool (or Disk if missing).",
-                action: () => {
-                    highlightNode(rootNode.descendants().find(d => d.data.name === "Pg 21"));
-                }
-            },
-            {
-                title: "Phase 5: Page Internals",
-                text: "Inside the page (16KB), InnoDB uses the Page Directory to jump close to the record.",
-                tech: "Binary Search on Directory Slots -> Linear Scan on Linked List -> Record Found.",
-                action: () => {
-                    const targetNode = rootNode.descendants().find(d => d.data.name === "Pg 21");
-                    showPageInternals(targetNode);
-                }
-            },
-            {
-                title: "Phase 7: Result Transmission",
-                text: "The row is found! It passes the MVCC visibility check and is sent back to the client.",
-                tech: "Protocol: Text Protocol. The integer 42 is converted to string '42' before sending.",
-                action: () => {
-                    d3.select(".page-detail-group").remove(); // Clean up detail view
-                    animatePacket(phases[3], phases[0], "Result", 1500); // Long return trip
-                    highlightPhase("client");
-                }
-            }
-        ];
+        // --- STATE ---
+        let currentStep = -1;
 
-        // --- RENDER FUNCTIONS ---
+        // --- INITIAL RENDER ---
+        function init() {
+            // 1. Draw Timeline Sidebar
+            const list = document.getElementById("timeline-list");
+            list.innerHTML = "";
+            steps.forEach((s, i) => {
+                const li = document.createElement("li");
+                li.className = "timeline-item";
+                li.id = `step-li-${i}`;
+                li.innerText = `${i+1}. ${s.label}`;
+                list.appendChild(li);
+            });
 
-        function drawPipeline() {
-            // Draw connecting lines
-            svg.append("line")
-                .attr("x1", 100).attr("y1", 80)
-                .attr("x2", 900).attr("y2", 80)
-                .attr("stroke", "#475569")
-                .attr("stroke-width", 2);
+            // 2. Draw Pipes (Background connectors)
+            // Adjusted line length for compacted layout
+            svg.append("line").attr("class", "pipe-line")
+                .attr("x1", centerX).attr("y1", 60)
+                .attr("x2", centerX).attr("y2", 350);
 
-            // Draw boxes
-            const g = svg.selectAll(".phase-group")
-                .data(phases)
+            // 3. Draw Layers
+            const layerGroups = svg.selectAll(".layer")
+                .data(layers)
                 .enter().append("g")
-                .attr("class", "phase-group")
-                .attr("id", d => "phase-" + d.id)
-                .attr("transform", d => `translate(${d.x}, ${d.y})`);
+                .attr("class", "layer")
+                .attr("id", d => `layer-${d.id}`)
+                .attr("transform", d => `translate(${centerX - 250}, ${d.y})`);
 
-            g.append("rect")
-                .attr("x", -60).attr("y", -25)
-                .attr("width", 120).attr("height", 50);
+            layerGroups.append("rect")
+                .attr("class", "layer-rect")
+                .attr("width", 500)
+                .attr("height", d => d.height);
 
-            g.append("text")
-                .attr("dy", 5)
+            layerGroups.append("text")
+                .attr("class", "layer-label")
+                .attr("x", 20).attr("y", 30)
                 .text(d => d.label);
+
+            // 4. Pre-draw Tree (Hidden initially)
+            drawTreeInsideStorage();
         }
 
-        let rootNode; // Store d3 hierarchy root
+        function drawTreeInsideStorage() {
+            const storageG = d3.select("#layer-storage");
+            
+            // Tree Group
+            const treeG = storageG.append("g")
+                .attr("id", "tree-viz")
+                .attr("transform", "translate(250, 60)") // Center inside storage box
+                .style("opacity", 0.1); // Dimmed initially
 
-        function drawTree() {
-            // Container for tree
-            const treeG = svg.append("g")
-                .attr("transform", "translate(0, 200)");
-
-            const treeLayout = d3.tree().size([width, 250]);
             const root = d3.hierarchy(treeData);
-            rootNode = treeLayout(root);
+            // Increased tree size slightly
+            const treeLayout = d3.tree().size([440, 180]);
+            treeLayout(root);
 
             // Links
-            treeG.selectAll(".link")
+            treeG.selectAll(".tree-link")
                 .data(root.links())
                 .enter().append("path")
-                .attr("class", "link")
-                .attr("target-name", d => d.target.data.name)
-                .attr("d", d3.linkVertical()
-                    .x(d => d.x)
-                    .y(d => d.y)
-                );
+                .attr("class", "tree-link")
+                .attr("d", d3.linkVertical().x(d => d.x - 220).y(d => d.y)); // Offset x to center
 
             // Nodes
-            const nodes = treeG.selectAll(".node")
+            const nodes = treeG.selectAll(".tree-node")
                 .data(root.descendants())
                 .enter().append("g")
-                .attr("class", "node")
-                .attr("transform", d => `translate(${d.x},${d.y})`)
-                .style("opacity", 0); // Start invisible
+                .attr("class", "tree-node")
+                .attr("id", (d,i) => `node-${i}`)
+                .attr("transform", d => `translate(${d.x - 220}, ${d.y})`);
 
-            nodes.append("circle")
-                .attr("r", 25);
-
-            nodes.append("text")
-                .attr("dy", 45)
-                .style("text-anchor", "middle")
-                .style("font-weight", "bold")
-                .text(d => d.data.name);
-
-            nodes.append("text")
-                .attr("dy", 5)
-                .style("text-anchor", "middle")
-                .style("font-size", "10px")
-                .text(d => d.data.keys);
-
-            // Fade in
-            nodes.transition().duration(500).style("opacity", 1);
-        }
-
-        function highlightPhase(id) {
-            d3.selectAll(".phase-group").attr("class", "phase-group"); // Reset
-            d3.select("#phase-" + id).attr("class", "phase-group phase-active");
-        }
-
-        function highlightNode(d3Node) {
-            // Find the specific DOM element based on data
-            svg.selectAll(".node")
-                .filter(d => d === d3Node)
-                .classed("node-active", true);
-        }
-
-        function animatePacket(source, target, label, duration = 1000) {
-            const packet = svg.append("g")
-                .attr("class", "packet-g")
-                .attr("transform", `translate(${source.x}, ${source.y})`);
-
-            packet.append("circle")
-                .attr("class", "packet")
-                .attr("r", 10);
+            nodes.append("circle").attr("r", 24); // Bigger nodes
+            nodes.append("text").attr("dy", 5).text(d => d.data.name.includes("Leaf") ? "Leaf" : "Root");
             
-            packet.append("text")
-                .attr("class", "packet-text")
-                .attr("dy", 4)
-                .text(label);
+            // Labels for ranges
+            nodes.append("text")
+                .attr("dy", 40)
+                .style("font-size", "12px")
+                .style("fill", "#64748b")
+                .text(d => d.data.name.includes("Leaf") ? "[10-50]" : "[10, 50]");
+        }
+
+        // --- ANIMATION CONTROLLER ---
+        function nextStep() {
+            if (currentStep >= steps.length - 1) return;
+            currentStep++;
+            updateUI(currentStep);
+            
+            const s = steps[currentStep];
+
+            switch(currentStep) {
+                case 0: // Connection
+                    animatePacket(layers[0], layers[1], "SQL"); 
+                    break;
+                case 1: // Parse
+                    highlightLayer("server");
+                    break;
+                case 2: // Optimize
+                    break;
+                case 3: // Exec Start
+                    animatePacket(layers[1], layers[2], "Get 42");
+                    d3.select("#tree-viz").transition().duration(1000).style("opacity", 1);
+                    break;
+                case 4: // Tree Root
+                    highlightNode(0); // Root
+                    break;
+                case 5: // Traverse
+                    highlightNode(2); // The middle child (Leaf)
+                    break;
+                case 6: // Leaf Scan (Zoom in)
+                    showPageDetails();
+                    break;
+                case 7: // MVCC
+                    d3.select("#record-42").transition().attr("fill", "#10b981");
+                    break;
+                case 8: // Return
+                    d3.select("#page-zoom").transition().style("opacity", 0); 
+                    animatePacket(layers[2], layers[0], "Result", 1500);
+                    break;
+            }
+        }
+
+        // --- ANIMATION HELPERS ---
+
+        function updateUI(index) {
+            d3.selectAll(".timeline-item").classed("active", false);
+            const activeItem = document.getElementById(`step-li-${index}`);
+            if (activeItem) {
+                activeItem.classList.add("active", "done");
+                activeItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+            
+            d3.select("#status-title").text(steps[index].label);
+            d3.select("#status-desc").text(steps[index].desc);
+
+            const btn = document.getElementById("btn-next");
+            if (index === steps.length - 1) {
+                btn.innerText = "Done";
+                btn.disabled = true;
+            } else {
+                btn.innerText = "Next Step ▼";
+            }
+        }
+
+        function highlightLayer(id) {
+            d3.selectAll(".layer").classed("layer-active", false);
+            d3.select(`#layer-${id}`).classed("layer-active", true);
+        }
+
+        function highlightNode(index) {
+            d3.selectAll(".tree-node").classed("node-active", false);
+            d3.select(`#node-${index}`).classed("node-active", true);
+        }
+
+        function animatePacket(fromLayer, toLayer, text, duration = 1000) {
+            highlightLayer(toLayer.id);
+            
+            const startY = fromLayer.y + (fromLayer.height/2);
+            const endY = toLayer.y + (toLayer.height/2);
+
+            const packet = svg.append("g")
+                .attr("transform", `translate(${centerX}, ${startY})`);
+
+            packet.append("circle").attr("r", 18).attr("class", "packet-glow"); // Bigger packet
+            packet.append("circle").attr("r", 10).attr("class", "packet-core");
+            packet.append("text").attr("class", "packet-text").attr("dy", 5).text(text);
 
             packet.transition()
                 .duration(duration)
-                .attr("transform", `translate(${target.x}, ${target.y})`)
-                .on("end", () => packet.remove());
+                .attr("transform", `translate(${centerX}, ${endY})`)
+                .on("end", function() {
+                    d3.select(this).remove();
+                });
         }
 
-        function showPageInternals(targetNode) {
-            // Draw a detail view near the node
-            const x = targetNode.x;
-            const y = targetNode.y + 200 + 60; // Offset from tree
-
-            const g = svg.append("g")
-                .attr("class", "page-detail-group")
-                .attr("transform", `translate(${x - 100}, ${y})`)
+        function showPageDetails() {
+            const storageG = d3.select("#layer-storage");
+            
+            const zoomG = storageG.append("g")
+                .attr("id", "page-zoom")
+                .attr("transform", "translate(125, 290)") // Centered better
                 .style("opacity", 0);
 
-            // Page Container
-            g.append("rect")
-                .attr("width", 200).attr("height", 80)
-                .attr("fill", "#1e293b")
-                .attr("stroke", "#fbbf24")
-                .attr("stroke-width", 2)
-                .attr("rx", 5);
+            zoomG.append("rect")
+                .attr("class", "detail-bg")
+                .attr("width", 250).attr("height", 100); // Bigger detail box
+            
+            zoomG.append("text")
+                .attr("x", 15).attr("y", 25)
+                .style("fill", "#94a3b8").style("font-size", "14px") // Bigger text
+                .text("Leaf Page Internals (Directory)");
 
-            g.append("text")
-                .attr("x", 10).attr("y", 20)
-                .attr("fill", "#94a3b8")
-                .style("font-size", "10px")
-                .text("Page Directory & Records");
-
-            // Draw Records (Boxes)
-            const records = targetNode.data.records; // [12, 25, 42, 48]
-            records.forEach((rec, i) => {
-                const rG = g.append("g").attr("transform", `translate(${20 + i*45}, 40)`);
-                
-                const rect = rG.append("rect")
-                    .attr("class", "record-rect")
-                    .attr("width", 35).attr("height", 25)
-                    .attr("id", "rec-" + rec);
-                
-                rG.append("text")
-                    .attr("x", 17.5).attr("y", 17)
+            const data = [12, 25, 42, 48];
+            data.forEach((val, i) => {
+                const g = zoomG.append("g").attr("transform", `translate(${25 + i*55}, 45)`);
+                g.append("rect")
+                    .attr("class", "detail-slot")
+                    .attr("id", `record-${val}`)
+                    .attr("width", 45).attr("height", 40).attr("rx", 4); // Bigger slots
+                g.append("text")
+                    .attr("x", 22.5).attr("y", 25)
                     .attr("text-anchor", "middle")
-                    .attr("fill", "white")
-                    .style("font-size", "11px")
-                    .text(rec);
+                    .style("fill", "#fff").style("font-size", "14px")
+                    .text(val);
             });
 
-            g.transition().duration(500).style("opacity", 1)
-             .on("end", () => {
-                 // Animate Search
-                 setTimeout(() => {
-                     d3.select("#rec-42")
-                        .transition().duration(300)
-                        .attr("fill", "#22c55e") // Green found
-                        .attr("transform", "scale(1.2) translate(-3, -3)"); // Pop out
-                 }, 500);
-             });
-        }
-
-        // --- CONTROLLER ---
-
-        function nextStep() {
-            const btn = document.getElementById("btn-next");
-            
-            if (stepIndex < storyboard.length) {
-                const step = storyboard[stepIndex];
-                
-                // Update UI Text
-                document.getElementById("info-title").innerText = step.title;
-                document.getElementById("info-text").innerText = step.text;
-                document.getElementById("tech-detail").innerText = step.tech;
-
-                // Execute Visualization Logic
-                step.action();
-
-                stepIndex++;
-                btn.innerText = (stepIndex >= storyboard.length) ? "Done" : "Next ▶";
-                if (stepIndex >= storyboard.length) btn.disabled = true;
-            }
+            zoomG.transition().duration(500).style("opacity", 1);
         }
 
         function resetViz() {
-            stepIndex = 0;
-            const btn = document.getElementById("btn-next");
-            btn.disabled = false;
-            btn.innerText = "Start Execution ▶";
-            
-            // Reset Text
-            document.getElementById("info-title").innerText = "Ready to Start";
-            document.getElementById("info-text").innerText = "Click 'Start Execution' to trace the query...";
-            document.getElementById("tech-detail").innerText = "";
-
-            // Clear SVG
+            currentStep = -1;
             svg.selectAll("*").remove();
+            
+            // Reset Button
+            const btn = document.getElementById("btn-next");
+            btn.innerText = "Start Journey ▶";
+            btn.disabled = false;
+            
+            d3.select("#status-title").text("Ready");
+            d3.select("#status-desc").text("Click Start to trace `SELECT * FROM users WHERE id=42` down the stack.");
+            
+            const timelineItems = document.querySelectorAll('.timeline-item');
+            timelineItems.forEach(item => {
+                item.classList.remove('active', 'done');
+            });
+
+            init();
         }
 
-        // Initial setup
-        resetViz(); // Ensures SVG is clear
-        drawPipeline(); // Show initial pipeline state
+        // Boot
+        init();
 
     </script>
 </body>
