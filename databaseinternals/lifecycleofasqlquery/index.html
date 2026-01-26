@@ -3,721 +3,488 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Lifecycle of a SQL Query</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>MySQL Point Query Lifecycle Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        
+        /* --- CSS STYLING --- */
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #0f172a; /* Slate 900 */
             color: #e2e8f0; /* Slate 200 */
-        }
-        
-        h1, h2, h3 {
-            font-family: 'Inter', sans-serif;
-            letter-spacing: -0.025em;
-        }
-
-        .code-font {
-            font-family: 'JetBrains Mono', monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        .gradient-text {
-            background: linear-gradient(to right, #818cf8, #38bdf8);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        h1 {
+            color: #38bdf8; /* Sky 400 */
+            margin-bottom: 10px;
+            font-weight: 300;
         }
 
-        canvas {
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            background: #1e293b; /* Slate 800 */
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Controls Area */
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            background: #020617;
+            padding: 15px;
+            border-radius: 8px;
             border: 1px solid #334155;
-            border-radius: 0.5rem;
-            background-color: #1e293b;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            width: 100%;
-            height: auto;
         }
 
-        .slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 6px;
-            border-radius: 5px;
-            background: #475569;
-            outline: none;
+        .query-box {
+            font-family: 'Courier New', monospace;
+            background: #0f172a;
+            color: #a5f3fc;
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 4px;
+            width: 300px;
+            font-size: 14px;
         }
-        
-        .slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #38bdf8;
+
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
         }
+
+        #btn-next { background-color: #3b82f6; color: white; }
+        #btn-next:hover { background-color: #2563eb; }
+        #btn-next:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.7; }
+
+        #btn-reset { background-color: #ef4444; color: white; }
+        #btn-reset:hover { background-color: #dc2626; }
+
+        /* Explanation Panel */
+        .info-panel {
+            background: #334155;
+            border-left: 5px solid #3b82f6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            min-height: 80px;
+        }
+
+        .info-title { font-weight: bold; color: #38bdf8; margin-bottom: 5px; display: block; }
+        .info-text { font-size: 15px; line-height: 1.5; }
+        .tech-detail { font-size: 13px; color: #94a3b8; margin-top: 5px; font-style: italic; }
+
+        /* Visualization SVG */
+        #viz-container {
+            width: 100%;
+            height: 600px;
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* D3 Elements */
+        .phase-box rect { fill: #1e293b; stroke: #475569; stroke-width: 2px; rx: 6; }
+        .phase-box text { fill: #cbd5e1; font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+        
+        .phase-active rect { stroke: #fbbf24; stroke-width: 3px; fill: #283547; filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.3)); }
+        .phase-active text { fill: #fbbf24; }
+
+        .packet { fill: #38bdf8; filter: drop-shadow(0 0 4px #38bdf8); }
+        .packet-text { font-size: 10px; fill: #0f172a; font-weight: bold; text-anchor: middle; pointer-events: none; }
+
+        /* B+ Tree Styling */
+        .node circle { fill: #1e293b; stroke: #64748b; stroke-width: 2px; }
+        .node text { font: 12px sans-serif; fill: #e2e8f0; pointer-events: none; }
+        .link { fill: none; stroke: #475569; stroke-width: 1.5px; opacity: 0.5; }
+
+        .node-active circle { stroke: #fbbf24; stroke-width: 3px; fill: #334155; }
+        .node-found circle { stroke: #22c55e; stroke-width: 3px; fill: #14532d; }
+        .link-active { stroke: #fbbf24; stroke-width: 3px; opacity: 1; }
+
+        /* Page Directory Internal View */
+        .page-detail-g rect { fill: #0f172a; stroke: #fbbf24; stroke-width: 1px; stroke-dasharray: 4; }
+        .record-rect { fill: #334155; stroke: none; rx: 2; }
+        .record-found { fill: #22c55e; }
+        
     </style>
 </head>
-<body class="antialiased selection:bg-indigo-500 selection:text-white">
+<body>
 
-    <!-- Hero Section -->
-    <header class="max-w-4xl mx-auto pt-20 pb-12 px-6 text-center">
-       
-        <h1 class="text-5xl md:text-6xl font-extrabold mb-6 text-white tracking-tight">
-            Lifecycle of a <br><span class="gradient-text">SQL Query</span>
-        </h1>
-        <p class="text-xl text-slate-400 max-w-2xl mx-auto mb-8">
-            When you type <span class="code-font bg-slate-800 px-2 py-1 rounded text-yellow-300">SELECT * FROM users WHERE id = 42</span>, what actually happens inside MySQL? Let's break down the 7 phases of execution.
-        </p>
-    </header>
+    <h1>MySQL Internal Lifecycle: Point Query</h1>
 
-    <main class="max-w-4xl mx-auto px-6 pb-24 space-y-24">
+    <div class="container">
+        <!-- Controls -->
+        <div class="controls">
+            <div class="query-box">SELECT * FROM users WHERE id=42</div>
+            <button id="btn-next" onclick="nextStep()">Start Execution ▶</button>
+            <button id="btn-reset" onclick="resetViz()">Reset ⟲</button>
+        </div>
 
-        <!-- Phase 1 & 2: Connection & Parsing -->
-        <section>
-            <div class="border-l-4 border-indigo-500 pl-6 mb-8">
-                <h2 class="text-3xl font-bold text-white mb-2">Phase 1 & 2: Connection & Parsing</h2>
-                <p class="text-slate-400">The "Front Desk" of the database.</p>
-            </div>
-            
-            <div class="prose prose-invert max-w-none text-slate-300 mb-8">
-                <p>
-                    When your application sends a query, it doesn't just float into the database. First, the <strong>Connection Manager</strong> assigns a dedicated thread (or grabs one from the pool) to handle your request. This thread initializes memory pools (MEM_ROOT) and prepares context.
-                </p>
-                <p>
-                    Next, the <strong>Parser</strong> takes your raw text string and breaks it down. This happens in two steps:
-                </p>
-                <ul class="list-disc pl-5 space-y-2 text-slate-400">
-                    <li><strong>Lexical Analysis:</strong> Breaking string characters into "Tokens" (e.g., <span class="code-font text-xs bg-slate-800 px-1">SELECT_SYM</span>, <span class="code-font text-xs bg-slate-800 px-1">IDENT</span>).</li>
-                    <li><strong>Syntactic Analysis:</strong> Building a Parse Tree to validate grammar.</li>
-                </ul>
-            </div>
+        <!-- Explanation Area -->
+        <div class="info-panel">
+            <span class="info-title" id="info-title">Ready to Start</span>
+            <div class="info-text" id="info-text">Click "Start Execution" to trace the query `SELECT * FROM users WHERE id = 42` through the MySQL kernel.</div>
+            <div class="tech-detail" id="tech-detail"></div>
+        </div>
 
-            <!-- Interactive Module 1 -->
-            <div class="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-white">Simulation: Thread Assignment & Tokenization</h3>
-                    <div class="space-x-2">
-                        <button id="btn-phase1-run" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-medium transition-colors">
-                            Send Query
-                        </button>
-                    </div>
-                </div>
-                
-                <canvas id="canvas-phase1" width="800" height="300"></canvas>
-                
-                <div class="mt-4 grid grid-cols-2 gap-4 text-sm text-slate-400">
-                    <div class="bg-slate-900 p-3 rounded">
-                        <span class="block text-xs uppercase tracking-wide text-slate-500 mb-1">Status</span>
-                        <span id="p1-status" class="text-yellow-400 font-mono">Waiting for client...</span>
-                    </div>
-                    <div class="bg-slate-900 p-3 rounded">
-                        <span class="block text-xs uppercase tracking-wide text-slate-500 mb-1">Tokens Generated</span>
-                        <span id="p1-tokens" class="font-mono text-green-400">[]</span>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <!-- Visualization Stage -->
+        <div id="viz-container"></div>
+    </div>
 
-        <!-- Phase 3 & 4: Resolution & Optimization -->
-        <section>
-            <div class="border-l-4 border-emerald-500 pl-6 mb-8">
-                <h2 class="text-3xl font-bold text-white mb-2">Phase 3 & 4: Resolution & Optimization</h2>
-                <p class="text-slate-400">The "Strategist" planning the route.</p>
-            </div>
-
-            <div class="prose prose-invert max-w-none text-slate-300 mb-8">
-                <p>
-                    Before execution, the <strong>Resolver</strong> checks if the table <code>users</code> actually exists and if you have permission to see it. It resolves <code>*</code> into actual column names.
-                </p>
-                <p>
-                    Then, the <strong>Optimizer</strong> calculates the cost of different approaches. For a point query (`id = 42`), the choice is obvious, but the math still happens.
-                </p>
-            </div>
-
-            <!-- Interactive Module 2 -->
-            <div class="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                <div class="flex flex-col md:flex-row gap-8 items-start">
-                    <div class="w-full md:w-1/2">
-                        <h3 class="text-lg font-semibold text-white mb-4">Cost Calculator</h3>
-                        <p class="text-sm text-slate-400 mb-4">
-                            Adjust the table size to see how the Optimizer compares a Full Table Scan vs. a B+ Tree Index Lookup.
-                        </p>
-                        
-                        <label class="block text-sm font-medium text-slate-300 mb-2">Total Rows in Table</label>
-                        <input type="range" id="slider-rows" min="1000" max="1000000" step="1000" value="100000" class="slider mb-2">
-                        <div class="flex justify-between text-xs text-slate-500 mb-6">
-                            <span>1k Rows</span>
-                            <span id="row-display" class="text-indigo-400 font-bold">100,000 Rows</span>
-                            <span>1M Rows</span>
-                        </div>
-
-                        <div class="space-y-3">
-                            <div class="p-3 bg-red-900/20 border border-red-900/50 rounded flex justify-between items-center">
-                                <div>
-                                    <div class="text-red-400 font-bold">Full Table Scan</div>
-                                    <div class="text-xs text-red-300/70">Complexity: O(N)</div>
-                                </div>
-                                <div class="text-right">
-                                    <div id="cost-scan" class="text-xl font-mono text-white">100,000</div>
-                                    <div class="text-xs text-slate-500">Cost Units</div>
-                                </div>
-                            </div>
-
-                            <div class="p-3 bg-emerald-900/20 border border-emerald-900/50 rounded flex justify-between items-center">
-                                <div>
-                                    <div class="text-emerald-400 font-bold">Index Lookup (ref)</div>
-                                    <div class="text-xs text-emerald-300/70">Complexity: O(log N)</div>
-                                </div>
-                                <div class="text-right">
-                                    <div id="cost-index" class="text-xl font-mono text-white">3</div>
-                                    <div class="text-xs text-slate-500">Cost Units (Levels)</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="w-full md:w-1/2 flex items-center justify-center bg-slate-900 rounded-lg p-4 h-64">
-                         <canvas id="canvas-optimizer" width="300" height="200"></canvas>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Phase 5: InnoDB Execution -->
-        <section>
-            <div class="border-l-4 border-yellow-500 pl-6 mb-8">
-                <h2 class="text-3xl font-bold text-white mb-2">Phase 5: B+ Tree Execution</h2>
-                <p class="text-slate-400">The "Librarian" running the search.</p>
-            </div>
-
-            <div class="prose prose-invert max-w-none text-slate-300 mb-8">
-                <p>
-                    The Executor calls the storage engine (InnoDB). InnoDB doesn't scan the whole file; it uses the <strong>Primary Key B+ Tree</strong>.
-                </p>
-                <p>
-                    A B+ tree is short and fat. Even with millions of rows, the tree is usually only 3-4 levels deep. This means we only need to read 3-4 pages of data (16KB each) to find exactly what we want.
-                </p>
-            </div>
-
-            <!-- Interactive Module 3 -->
-            <div class="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-white">Visualizing B+ Tree Traversal</h3>
-                    <div class="space-x-2">
-                        <button id="btn-btree-search" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-md text-sm font-medium transition-colors">
-                            Find ID: 42
-                        </button>
-                         <button id="btn-btree-reset" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm font-medium transition-colors">
-                            Reset
-                        </button>
-                    </div>
-                </div>
-
-                <canvas id="canvas-btree" width="800" height="350"></canvas>
-                
-                <div class="mt-4 p-4 bg-slate-900 rounded border-l-2 border-yellow-500">
-                    <p id="btree-log" class="font-mono text-sm text-slate-300">System Ready. Click 'Find ID: 42' to start traversal.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Phase 6 & 7: Buffer Pool & Latency -->
-        <section>
-            <div class="border-l-4 border-pink-500 pl-6 mb-8">
-                <h2 class="text-3xl font-bold text-white mb-2">Phase 6: Buffer Pool & I/O</h2>
-                <p class="text-slate-400">The "Warehouse" vs. The "Backpack".</p>
-            </div>
-
-            <div class="prose prose-invert max-w-none text-slate-300 mb-8">
-                <p>
-                    Once the correct page is identified in the B+ Tree, InnoDB checks the <strong>Buffer Pool</strong> (memory). 
-                </p>
-                <ul class="list-disc pl-5 space-y-2 text-slate-400">
-                    <li><strong>Cache Hit (RAM):</strong> ~100 nanoseconds. Instant.</li>
-                    <li><strong>Cache Miss (Disk):</strong> ~10 milliseconds. 100,000x slower!</li>
-                </ul>
-            </div>
-
-            <!-- Interactive Module 4 -->
-            <div class="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                <h3 class="text-lg font-semibold text-white mb-4">Latency Simulator</h3>
-                <p class="text-sm text-slate-400 mb-6">
-                    This simulation is scaled down. If RAM access is 1 pixel of movement, Disk access would be a kilometer. Here, we just slow it down enough to feel the pain.
-                </p>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Buffer Pool Status -->
-                    <div class="bg-slate-900 p-4 rounded-lg">
-                        <h4 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Buffer Pool State</h4>
-                        <div id="buffer-grid" class="grid grid-cols-8 gap-1 mb-4">
-                            <!-- JS Generates Grid -->
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-xs text-slate-500">Green = Cached Page</span>
-                            <button id="btn-flush-cache" class="text-xs text-red-400 hover:text-red-300 underline">Flush Cache</button>
-                        </div>
-                    </div>
-
-                    <!-- Action Area -->
-                    <div class="flex flex-col justify-center space-y-6">
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-300">Requesting Page #42...</span>
-                                <span id="io-timer" class="font-mono text-slate-400">0 ms</span>
-                            </div>
-                            <div class="h-4 bg-slate-700 rounded-full overflow-hidden">
-                                <div id="io-progress" class="h-full bg-indigo-500 w-0 transition-all duration-75"></div>
-                            </div>
-                        </div>
-
-                        <button id="btn-request-page" class="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded shadow-lg transition-transform active:scale-95">
-                            Fetch Page #42
-                        </button>
-
-                        <div id="io-result" class="text-center text-sm min-h-[20px]"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Conclusion -->
-        <section class="border-t border-slate-800 pt-12 text-center">
-            <h2 class="text-2xl font-bold text-white mb-4">The Result</h2>
-            <p class="text-slate-400 max-w-2xl mx-auto mb-8">
-                After the row is retrieved from the Buffer Pool, MySQL checks MVCC visibility (is this row valid for my transaction?), formats the result packet, and sends it back to the client. All of this usually happens in less than 1 millisecond for a cached point query.
-            </p>
-        </section>
-
-    </main>
-
-    <footer class="bg-slate-900 text-slate-500 py-8 text-center text-sm border-t border-slate-800">
-    </footer>
-
-    <!-- JAVASCRIPT LOGIC -->
     <script>
-        /**
-         * MODULE 1: Connection & Parser Animation
-         */
-        (function() {
-            const canvas = document.getElementById('canvas-phase1');
-            const ctx = canvas.getContext('2d');
-            const btn = document.getElementById('btn-phase1-run');
-            const statusEl = document.getElementById('p1-status');
-            const tokenEl = document.getElementById('p1-tokens');
+        // --- D3 SETUP ---
+        const width = 1000;
+        const height = 600;
+        const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+        
+        const svg = d3.select("#viz-container")
+            .append("svg")
+            .attr("viewBox", `0 0 ${width} ${height}`)
+            .attr("preserveAspectRatio", "xMidYMid meet");
 
-            let animationState = 'idle'; // idle, connecting, parsing, done
-            let packetX = 50;
-            let packetY = 150;
-            let tokens = [];
-            let frameId;
+        // --- DATA STRUCTURES ---
 
-            // Visual elements
-            const clientX = 50;
-            const threadPoolX = 300;
-            const parserX = 600;
+        // 1. Pipeline Phases
+        const phases = [
+            { id: "client", label: "Client", x: 100, y: 80 },
+            { id: "conn", label: "Connection", x: 300, y: 80 },
+            { id: "parser", label: "Parser & Opt", x: 500, y: 80 },
+            { id: "innodb", label: "InnoDB Buffer", x: 700, y: 80 },
+            { id: "disk", label: "Disk Storage", x: 900, y: 80 }
+        ];
 
-            function draw() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 2. B+ Tree Data (Simplified)
+        // Root: [10, 50] -> Children cover ranges <10, 10-50, >50
+        const treeData = {
+            name: "Root Page (Pg 10)",
+            type: "internal",
+            keys: "Keys: [10, 50]",
+            children: [
+                { name: "Pg 20", type: "leaf", keys: "< 10", hidden: true }, 
+                { 
+                    name: "Pg 21", 
+                    type: "leaf", 
+                    keys: "10 <= id < 50", 
+                    isTarget: true,
+                    records: [12, 25, 42, 48] 
+                },
+                { name: "Pg 22", type: "leaf", keys: "> 50", hidden: true }
+            ]
+        };
 
-                // Draw Architecture
-                ctx.fillStyle = '#334155';
-                
-                // Client Box
-                ctx.fillStyle = '#475569';
-                ctx.fillRect(20, 100, 80, 100);
-                ctx.fillStyle = '#fff';
-                ctx.font = '12px Inter';
-                ctx.fillText("Client", 40, 155);
-
-                // Thread Pool Box
-                ctx.fillStyle = '#1e293b';
-                ctx.strokeStyle = '#6366f1';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(250, 50, 150, 200);
-                ctx.fillStyle = '#818cf8';
-                ctx.fillText("Connection Manager", 265, 80);
-                
-                // Threads
-                for(let i=0; i<3; i++) {
-                    ctx.fillStyle = (animationState !== 'idle' && i === 1) ? '#818cf8' : '#334155';
-                    ctx.fillRect(270, 100 + (i*40), 110, 30);
-                    ctx.fillStyle = '#fff';
-                    ctx.fillText(`Thread ${i+1}`, 280, 120 + (i*40));
+        // --- STATE MANAGEMENT ---
+        let stepIndex = 0;
+        const totalSteps = 9;
+        
+        // Define the storyboard
+        const storyboard = [
+            {
+                title: "Phase 1: Connection",
+                text: "The client sends the SQL packet via TCP/IP. The Connection Manager assigns a thread.",
+                tech: "Command: COM_QUERY (0x03). A new THD (Thread Descriptor) is initialized.",
+                action: () => {
+                    drawPipeline();
+                    animatePacket(phases[0], phases[1], "SQL");
+                    highlightPhase("conn");
                 }
-
-                // Parser Box
-                ctx.fillStyle = '#1e293b';
-                ctx.strokeStyle = '#10b981';
-                ctx.strokeRect(550, 50, 200, 200);
-                ctx.fillStyle = '#34d399';
-                ctx.fillText("Parser (Bison/Yacc)", 580, 80);
-
-                // Animation Logic
-                if (animationState === 'connecting') {
-                    // Draw Packet
-                    ctx.beginPath();
-                    ctx.arc(packetX, packetY, 10, 0, Math.PI * 2);
-                    ctx.fillStyle = '#facc15'; // Yellow
-                    ctx.fill();
-                    ctx.fillStyle = '#000';
-                    ctx.fillText("SQL", packetX-10, packetY-15);
-
-                    if (packetX < 325) {
-                        packetX += 5; // Move to thread
-                    } else {
-                        statusEl.innerText = "Thread Assigned. Forwarding to Parser...";
-                        statusEl.className = "text-indigo-400 font-mono";
-                        animationState = 'forwarding';
-                    }
-                } else if (animationState === 'forwarding') {
-                    // Packet moves to Parser
-                    ctx.beginPath();
-                    ctx.arc(packetX, packetY, 10, 0, Math.PI * 2);
-                    ctx.fillStyle = '#facc15';
-                    ctx.fill();
-
-                    if (packetX < 650) {
-                        packetX += 5;
-                    } else {
-                        statusEl.innerText = "Lexical Analysis in progress...";
-                        statusEl.className = "text-emerald-400 font-mono";
-                        animationState = 'parsing';
-                        setTimeout(tokenize, 500);
-                    }
-                } else if (animationState === 'parsing') {
-                    // Draw Tokens appearing
-                    let yPos = 110;
-                    tokens.forEach((token, idx) => {
-                        ctx.fillStyle = '#334155';
-                        ctx.fillRect(570, yPos, 160, 25);
-                        ctx.fillStyle = '#a7f3d0';
-                        ctx.fillText(token, 580, yPos + 17);
-                        yPos += 30;
-                    });
+            },
+            {
+                title: "Phase 2: Parsing",
+                text: "The thread passes the SQL text to the Parser. It checks syntax and builds a Parse Tree.",
+                tech: "File: sql_yacc.yy. Output: SELECT_LEX structure (Abstract Syntax Tree).",
+                action: () => {
+                    animatePacket(phases[1], phases[2], "AST");
+                    highlightPhase("parser");
                 }
-            }
-
-            function tokenize() {
-                const fullTokens = ['SELECT_SYM', 'IDENT "users"', 'WHERE_SYM', 'IDENT "id"', 'EQ_SYM', 'INT "42"'];
-                let count = 0;
-                const interval = setInterval(() => {
-                    if (count >= fullTokens.length) {
-                        clearInterval(interval);
-                        statusEl.innerText = "Parse Tree Built. Ready for Optimizer.";
-                        animationState = 'done';
-                        return;
-                    }
-                    tokens.push(fullTokens[count]);
-                    tokenEl.innerText = '[' + tokens.map(t => `'${t.split(' ')[0]}'`).join(', ') + ']';
-                    count++;
-                }, 300);
-            }
-
-            function animate() {
-                draw();
-                if(animationState !== 'done') {
-                    frameId = requestAnimationFrame(animate);
-                } else {
-                     draw(); // One last draw
+            },
+            {
+                title: "Phase 3: Resolution & Optimization",
+                text: "The server resolves table names and decides the best way to execute the query.",
+                tech: "Optimizer sees 'WHERE id=42'. Since 'id' is Primary Key, it chooses Access Type: const (EQ_REF). Cost: ~1.0.",
+                action: () => {
+                    highlightPhase("parser"); // Stay on parser/opt
+                    // Flash effect to symbolize "Thinking"
+                    d3.select("#phase-parser rect")
+                        .transition().duration(200).style("fill", "#475569")
+                        .transition().duration(200).style("fill", "#283547");
                 }
-            }
-
-            btn.addEventListener('click', () => {
-                if (animationState !== 'idle' && animationState !== 'done') return;
-                
-                // Reset
-                packetX = 50;
-                tokens = [];
-                tokenEl.innerText = '[]';
-                statusEl.innerText = 'Sending Query Packet...';
-                statusEl.className = 'text-yellow-400 font-mono';
-                animationState = 'connecting';
-                animate();
-            });
-
-            // Initial draw
-            draw();
-        })();
-
-
-        /**
-         * MODULE 2: Optimizer Cost Visualizer
-         */
-        (function() {
-            const slider = document.getElementById('slider-rows');
-            const display = document.getElementById('row-display');
-            const costScanEl = document.getElementById('cost-scan');
-            const costIndexEl = document.getElementById('cost-index');
-            const canvas = document.getElementById('canvas-optimizer');
-            const ctx = canvas.getContext('2d');
-
-            function update() {
-                const rows = parseInt(slider.value);
-                const kRows = (rows / 1000).toFixed(0) + (rows >= 1000000 ? 'M' : 'k');
-                display.innerText = rows.toLocaleString() + " Rows";
-
-                // Calculations
-                // Cost 1: Table Scan = rows * 0.1 (evaluate cost) + read cost
-                const scanCost = Math.round(rows * 0.2); // Simplified
-                // Cost 2: Index = Log_base_100(rows) roughly
-                const levels = Math.max(1, Math.ceil(Math.log(rows) / Math.log(100)));
-                const indexCost = levels + 1; // Traversal + 1 read
-
-                costScanEl.innerText = scanCost.toLocaleString();
-                costIndexEl.innerText = indexCost;
-
-                drawGraph(scanCost, indexCost);
-            }
-
-            function drawGraph(scan, index) {
-                ctx.clearRect(0,0, canvas.width, canvas.height);
-                
-                // Bars
-                const barWidth = 60;
-                const bottom = 180;
-                
-                // Scan Bar (Red) - Logarithmic scaling for visualization
-                const scanHeight = Math.min(150, Math.log(scan) * 15);
-                ctx.fillStyle = '#f87171';
-                ctx.fillRect(60, bottom - scanHeight, barWidth, scanHeight);
-                ctx.fillStyle = '#fff';
-                ctx.fillText("Scan", 70, bottom + 20);
-
-                // Index Bar (Green)
-                const indexHeight = Math.min(150, Math.log(index * 10000) * 10); // Artificial scale to make it visible
-                ctx.fillStyle = '#34d399';
-                ctx.fillRect(180, bottom - indexHeight, barWidth, indexHeight);
-                ctx.fillStyle = '#fff';
-                ctx.fillText("Index", 190, bottom + 20);
-                
-                // Title
-                ctx.fillStyle = '#94a3b8';
-                ctx.fillText("Relative Cost (Log Scale)", 80, 20);
-            }
-
-            slider.addEventListener('input', update);
-            update(); // Init
-        })();
-
-
-        /**
-         * MODULE 3: B+ Tree Traversal
-         */
-        (function() {
-            const canvas = document.getElementById('canvas-btree');
-            const ctx = canvas.getContext('2d');
-            const btnRun = document.getElementById('btn-btree-search');
-            const btnReset = document.getElementById('btn-btree-reset');
-            const logEl = document.getElementById('btree-log');
-
-            // B+ Tree Data Structure (Visual Representation)
-            const tree = {
-                root: { x: 400, y: 50, val: "Root [1-100]", type: 'node', 
-                    children: [
-                        { x: 200, y: 150, val: "[1-50]", type: 'node', 
-                            children: [
-                                { x: 100, y: 250, val: "Leaf [1-25]", type: 'leaf', values: [1, 10, 20] },
-                                { x: 300, y: 250, val: "Leaf [26-50]", type: 'leaf', values: [30, 42, 50] } // Target here
-                            ]
-                        },
-                        { x: 600, y: 150, val: "[51-100]", type: 'node',
-                             children: [
-                                { x: 500, y: 250, val: "Leaf [51-75]", type: 'leaf', values: [55, 60] },
-                                { x: 700, y: 250, val: "Leaf [76-100]", type: 'leaf', values: [80, 99] }
-                            ]
-                        }
-                    ]
+            },
+            {
+                title: "Phase 4: Execution Start",
+                text: "The Executor requests the row from the Storage Engine (InnoDB).",
+                tech: "Function call: handler::ha_index_read_map(key=42).",
+                action: () => {
+                    animatePacket(phases[2], phases[3], "Get 42");
+                    highlightPhase("innodb");
+                    drawTree(); // Show the tree now
                 }
-            };
-
-            let currentPath = []; // Array of nodes being visited
-            let animationStep = 0;
-            let targetId = 42;
-            let isAnimating = false;
-
-            function drawNode(node, isActive) {
-                // Connection lines
-                if (node.children) {
-                    node.children.forEach(child => {
-                        ctx.beginPath();
-                        ctx.moveTo(node.x, node.y + 20);
-                        ctx.lineTo(child.x, child.y - 20);
-                        ctx.strokeStyle = '#475569';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-                    });
+            },
+            {
+                title: "Phase 5: B+ Tree Root Search",
+                text: "InnoDB looks at the Root Page (cached in Buffer Pool). It compares 42 against keys [10, 50].",
+                tech: "42 > 10 and 42 < 50. The pointer indicates the child page is Page 21.",
+                action: () => {
+                    highlightNode(rootNode.descendants()[0]); // Root
                 }
-
-                // Node box
-                ctx.fillStyle = isActive ? '#eab308' : '#1e293b'; // Yellow if active
-                ctx.strokeStyle = isActive ? '#fef08a' : '#475569';
-                ctx.lineWidth = isActive ? 3 : 1;
-                
-                const width = node.type === 'leaf' ? 100 : 120;
-                ctx.fillRect(node.x - width/2, node.y - 20, width, 40);
-                ctx.strokeRect(node.x - width/2, node.y - 20, width, 40);
-
-                // Text
-                ctx.fillStyle = isActive ? '#000' : '#cbd5e1';
-                ctx.font = '12px Inter';
-                ctx.textAlign = 'center';
-                ctx.fillText(node.val, node.x, node.y + 5);
-
-                // Draw specific value if found in leaf
-                if (isActive && node.type === 'leaf' && node.values.includes(targetId)) {
-                    ctx.fillStyle = '#10b981'; // Green
-                    ctx.font = 'bold 14px Inter';
-                    ctx.fillText(`FOUND ID: ${targetId}`, node.x, node.y + 40);
+            },
+            {
+                title: "Phase 5: Tree Traversal",
+                text: "Following the pointer down to the Leaf Level.",
+                tech: "Skipping Page 20 and 22. This 'Index Selectivity' is why B-Trees are fast (O(log N)).",
+                action: () => {
+                    // Highlight link to middle child
+                    const link = d3.select("path.link[target-name='Pg 21']");
+                    link.attr("class", "link link-active");
                 }
-
-                // Recursion
-                if (node.children) {
-                    node.children.forEach(child => drawNode(child, currentPath.includes(child)));
+            },
+            {
+                title: "Phase 5: Leaf Page Search",
+                text: "We arrive at Leaf Page 21. This page contains the actual row data.",
+                tech: "Page loaded from Buffer Pool (or Disk if missing).",
+                action: () => {
+                    highlightNode(rootNode.descendants().find(d => d.data.name === "Pg 21"));
+                }
+            },
+            {
+                title: "Phase 5: Page Internals",
+                text: "Inside the page (16KB), InnoDB uses the Page Directory to jump close to the record.",
+                tech: "Binary Search on Directory Slots -> Linear Scan on Linked List -> Record Found.",
+                action: () => {
+                    const targetNode = rootNode.descendants().find(d => d.data.name === "Pg 21");
+                    showPageInternals(targetNode);
+                }
+            },
+            {
+                title: "Phase 7: Result Transmission",
+                text: "The row is found! It passes the MVCC visibility check and is sent back to the client.",
+                tech: "Protocol: Text Protocol. The integer 42 is converted to string '42' before sending.",
+                action: () => {
+                    d3.select(".page-detail-group").remove(); // Clean up detail view
+                    animatePacket(phases[3], phases[0], "Result", 1500); // Long return trip
+                    highlightPhase("client");
                 }
             }
+        ];
 
-            function render() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawNode(tree.root, currentPath.includes(tree.root));
-            }
+        // --- RENDER FUNCTIONS ---
 
-            function runSearch() {
-                if (isAnimating) return;
-                isAnimating = true;
-                currentPath = [tree.root];
-                animationStep = 0;
-                logEl.innerText = "Step 1: Accessing Root Page (Cached in Memory)...";
-                render();
+        function drawPipeline() {
+            // Draw connecting lines
+            svg.append("line")
+                .attr("x1", 100).attr("y1", 80)
+                .attr("x2", 900).attr("y2", 80)
+                .attr("stroke", "#475569")
+                .attr("stroke-width", 2);
 
-                const steps = [
-                    () => {
-                        // Go left
-                        currentPath.push(tree.root.children[0]);
-                        logEl.innerText = "Step 2: ID 42 is < 50. Moving to Left Branch...";
-                        render();
-                    },
-                    () => {
-                        // Go right leaf
-                        currentPath.push(tree.root.children[0].children[1]);
-                        logEl.innerText = "Step 3: ID 42 is > 25. Moving to Leaf Page...";
-                        render();
-                    },
-                    () => {
-                        logEl.innerHTML = "<span class='text-green-400 font-bold'>Step 4: Scanning Leaf Page... Record Found! Pointer returned.</span>";
-                        render();
-                        isAnimating = false;
-                    }
-                ];
+            // Draw boxes
+            const g = svg.selectAll(".phase-group")
+                .data(phases)
+                .enter().append("g")
+                .attr("class", "phase-group")
+                .attr("id", d => "phase-" + d.id)
+                .attr("transform", d => `translate(${d.x}, ${d.y})`);
 
-                let stepCount = 0;
-                const interval = setInterval(() => {
-                    if (stepCount >= steps.length) {
-                        clearInterval(interval);
-                        return;
-                    }
-                    steps[stepCount]();
-                    stepCount++;
-                }, 1000);
-            }
+            g.append("rect")
+                .attr("x", -60).attr("y", -25)
+                .attr("width", 120).attr("height", 50);
 
-            btnRun.addEventListener('click', runSearch);
-            btnReset.addEventListener('click', () => {
-                currentPath = [];
-                isAnimating = false;
-                logEl.innerText = "System Ready.";
-                render();
-            });
+            g.append("text")
+                .attr("dy", 5)
+                .text(d => d.label);
+        }
 
-            // Init
-            render();
-        })();
+        let rootNode; // Store d3 hierarchy root
 
-        /**
-         * MODULE 4: Buffer Pool Simulator
-         */
-        (function() {
-            const gridEl = document.getElementById('buffer-grid');
-            const btnReq = document.getElementById('btn-request-page');
-            const btnFlush = document.getElementById('btn-flush-cache');
-            const progressEl = document.getElementById('io-progress');
-            const timerEl = document.getElementById('io-timer');
-            const resultEl = document.getElementById('io-result');
+        function drawTree() {
+            // Container for tree
+            const treeG = svg.append("g")
+                .attr("transform", "translate(0, 200)");
 
-            let bufferPool = new Set();
-            const PAGE_ID = 42;
-            const TOTAL_PAGES = 32;
+            const treeLayout = d3.tree().size([width, 250]);
+            const root = d3.hierarchy(treeData);
+            rootNode = treeLayout(root);
 
-            // Init Grid
-            function renderGrid() {
-                gridEl.innerHTML = '';
-                for(let i=0; i<TOTAL_PAGES; i++) {
-                    const div = document.createElement('div');
-                    div.className = 'w-4 h-4 rounded-sm transition-colors duration-300 ' + 
-                                    (bufferPool.has(i) ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-slate-700');
-                    if(i === PAGE_ID) div.id = 'target-page-indicator';
-                    gridEl.appendChild(div);
-                }
-            }
+            // Links
+            treeG.selectAll(".link")
+                .data(root.links())
+                .enter().append("path")
+                .attr("class", "link")
+                .attr("target-name", d => d.target.data.name)
+                .attr("d", d3.linkVertical()
+                    .x(d => d.x)
+                    .y(d => d.y)
+                );
 
-            function simulateFetch() {
-                if(btnReq.disabled) return;
-                btnReq.disabled = true;
-                resultEl.innerText = '';
-                
-                if (bufferPool.has(PAGE_ID)) {
-                    // Cache Hit
-                    timerEl.innerText = "< 0.1 ms";
-                    progressEl.style.transition = 'none';
-                    progressEl.style.width = '100%';
-                    resultEl.innerHTML = "<span class='text-emerald-400 font-bold'>CACHE HIT! (RAM speed)</span>";
-                    
-                    setTimeout(() => {
-                         progressEl.style.width = '0%';
-                         btnReq.disabled = false;
-                    }, 1000);
+            // Nodes
+            const nodes = treeG.selectAll(".node")
+                .data(root.descendants())
+                .enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.x},${d.y})`)
+                .style("opacity", 0); // Start invisible
 
-                } else {
-                    // Cache Miss (Disk I/O)
-                    timerEl.innerText = "...";
-                    progressEl.style.transition = 'width 2s ease-out'; // Simulate slow disk
-                    progressEl.style.width = '100%';
-                    resultEl.innerHTML = "<span class='text-red-400 animate-pulse'>Reading from Disk... (Slow)</span>";
+            nodes.append("circle")
+                .attr("r", 25);
 
-                    let ms = 0;
-                    const timerInterval = setInterval(() => {
-                        ms += 0.5;
-                        timerEl.innerText = ms.toFixed(1) + " ms";
-                    }, 100);
+            nodes.append("text")
+                .attr("dy", 45)
+                .style("text-anchor", "middle")
+                .style("font-weight", "bold")
+                .text(d => d.data.name);
 
-                    setTimeout(() => {
-                        clearInterval(timerInterval);
-                        timerEl.innerText = "12.4 ms";
-                        bufferPool.add(PAGE_ID); // Add to cache
-                        // Fill some random others to simulate locality/read-ahead
-                        bufferPool.add(PAGE_ID+1); 
-                        renderGrid();
-                        resultEl.innerHTML = "<span class='text-yellow-400'>Page Loaded into Buffer Pool. Next read will be fast.</span>";
-                        
-                        setTimeout(() => {
-                             progressEl.style.transition = 'none';
-                             progressEl.style.width = '0%';
-                             btnReq.disabled = false;
-                        }, 1000);
+            nodes.append("text")
+                .attr("dy", 5)
+                .style("text-anchor", "middle")
+                .style("font-size", "10px")
+                .text(d => d.data.keys);
 
-                    }, 2000);
-                }
-            }
+            // Fade in
+            nodes.transition().duration(500).style("opacity", 1);
+        }
 
-            btnReq.addEventListener('click', simulateFetch);
+        function highlightPhase(id) {
+            d3.selectAll(".phase-group").attr("class", "phase-group"); // Reset
+            d3.select("#phase-" + id).attr("class", "phase-group phase-active");
+        }
+
+        function highlightNode(d3Node) {
+            // Find the specific DOM element based on data
+            svg.selectAll(".node")
+                .filter(d => d === d3Node)
+                .classed("node-active", true);
+        }
+
+        function animatePacket(source, target, label, duration = 1000) {
+            const packet = svg.append("g")
+                .attr("class", "packet-g")
+                .attr("transform", `translate(${source.x}, ${source.y})`);
+
+            packet.append("circle")
+                .attr("class", "packet")
+                .attr("r", 10);
             
-            btnFlush.addEventListener('click', () => {
-                bufferPool.clear();
-                renderGrid();
-                resultEl.innerText = "Buffer Pool Flushed.";
+            packet.append("text")
+                .attr("class", "packet-text")
+                .attr("dy", 4)
+                .text(label);
+
+            packet.transition()
+                .duration(duration)
+                .attr("transform", `translate(${target.x}, ${target.y})`)
+                .on("end", () => packet.remove());
+        }
+
+        function showPageInternals(targetNode) {
+            // Draw a detail view near the node
+            const x = targetNode.x;
+            const y = targetNode.y + 200 + 60; // Offset from tree
+
+            const g = svg.append("g")
+                .attr("class", "page-detail-group")
+                .attr("transform", `translate(${x - 100}, ${y})`)
+                .style("opacity", 0);
+
+            // Page Container
+            g.append("rect")
+                .attr("width", 200).attr("height", 80)
+                .attr("fill", "#1e293b")
+                .attr("stroke", "#fbbf24")
+                .attr("stroke-width", 2)
+                .attr("rx", 5);
+
+            g.append("text")
+                .attr("x", 10).attr("y", 20)
+                .attr("fill", "#94a3b8")
+                .style("font-size", "10px")
+                .text("Page Directory & Records");
+
+            // Draw Records (Boxes)
+            const records = targetNode.data.records; // [12, 25, 42, 48]
+            records.forEach((rec, i) => {
+                const rG = g.append("g").attr("transform", `translate(${20 + i*45}, 40)`);
+                
+                const rect = rG.append("rect")
+                    .attr("class", "record-rect")
+                    .attr("width", 35).attr("height", 25)
+                    .attr("id", "rec-" + rec);
+                
+                rG.append("text")
+                    .attr("x", 17.5).attr("y", 17)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-size", "11px")
+                    .text(rec);
             });
 
-            renderGrid();
-        })();
+            g.transition().duration(500).style("opacity", 1)
+             .on("end", () => {
+                 // Animate Search
+                 setTimeout(() => {
+                     d3.select("#rec-42")
+                        .transition().duration(300)
+                        .attr("fill", "#22c55e") // Green found
+                        .attr("transform", "scale(1.2) translate(-3, -3)"); // Pop out
+                 }, 500);
+             });
+        }
+
+        // --- CONTROLLER ---
+
+        function nextStep() {
+            const btn = document.getElementById("btn-next");
+            
+            if (stepIndex < storyboard.length) {
+                const step = storyboard[stepIndex];
+                
+                // Update UI Text
+                document.getElementById("info-title").innerText = step.title;
+                document.getElementById("info-text").innerText = step.text;
+                document.getElementById("tech-detail").innerText = step.tech;
+
+                // Execute Visualization Logic
+                step.action();
+
+                stepIndex++;
+                btn.innerText = (stepIndex >= storyboard.length) ? "Done" : "Next ▶";
+                if (stepIndex >= storyboard.length) btn.disabled = true;
+            }
+        }
+
+        function resetViz() {
+            stepIndex = 0;
+            const btn = document.getElementById("btn-next");
+            btn.disabled = false;
+            btn.innerText = "Start Execution ▶";
+            
+            // Reset Text
+            document.getElementById("info-title").innerText = "Ready to Start";
+            document.getElementById("info-text").innerText = "Click 'Start Execution' to trace the query...";
+            document.getElementById("tech-detail").innerText = "";
+
+            // Clear SVG
+            svg.selectAll("*").remove();
+        }
+
+        // Initial setup
+        resetViz(); // Ensures SVG is clear
+        drawPipeline(); // Show initial pipeline state
+
     </script>
 </body>
 </html>
