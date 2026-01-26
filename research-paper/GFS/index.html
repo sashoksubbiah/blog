@@ -3,648 +3,629 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GFS: The Visual Guide</title>
+    <title>Google File System</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        gfsDark: '#0f172a',
-                        gfsCard: '#1e293b',
-                        gfsCyan: '#06b6d4',
-                        gfsPurple: '#a855f7',
-                        gfsGreen: '#22c55e',
-                        gfsYellow: '#eab308',
-                        gfsRed: '#ef4444',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['Fira Code', 'monospace'],
-                    },
-                    animation: {
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code&display=swap');
-        
-        body {
-            background-color: #0f172a;
-            color: #e2e8f0;
-            font-family: 'Inter', sans-serif;
-            overflow-x: hidden;
-        }
-
-        /* Architecture Diagram Styles */
-        .arch-container {
-            position: relative;
-            background-image: radial-gradient(#334155 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        .arch-node {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: absolute;
-            z-index: 20;
-            cursor: default;
-            /* Center the node on its coordinate */
-            transform: translate(-50%, -50%);
-        }
-        
-        .arch-node.active {
-            transform: translate(-50%, -50%) scale(1.1);
-            box-shadow: 0 0 25px rgba(6, 182, 212, 0.5);
-            border-color: #06b6d4;
-            background-color: #0f172a;
-        }
-
-        .arch-node.primary-active {
-            border-color: #a855f7;
-            box-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
-        }
-
-        .connection-line {
-            fill: none;
-            stroke: #475569;
-            stroke-width: 2;
-            stroke-linecap: round;
-            transition: stroke 0.3s ease;
-        }
-        
-        /* 3D Card Effect */
-        .card-3d-wrapper {
-            perspective: 1000px;
-        }
-        .card-3d {
-            transition: transform 0.6s;
-            transform-style: preserve-3d;
-        }
-        .card-3d.flipped {
-            transform: rotateY(180deg);
-        }
-        .card-front, .card-back {
-            backface-visibility: hidden;
-            position: absolute;
-            inset: 0;
-        }
-        .card-back {
-            transform: rotateY(180deg);
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .node-label { font-size: 10px; pointer-events: none; fill: #475569; }
+        .interactive-canvas { background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-6 lg:p-8">
+<body>
+    <div id="root"></div>
 
-    <!-- Header -->
-    <header class="max-w-7xl mx-auto mb-8 text-center">
-        <h1 class="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gfsCyan to-gfsPurple mb-2">
-            The Google File System
-        </h1>
-    </header>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
 
-    <!-- INTERACTIVE OPERATIONS LAB -->
-    <section class="max-w-7xl mx-auto mb-12">
-        
-        <!-- Controls Header -->
-        <div class="flex flex-col md:flex-row items-center justify-between mb-4 bg-gfsCard p-4 rounded-t-xl border-b border-gray-700 shadow-lg">
-            <div class="flex items-center gap-4 mb-4 md:mb-0 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-                <i class="fa-solid fa-flask text-gfsCyan text-xl shrink-0"></i>
-                <div class="h-6 w-px bg-gray-600 mx-2 shrink-0"></div>
-                <!-- Scenario Tabs -->
-                <div class="flex bg-gray-900 rounded-lg p-1 shrink-0">
-                    <button onclick="setScenario('read')" id="tab-read" class="px-4 py-2 rounded-md text-xs font-bold transition-all bg-gfsCyan text-white whitespace-nowrap">Read Flow</button>
-                    <button onclick="setScenario('write')" id="tab-write" class="px-4 py-2 rounded-md text-xs font-bold transition-all text-gray-400 hover:text-white whitespace-nowrap">Write Flow</button>
-                    <button onclick="setScenario('append')" id="tab-append" class="px-4 py-2 rounded-md text-xs font-bold transition-all text-gray-400 hover:text-white whitespace-nowrap">Record Append</button>
-                </div>
+        // --- Shared Components ---
+
+        const Card = ({ title, children, className = "" }) => (
+            <div className={`bg-white rounded-lg shadow p-6 border border-slate-200 ${className}`}>
+                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">{title}</h3>
+                {children}
             </div>
+        );
 
-            <!-- Playback Controls -->
-            <div class="flex gap-2 shrink-0">
-                <button onclick="resetSim()" class="px-4 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-white text-xs font-bold transition-all">
-                    <i class="fa-solid fa-rotate-left mr-2"></i>Reset
+        const Button = ({ onClick, disabled, children, color = "blue" }) => {
+            const colors = {
+                blue: "bg-blue-600 hover:bg-blue-700 text-white",
+                green: "bg-green-600 hover:bg-green-700 text-white",
+                red: "bg-red-600 hover:bg-red-700 text-white",
+                slate: "bg-slate-200 hover:bg-slate-300 text-slate-800"
+            };
+            return (
+                <button 
+                    onClick={onClick} 
+                    disabled={disabled}
+                    className={`${colors[color]} px-4 py-2 rounded font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                    {children}
                 </button>
-                <button onclick="nextStep()" id="nextBtn" class="px-6 py-2 rounded-lg bg-gfsGreen text-white font-bold text-xs shadow-lg shadow-green-900/20 hover:bg-green-500 hover:scale-105 transition-all flex items-center">
-                    Next Step <i class="fa-solid fa-forward ml-2"></i>
-                </button>
-            </div>
-        </div>
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto lg:h-[450px]">
-            
-            <!-- LEFT: The Diagram Canvas -->
-            <div class="lg:col-span-2 bg-gfsCard rounded-b-xl lg:rounded-bl-xl lg:rounded-br-none border border-gray-700 h-[400px] lg:h-full arch-container overflow-hidden relative shadow-inner" id="canvas-container">
-                
-                <!-- SVG Layer for Links & Packets -->
-                <svg id="main-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10">
-                    <defs>
-                        <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" />
-                        </marker>
-                        <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#a855f7" />
-                        </marker>
-                    </defs>
-                    <!-- Paths injected by JS -->
-                </svg>
-
-                <!-- NODES (Injected by JS based on View) -->
-                <div id="nodes-layer" class="w-full h-full relative z-20">
-                    <!-- JS will populate this -->
-                </div>
-
-                <!-- View Label -->
-                <div class="absolute top-4 left-4 bg-black/60 backdrop-blur px-3 py-1 rounded text-[10px] tracking-widest text-gray-300 border border-gray-700 font-mono z-0">
-                    VIEW: <span id="view-label" class="text-gfsCyan font-bold">CLUSTER</span>
-                </div>
-            </div>
-
-            <!-- RIGHT: System Log & Explainer -->
-            <div class="bg-black rounded-b-xl lg:rounded-bl-none lg:rounded-br-xl border border-gray-700 p-0 flex flex-col h-[300px] lg:h-full shadow-2xl">
-                <div class="p-3 border-b border-gray-800 bg-gray-900/80 flex justify-between items-center">
-                    <span class="text-xs font-mono text-gray-400 font-bold"><i class="fa-solid fa-terminal mr-2"></i>SYSTEM_LOG</span>
-                    <span id="step-indicator" class="text-[10px] font-bold bg-gray-800 px-2 py-1 rounded text-gfsCyan">READY</span>
-                </div>
-                
-                <!-- Log Content -->
-                <div id="console-output" class="flex-grow p-4 font-mono text-xs overflow-y-auto space-y-3 scroll-smooth">
-                    <div class="text-gray-500 italic">> System initialized...</div>
-                    <div class="text-gray-500 italic">> Waiting for user input.</div>
-                </div>
-
-                <!-- Legend -->
-                <div class="p-3 border-t border-gray-800 bg-gray-900/50 text-[10px] text-gray-500 grid grid-cols-2 gap-x-2 gap-y-1">
-                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsCyan"></div> Data Flow</div>
-                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsPurple"></div> Control/Meta</div>
-                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-gfsGreen"></div> Primary</div>
-                    <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-slate-500"></div> Replica</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Section 2: Design Decisions (Cards) -->
-    <section class="max-w-7xl mx-auto mb-16">
-        <div class="flex items-center gap-3 mb-6">
-            <i class="fa-solid fa-scale-balanced text-gfsPurple text-2xl"></i>
-            <h2 class="text-2xl font-bold text-white">Critical Design Decisions</h2>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            
-            <!-- Card 1: Failures -->
-            <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
-                <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
-                        <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-triangle-exclamation"></i> Constraint</div>
-                            <h3 class="text-lg font-bold text-white">Component Failure</h3>
-                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">With 1000s of disks, component failure is the norm, not the exception.</p>
-                        </div>
-                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
-                    </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
-                        <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-check"></i> Solution</div>
-                            <h3 class="text-lg font-bold text-white">Constant Monitoring</h3>
-                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">3x Replication. Checksums on every block. Fast cloning for recovery.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card 2: Metadata -->
-             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
-                <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
-                        <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-database"></i> Constraint</div>
-                            <h3 class="text-lg font-bold text-white">Memory Overhead</h3>
-                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">Billions of KB-sized files would exhaust the Master's RAM.</p>
-                        </div>
-                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
-                    </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
-                        <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-cube"></i> Solution</div>
-                            <h3 class="text-lg font-bold text-white">64 MB Chunks</h3>
-                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">Large chunks reduce metadata size, allowing it to fit entirely in RAM.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-             <!-- Card 3: Consistency -->
-             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
-                <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
-                        <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-pen-to-square"></i> Workload</div>
-                            <h3 class="text-lg font-bold text-white">Concurrent Appends</h3>
-                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">Many clients appending to logs simultaneously. Locks are too slow.</p>
-                        </div>
-                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
-                    </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
-                        <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-list-ol"></i> Solution</div>
-                            <h3 class="text-lg font-bold text-white">Relaxed Consistency</h3>
-                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">Atomic Record Appends. "At least once" delivery logic.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card 4: Bandwidth -->
-             <div class="h-48 cursor-pointer card-3d-wrapper" onclick="this.querySelector('.card-3d').classList.toggle('flipped')">
-                <div class="relative w-full h-full card-3d">
-                    <div class="card-front bg-gfsCard p-6 rounded-xl border border-red-900/50 flex flex-col justify-between shadow-lg hover:border-red-500/50 transition-colors">
-                        <div>
-                            <div class="flex items-center gap-2 text-red-400 font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-network-wired"></i> Bottleneck</div>
-                            <h3 class="text-lg font-bold text-white">Master Throughput</h3>
-                            <p class="text-gray-400 text-xs mt-2 leading-relaxed">A single master cannot pipe data for thousands of clients.</p>
-                        </div>
-                        <div class="text-right text-xs text-gray-600">Click to flip <i class="fa-solid fa-rotate ml-1"></i></div>
-                    </div>
-                    <div class="card-back bg-gfsCard p-6 rounded-xl border border-gfsGreen flex flex-col justify-between shadow-lg">
-                        <div>
-                            <div class="flex items-center gap-2 text-gfsGreen font-bold mb-2 text-xs uppercase tracking-wider"><i class="fa-solid fa-route"></i> Solution</div>
-                            <h3 class="text-lg font-bold text-white">Decoupled Flows</h3>
-                            <p class="text-gray-300 text-xs mt-2 leading-relaxed">Master handles Metadata (Control). Chunkservers handle Data.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="max-w-7xl mx-auto text-center text-gray-500 py-8 border-t border-gray-800">
-        <p>Visual Guide generated based on <em>"The Google File System" (SOSP 2003)</em></p>
-        <p class="text-xs mt-2">Ghemawat, Gobioff, and Leung</p>
-    </footer>
-
-    <!-- LOGIC SCRIPT -->
-    <script>
-        // --- DATA & STATE ---
-        let currentScenario = 'read';
-        let currentStep = 0;
-        let drawnLines = []; // Store active lines to manage/clear them
-
-        // --- SCENARIO DEFINITIONS ---
-        const scenarios = {
-            read: {
-                view: 'cluster',
-                steps: [
-                    { 
-                        text: "APP: calls Read('/home/user/log.txt', offset: 10MB). Client calculates Chunk Index: 0.", 
-                        highlightNode: ['client'], 
-                        resetPaths: true 
-                    },
-                    { 
-                        text: "REQ: Client sends ('/home/user/log.txt', 0) to Master [10.0.0.1].", 
-                        highlightNode: ['client', 'master'], 
-                        packet: {from: 'client', to: 'master', color: '#a855f7'} 
-                    },
-                    { 
-                        text: "META: Master returns Handle '8af2' & Replicas [192.168.1.10, 192.168.1.11, 192.168.1.12].", 
-                        highlightNode: ['master', 'client'], 
-                        packet: {from: 'master', to: 'client', color: '#a855f7'} 
-                    },
-                    { 
-                        text: "REQ: Client caches meta. Requests Handle '8af2' from closest Replica (CS2).", 
-                        highlightNode: ['client', 'cs2'], 
-                        packet: {from: 'client', to: 'cs2', color: '#06b6d4'} 
-                    },
-                    { 
-                        text: "DATA: CS2 reads disk block at offset 10MB and streams 64KB packet to Client.", 
-                        highlightNode: ['cs2', 'client'], 
-                        packet: {from: 'cs2', to: 'client', color: '#06b6d4'} 
-                    },
-                    { 
-                        text: "DONE: 64KB data delivered to App buffer.", 
-                        highlightNode: ['client'], 
-                        complete: true 
-                    }
-                ]
-            },
-            write: {
-                view: 'pipeline',
-                steps: [
-                    { 
-                        text: "META: Client asks Master: 'Who is Primary for Chunk 3c9b?'", 
-                        highlightNode: ['client', 'master'], 
-                        packet: {from: 'client', to: 'master', color: '#a855f7'} 
-                    },
-                    { 
-                        text: "REPLY: Master says: 'Replica A [10.2.1.1] is Primary. Secondaries: B, C.'", 
-                        highlightNode: ['master', 'client'], 
-                        packet: {from: 'master', to: 'client', color: '#a855f7'} 
-                    },
-                    { 
-                        text: "DATA PUSH: Client pushes 'PAYLOAD_XYZ' to closest Replica (B). Saved in LRU Buffer.", 
-                        highlightNode: ['client', 'repB'], 
-                        packet: {from: 'client', to: 'repB', color: '#06b6d4'} 
-                    },
-                    { 
-                        text: "CHAIN: Replica B forwards 'PAYLOAD_XYZ' to Primary A.", 
-                        highlightNode: ['repB', 'primary'], 
-                        packet: {from: 'repB', to: 'primary', color: '#06b6d4'} 
-                    },
-                    { 
-                        text: "CHAIN: Primary A forwards 'PAYLOAD_XYZ' to Replica C. All buffers full.", 
-                        highlightNode: ['primary', 'repC'], 
-                        packet: {from: 'primary', to: 'repC', color: '#06b6d4'} 
-                    },
-                    { 
-                        text: "CONTROL: Client sends 'Write Request' to Primary. 'Commit PAYLOAD_XYZ!'", 
-                        highlightNode: ['client', 'primary'], 
-                        packet: {from: 'client', to: 'primary', color: '#a855f7', dashed: true} 
-                    },
-                    { 
-                        text: "ORDER: Primary assigns Serial #551. Tells B & C: 'Write at #551'.", 
-                        highlightNode: ['primary', 'repB', 'repC'], 
-                        packet: {from: 'primary', to: ['repB', 'repC'], color: '#a855f7', dashed: true} 
-                    },
-                    { 
-                        text: "ACK: Secondaries write to disk and Ack success to Primary.", 
-                        highlightNode: ['repB', 'repC', 'primary'], 
-                        packet: {from: ['repB', 'repC'], to: 'primary', color: '#a855f7', dashed: true} 
-                    },
-                    { 
-                        text: "SUCCESS: Primary replies to Client. Data is Consistent & Defined.", 
-                        highlightNode: ['primary', 'client'], 
-                        packet: {from: 'primary', to: 'client', color: '#a855f7', dashed: true} 
-                    }
-                ]
-            },
-            append: {
-                view: 'pipeline',
-                steps: [
-                     { 
-                        text: "SETUP: Client pushes 'LOG_ENTRY_101' to all replicas (Daisy Chain complete).", 
-                        highlightNode: ['client', 'repB', 'primary', 'repC'], 
-                        resetPaths: true
-                    },
-                    { 
-                        text: "REQ: Client sends 'Record Append' to Primary.", 
-                        highlightNode: ['client', 'primary'], 
-                        packet: {from: 'client', to: 'primary', color: '#a855f7', dashed: true} 
-                    },
-                    { 
-                        text: "LOGIC: Primary checks chunk 3c9b size. 63MB used. 1MB fits? Yes.", 
-                        highlightNode: ['primary'], 
-                        special: "Checking Size..."
-                    },
-                    { 
-                        text: "COMMIT: Primary picks Offset 63MB. Writes locally. Sends Offset 63MB to B & C.", 
-                        highlightNode: ['primary', 'repB', 'repC'], 
-                        packet: {from: 'primary', to: ['repB', 'repC'], color: '#a855f7', dashed: true} 
-                    },
-                    { 
-                        text: "WRITE: Secondaries write 'LOG_ENTRY_101' at Offset 63MB. Ack to Primary.", 
-                        highlightNode: ['repB', 'repC', 'primary'], 
-                        packet: {from: ['repB', 'repC'], to: 'primary', color: '#a855f7', dashed: true} 
-                    },
-                    { 
-                        text: "SUCCESS: Primary tells Client 'Append Successful at Offset 63MB'.", 
-                        highlightNode: ['primary', 'client'], 
-                        packet: {from: 'primary', to: 'client', color: '#a855f7', dashed: true} 
-                    }
-                ]
-            }
+            );
         };
 
-        // --- DOM ELEMENTS ---
-        const nodesLayer = document.getElementById('nodes-layer');
-        const svgLayer = document.getElementById('main-svg');
-        const consoleOut = document.getElementById('console-output');
-        const stepIndicator = document.getElementById('step-indicator');
-        const viewLabel = document.getElementById('view-label');
+        const InfoTooltip = ({ content, x, y }) => {
+            if (!content) return null;
+            return (
+                <div 
+                    className="absolute bg-slate-800 text-white text-xs p-3 rounded shadow-xl z-50 w-64 pointer-events-none"
+                    style={{ left: x + 10, top: y + 10 }}
+                >
+                    <pre className="whitespace-pre-wrap font-mono">{content}</pre>
+                </div>
+            );
+        };
 
-        // --- INITIALIZATION ---
-        function setScenario(name) {
-            currentScenario = name;
-            currentStep = 0;
-            drawnLines = [];
-            
-            // Update UI Tabs
-            ['read', 'write', 'append'].forEach(t => {
-                const btn = document.getElementById(`tab-${t}`);
-                if(t === name) {
-                    btn.classList.add('bg-gfsCyan', 'text-white');
-                    btn.classList.remove('text-gray-400');
-                } else {
-                    btn.classList.remove('bg-gfsCyan', 'text-white');
-                    btn.classList.add('text-gray-400');
+        // --- Module 1: Architecture & "God Mode" ---
+
+        const ModuleArchitecture = () => {
+            const svgRef = useRef(null);
+            const [hoverInfo, setHoverInfo] = useState(null);
+            const [selectedFile, setSelectedFile] = useState(null);
+
+            // Mock Data for Files
+            const fileSystem = {
+                "/user/home/research_data.dat": {
+                    size: "128MB",
+                    chunks: [
+                        { id: "C1", locations: ["cs-0-1", "cs-1-2", "cs-2-1"] }, // Spans 3 racks
+                        { id: "C2", locations: ["cs-0-2", "cs-1-3", "cs-2-2"] }
+                    ]
+                },
+                "/sys/logs/app.log": {
+                    size: "64MB",
+                    chunks: [
+                        { id: "C3", locations: ["cs-0-4", "cs-0-5", "cs-1-4"] } // Poorly replicated (mostly rack 0)
+                    ]
                 }
-            });
-
-            // Set View
-            const viewType = scenarios[name].view;
-            renderNodes(viewType);
-            viewLabel.innerText = viewType === 'cluster' ? "CLUSTER VIEW (General)" : "REPLICATION PIPELINE (Zoomed In)";
-            
-            // Reset Console
-            consoleOut.innerHTML = `<div class="text-gfsCyan font-bold">> Mode: ${name.toUpperCase()}</div><div class="text-gray-500 italic">> Ready. Click 'Next Step'.</div>`;
-            stepIndicator.innerText = `STEP 0/${scenarios[name].steps.length}`;
-            
-            // Clear SVG paths but keep defs
-            clearSvgPaths();
-        }
-
-        function clearSvgPaths() {
-             const paths = svgLayer.querySelectorAll('path, circle');
-             paths.forEach(p => p.remove());
-        }
-
-        function renderNodes(view) {
-            nodesLayer.innerHTML = '';
-            
-            // Icons
-            const iconClient = '<i class="fa-solid fa-laptop-code text-2xl mb-1 text-gfsCyan"></i>';
-            const iconMaster = '<i class="fa-solid fa-brain text-2xl mb-1 text-gfsPurple"></i>';
-            const iconServer = '<i class="fa-solid fa-server text-2xl mb-1 text-gray-400"></i>';
-            const iconPrimary = '<i class="fa-solid fa-server text-2xl mb-1 text-gfsGreen"></i>';
-            
-            if (view === 'cluster') {
-                // Using percentages with translate(-50%, -50%) for center alignment
-                createNode('client', `Client`, '15%', '50%', 'border-gfsCyan', false, iconClient);
-                createNode('master', `Master`, '50%', '15%', 'border-gfsPurple', false, iconMaster);
-                createNode('cs1', `CS 1`, '20%', '85%', 'border-gray-500', false, iconServer);
-                createNode('cs2', `CS 2`, '50%', '85%', 'border-gray-500', false, iconServer); 
-                createNode('cs3', `CS 3`, '80%', '85%', 'border-gray-500', false, iconServer);
-            } else {
-                // Pipeline View - Linear flow for better mobile fit
-                createNode('client', `Client`, '10%', '50%', 'border-gfsCyan', false, iconClient);
-                createNode('master', `Master`, '10%', '15%', 'border-gfsPurple', false, iconMaster);
-                
-                // Daisy Chain: B -> A -> C
-                createNode('repB', `Replica B\n(Sec)`, '35%', '50%', 'border-gray-500', false, iconServer); 
-                createNode('primary', `Primary A\n(Lease)`, '60%', '50%', 'border-gfsGreen', true, iconPrimary); 
-                createNode('repC', `Replica C\n(Sec)`, '85%', '50%', 'border-gray-500', false, iconServer); 
-            }
-        }
-
-        function createNode(id, label, left, top, colorClass, isPrimary, iconHtml) {
-            const div = document.createElement('div');
-            div.id = `node-${id}`;
-            div.className = `arch-node w-24 h-24 rounded-xl border-2 bg-slate-800 flex flex-col items-center justify-center text-center text-[10px] font-bold text-gray-300 shadow-xl ${colorClass}`;
-            if(isPrimary) div.classList.add('primary-active');
-            
-            div.style.left = left;
-            div.style.top = top;
-            
-            div.innerHTML = `${iconHtml}<span>${label}</span>`;
-            nodesLayer.appendChild(div);
-        }
-
-        // --- SIMULATION LOGIC ---
-        function nextStep() {
-            const scenData = scenarios[currentScenario];
-            if (currentStep >= scenData.steps.length) return;
-
-            const stepData = scenData.steps[currentStep];
-            
-            // Log
-            const logEntry = document.createElement('div');
-            logEntry.className = "border-l-2 border-gfsCyan pl-2 py-1 animate-pulse-slow";
-            logEntry.innerText = `[${currentStep + 1}] ${stepData.text}`;
-            consoleOut.appendChild(logEntry);
-            
-            // Auto-Scroll to bottom
-            requestAnimationFrame(() => {
-                consoleOut.scrollTop = consoleOut.scrollHeight;
-            });
-
-            // Reset SVG if needed
-            if (stepData.resetPaths) {
-                clearSvgPaths();
-            }
-
-            // Highlight Nodes
-            document.querySelectorAll('.arch-node').forEach(n => n.classList.remove('active'));
-            if (stepData.highlightNode) {
-                stepData.highlightNode.forEach(id => {
-                    const el = document.getElementById(`node-${id}`);
-                    if(el) el.classList.add('active');
-                });
-            }
-
-            // Animate Packet/Lines
-            if (stepData.packet) {
-                const { from, to, color, dashed } = stepData.packet;
-                const targets = Array.isArray(to) ? to : [to];
-                
-                targets.forEach(targetId => {
-                    animateConnection(from, targetId, color, dashed);
-                });
-            }
-
-            currentStep++;
-            stepIndicator.innerText = `STEP ${currentStep}/${scenData.steps.length}`;
-            
-            if (currentStep === scenData.steps.length) {
-                const done = document.createElement('div');
-                done.className = "text-gfsGreen font-bold mt-2";
-                done.innerText = ">> OPERATION COMPLETE";
-                consoleOut.appendChild(done);
-                requestAnimationFrame(() => {
-                    consoleOut.scrollTop = consoleOut.scrollHeight;
-                });
-            }
-        }
-
-        function resetSim() {
-            setScenario(currentScenario);
-        }
-
-        // --- ANIMATION HELPERS ---
-        function getCenter(id) {
-            const el = document.getElementById(`node-${id}`);
-            if(!el) return {x:0, y:0};
-            // Since we use translate(-50%, -50%), the offsetLeft/Top is the center point
-            return {
-                x: el.offsetLeft,
-                y: el.offsetTop
             };
-        }
 
-        function animateConnection(fromId, toId, color, dashed) {
-            const start = getCenter(fromId);
-            const end = getCenter(toId);
-            
-            const pathId = `path-${fromId}-${toId}-${Date.now()}`;
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            
-            // Draw Curve - dynamically calculated based on relative positions
-            const deltaX = end.x - start.x;
-            const deltaY = end.y - start.y;
-            
-            // If horizontal line, curve up/down slightly. If vertical, curve left/right.
-            let cx, cy;
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                cx = (start.x + end.x) / 2;
-                cy = Math.min(start.y, end.y) - 30; // Curve Upwards
-            } else {
-                cx = Math.min(start.x, end.x) - 30;
-                cy = (start.y + end.y) / 2;
-            }
+            useEffect(() => {
+                const width = 800;
+                const height = 500;
+                const svg = d3.select(svgRef.current);
+                svg.selectAll("*").remove();
 
-            const d = `M${start.x},${start.y} Q${cx},${cy} ${end.x},${end.y}`;
-            
-            path.setAttribute("d", d);
-            path.setAttribute("class", "connection-line");
-            path.style.stroke = color;
-            if(dashed) path.style.strokeDasharray = "5,5";
-            path.setAttribute("marker-end", color === '#06b6d4' ? "url(#arrow-blue)" : "url(#arrow-purple)");
-            
-            svgLayer.appendChild(path);
-
-            // Create Packet
-            const packet = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            packet.setAttribute("class", "packet");
-            packet.style.fill = color;
-            svgLayer.appendChild(packet);
-
-            // Animate Packet
-            let progress = 0;
-            function step() {
-                progress += 0.015; // Speed
-                if (progress > 1) {
-                    packet.remove();
-                    return;
-                }
+                const racks = 3;
+                const nodesPerRack = 10;
                 
-                try {
-                    const point = path.getPointAtLength(progress * path.getTotalLength());
-                    packet.setAttribute("cx", point.x);
-                    packet.setAttribute("cy", point.y);
-                    packet.style.opacity = 1;
-                    requestAnimationFrame(step);
-                } catch(e) {
-                    // Path might be removed on reset
+                // --- Visualizing Racks ---
+                const rackWidth = 120;
+                const rackHeight = 300;
+                const rackSpacing = 160;
+                const startX = 200;
+                const startY = 100;
+
+                const rackGroup = svg.append("g");
+
+                // Draw Rack Containers
+                for(let r=0; r<racks; r++) {
+                    rackGroup.append("rect")
+                        .attr("x", startX + (r * rackSpacing))
+                        .attr("y", startY)
+                        .attr("width", rackWidth)
+                        .attr("height", rackHeight)
+                        .attr("fill", "#f1f5f9")
+                        .attr("stroke", "#cbd5e1")
+                        .attr("rx", 8);
+                    
+                    rackGroup.append("text")
+                        .attr("x", startX + (r * rackSpacing) + rackWidth/2)
+                        .attr("y", startY - 10)
+                        .attr("text-anchor", "middle")
+                        .attr("class", "text-xs font-bold fill-slate-500")
+                        .text(`Rack ${r+1}`);
                 }
-            }
-            requestAnimationFrame(step);
-        }
 
-        // Handle Window Resize to keep lines correct
-        window.addEventListener('resize', () => {
-             // In a real app, we'd redraw lines. For this demo, simple reset is safer to avoid visual glitches.
-             resetSim();
-        });
+                // --- Nodes ---
+                let nodes = [{ id: "master", type: "master", label: "Master", x: 100, y: height/2 }];
+                
+                // Add Chunkservers with fixed positions inside racks
+                for(let r=0; r<racks; r++) {
+                    for(let i=0; i<nodesPerRack; i++) {
+                        nodes.push({ 
+                            id: `cs-${r}-${i}`, 
+                            type: "chunkserver", 
+                            rack: r,
+                            x: startX + (r * rackSpacing) + (rackWidth/2),
+                            y: startY + 30 + (i * 25)
+                        });
+                    }
+                }
 
-        // Init
-        window.addEventListener('load', () => setScenario('read'));
+                // --- Drawing Nodes ---
+                const nodeGroup = svg.append("g");
 
+                // Draw Connections (Master to Racks - Logical)
+                if (selectedFile) {
+                    // Draw lines from Master to active Chunkservers
+                    const activeChunks = fileSystem[selectedFile].chunks;
+                    const activeCS = new Set(activeChunks.flatMap(c => c.locations));
+
+                    activeCS.forEach(csId => {
+                        const target = nodes.find(n => n.id === csId);
+                        if (target) {
+                            nodeGroup.append("line")
+                                .attr("x1", nodes[0].x)
+                                .attr("y1", nodes[0].y)
+                                .attr("x2", target.x)
+                                .attr("y2", target.y)
+                                .attr("stroke", "#3b82f6")
+                                .attr("stroke-width", 1)
+                                .attr("opacity", 0.3)
+                                .attr("stroke-dasharray", "5,5");
+                        }
+                    });
+                }
+
+                nodes.forEach(d => {
+                    const isMaster = d.type === 'master';
+                    const isActive = selectedFile && 
+                        fileSystem[selectedFile].chunks.some(c => c.locations.includes(d.id));
+
+                    const circle = nodeGroup.append("circle")
+                        .attr("cx", d.x)
+                        .attr("cy", d.y)
+                        .attr("r", isMaster ? 30 : 8)
+                        .attr("fill", () => {
+                            if (isMaster) return "#7c3aed";
+                            if (isActive) return "#ef4444"; // Highlight active CS
+                            return "#16a34a"; // Normal CS
+                        })
+                        .attr("stroke", "white")
+                        .attr("stroke-width", 2)
+                        .style("cursor", "pointer")
+                        .style("transition", "fill 0.3s");
+
+                    // Interactions
+                    circle.on("mouseover", (event) => {
+                        let content = "";
+                        if(isMaster) {
+                            content = `MASTER (RAM):\n-------------\nFiles: ${Object.keys(fileSystem).length}\n\nNAMESPACE LOOKUP:\n${selectedFile ? `${selectedFile} \n-> [Chunk handles...]` : "(Select a file to see mapping)"}`;
+                        } else {
+                            content = `CHUNKSERVER (DISK):\n------------------\nID: ${d.id}\nRack: ${d.rack + 1}\n\n${isActive ? ">> HOLDING REPLICA <<" : "Idle"}`;
+                        }
+                        setHoverInfo({ content, x: event.pageX, y: event.pageY });
+                    })
+                    .on("mouseout", () => setHoverInfo(null));
+
+                    if (isMaster) {
+                        nodeGroup.append("text")
+                            .attr("x", d.x).attr("y", d.y + 5)
+                            .attr("text-anchor", "middle")
+                            .attr("fill", "white")
+                            .attr("class", "text-xs font-bold pointer-events-none")
+                            .text("RAM");
+                    }
+                });
+
+            }, [selectedFile]);
+
+            return (
+                <div className="flex flex-col gap-4">
+                    <div className="flex justify-between items-center bg-blue-50 p-4 rounded border border-blue-100">
+                        <div>
+                            <h4 className="font-bold text-slate-700 text-sm mb-2">Simulate File Inspection:</h4>
+                            <div className="flex gap-2">
+                                {Object.keys(fileSystem).map(f => (
+                                    <button 
+                                        key={f}
+                                        onClick={() => setSelectedFile(f)}
+                                        className={`text-xs px-3 py-1 rounded border ${
+                                            selectedFile === f ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 hover:bg-slate-50"
+                                        }`}
+                                    >
+                                        {f}
+                                    </button>
+                                ))}
+                                <button onClick={() => setSelectedFile(null)} className="text-xs px-3 py-1 text-slate-500 hover:text-slate-700">Clear</button>
+                            </div>
+                        </div>
+                        <div className="text-xs text-slate-600 max-w-xs text-right hidden md:block">
+                            Select a file to see how the Master (Purple) maps a Logical Filename to Physical Replicas (Red) across Racks.
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <svg ref={svgRef} viewBox="0 0 800 500" className="w-full h-auto interactive-canvas bg-slate-50 border border-slate-200" />
+                        {hoverInfo && <InfoTooltip {...hoverInfo} />}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Module 2: The Read Flow ---
+
+        const ModuleReadFlow = () => {
+            const svgRef = useRef(null);
+            const [step, setStep] = useState(0); // 0: Idle, 1: Miss, 2: Hit
+
+            const animateRead = (isHit) => {
+                const svg = d3.select(svgRef.current);
+                svg.selectAll(".packet").remove();
+
+                const clientPos = { x: 100, y: 250 };
+                const masterPos = { x: 400, y: 100 };
+                const chunkServerPos = { x: 400, y: 400 };
+
+                const packet = svg.append("circle")
+                    .attr("class", "packet")
+                    .attr("r", 8)
+                    .attr("cx", clientPos.x)
+                    .attr("cy", clientPos.y)
+                    .attr("fill", "#ef4444"); // Red for request
+
+                if (!isHit) {
+                    // Miss Flow: Client -> Master -> Client -> CS
+                    packet.transition().duration(1000).attr("cx", masterPos.x).attr("cy", masterPos.y) // To Master
+                        .transition().duration(500).attr("fill", "#3b82f6") // Turn Blue (Metadata)
+                        .transition().duration(1000).attr("cx", clientPos.x).attr("cy", clientPos.y) // Back to Client
+                        .on("end", () => {
+                             // Light up cache
+                             d3.select("#client-cache-box").style("opacity", 1);
+                             
+                             // Client to Data
+                             svg.append("circle")
+                                .attr("class", "packet")
+                                .attr("r", 8)
+                                .attr("cx", clientPos.x)
+                                .attr("cy", clientPos.y)
+                                .attr("fill", "#16a34a") // Green for Data Req
+                                .transition().duration(1000).attr("cx", chunkServerPos.x).attr("cy", chunkServerPos.y)
+                                .on("end", () => setStep(2));
+                        });
+                } else {
+                    // Hit Flow: Client -> CS (Bypassing Master)
+                    packet.attr("fill", "#16a34a")
+                        .transition().duration(1000).attr("cx", chunkServerPos.x).attr("cy", chunkServerPos.y)
+                        .on("end", () => {
+                            // Pulse animation on CS
+                            svg.append("circle").attr("cx", chunkServerPos.x).attr("cy", chunkServerPos.y)
+                                .attr("r", 10).attr("fill", "none").attr("stroke", "#16a34a")
+                                .transition().duration(500).attr("r", 40).style("opacity", 0).remove();
+                        });
+                }
+            };
+
+            const reset = () => {
+                setStep(0);
+                d3.select("#client-cache-box").style("opacity", 0.3);
+                d3.select(svgRef.current).selectAll(".packet").remove();
+            };
+
+            return (
+                <div className="flex flex-col items-center">
+                    <div className="flex gap-4 mb-4">
+                        <Button onClick={() => { setStep(1); animateRead(false); }} disabled={step !== 0}>
+                            1. Read File X (Cold)
+                        </Button>
+                        <Button onClick={() => animateRead(true)} disabled={step !== 2} color="green">
+                            2. Read File X (Cached)
+                        </Button>
+                        <Button onClick={reset} color="slate">Reset</Button>
+                    </div>
+                    
+                    <div className="relative w-full max-w-2xl">
+                        <svg ref={svgRef} viewBox="0 0 600 500" className="w-full interactive-canvas">
+                            {/* Layout */}
+                            {/* Master */}
+                            <circle cx="400" cy="100" r="30" fill="#7c3aed" />
+                            <text x="400" y="60" textAnchor="middle" className="text-sm font-bold">GFS Master</text>
+                            
+                            {/* Chunkserver */}
+                            <rect x="360" y="370" width="80" height="60" rx="4" fill="#16a34a" />
+                            <text x="400" y="450" textAnchor="middle" className="text-sm font-bold">Chunkserver</text>
+
+                            {/* Client */}
+                            <rect x="60" y="220" width="80" height="60" rx="4" fill="#2563eb" />
+                            <text x="100" y="300" textAnchor="middle" className="text-sm font-bold">Client</text>
+                            
+                            {/* Client Cache Visual */}
+                            <g id="client-cache-box" opacity="0.3">
+                                <rect x="70" y="235" width="60" height="30" fill="white" stroke="#2563eb" strokeWidth="2" />
+                                <text x="100" y="255" textAnchor="middle" fontSize="10" fill="#2563eb">CACHE</text>
+                            </g>
+
+                            {/* Paths */}
+                            <line x1="100" y1="220" x2="370" y2="100" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="5,5" />
+                            <line x1="100" y1="280" x2="360" y2="400" stroke="#cbd5e1" strokeWidth="2" />
+                        </svg>
+                        
+                        <div className="absolute top-4 left-4 bg-yellow-50 p-3 rounded border border-yellow-200 text-sm w-64">
+                            <strong>Status:</strong><br/>
+                            {step === 0 && "Waiting for request..."}
+                            {step === 1 && "Fetching metadata from Master..."}
+                            {step === 2 && "Metadata Cached! Master is now bypassed."}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Module 3: Write Flow (Pipelining) ---
+
+        const ModuleWriteFlow = () => {
+            const svgRef = useRef(null);
+            const [status, setStatus] = useState("idle"); // idle, piping, control, done
+
+            const runSimulation = () => {
+                setStatus("piping");
+                const svg = d3.select(svgRef.current);
+                svg.selectAll(".data-chunk").remove();
+                svg.selectAll(".control-signal").remove();
+
+                // Coordinates
+                const nodes = [
+                    { id: 'client', x: 50, y: 150, color: '#2563eb' },
+                    { id: 'p', x: 200, y: 150, color: '#16a34a' },
+                    { id: 's1', x: 350, y: 150, color: '#16a34a' },
+                    { id: 's2', x: 500, y: 150, color: '#16a34a' }
+                ];
+
+                // Phase A: Data Pipelining
+                // We animate a large block "filling" the buffers.
+                // To visualize pipelining, we send chunks that travel between nodes
+                
+                const sendData = (source, target, delay) => {
+                    const chunk = svg.append("rect")
+                        .attr("class", "data-chunk")
+                        .attr("x", source.x)
+                        .attr("y", source.y - 15)
+                        .attr("width", 0)
+                        .attr("height", 30)
+                        .attr("fill", "#f59e0b") // Orange data
+                        .attr("opacity", 0.7);
+
+                    // Expand to simulate sending
+                    chunk.transition().delay(delay).duration(1000)
+                        .attr("width", target.x - source.x - 20)
+                        .on("end", () => {
+                            // "Fill" the target node
+                            svg.append("rect")
+                                .attr("x", target.x - 20).attr("y", target.y + 25)
+                                .attr("width", 40).attr("height", 0)
+                                .attr("fill", "#f59e0b")
+                                .transition().duration(500)
+                                .attr("y", target.y + 5).attr("height", 20);
+                        });
+                };
+
+                // Pipeline: Client -> P, P -> S1, S1 -> S2
+                sendData(nodes[0], nodes[1], 0);    // Client -> Primary
+                sendData(nodes[1], nodes[2], 800);  // Primary -> S1 (starts before full arrival)
+                sendData(nodes[2], nodes[3], 1600); // S1 -> S2
+
+                // Phase B: Control Flow
+                setTimeout(() => {
+                    setStatus("control");
+                    
+                    // Client -> Primary (Write Request)
+                    const controlDot = svg.append("circle")
+                        .attr("class", "control-signal")
+                        .attr("r", 5).attr("fill", "#ef4444")
+                        .attr("cx", nodes[0].x).attr("cy", nodes[0].y - 40);
+                    
+                    controlDot.transition().duration(500)
+                        .attr("cx", nodes[1].x).attr("cy", nodes[1].y - 40)
+                        .on("end", () => {
+                            // Primary flashes
+                            svg.append("text").attr("x", nodes[1].x).attr("y", nodes[1].y - 50)
+                                .text("SERIAL #1").attr("text-anchor", "middle").attr("font-size", "10px")
+                                .transition().delay(1000).remove();
+                            
+                            // Primary -> Secondaries
+                            [nodes[2], nodes[3]].forEach(target => {
+                                svg.append("circle").attr("class", "control-signal").attr("r", 4).attr("fill", "#ef4444")
+                                    .attr("cx", nodes[1].x).attr("cy", nodes[1].y - 40)
+                                    .transition().duration(500)
+                                    .attr("cx", target.x).attr("cy", target.y - 40);
+                            });
+
+                            setTimeout(() => setStatus("done"), 1000);
+                        });
+
+                }, 3000);
+            };
+
+            return (
+                <div className="flex flex-col items-center">
+                    <div className="flex gap-4 mb-4">
+                        <Button onClick={runSimulation} disabled={status === "piping" || status === "control"}>
+                            Push Data & Write
+                        </Button>
+                    </div>
+
+                    <div className="w-full max-w-2xl bg-slate-50 border rounded-lg p-4">
+                        <svg ref={svgRef} viewBox="0 0 600 300" className="w-full">
+                            {/* Connections */}
+                            <path d="M50 150 L500 150" stroke="#cbd5e1" strokeWidth="4" />
+                            
+                            {/* Nodes */}
+                            {[ 
+                                {l: "Client", x: 50, c: "#2563eb"},
+                                {l: "Primary", x: 200, c: "#16a34a"},
+                                {l: "Secondary A", x: 350, c: "#16a34a"},
+                                {l: "Secondary B", x: 500, c: "#16a34a"}
+                            ].map((n, i) => (
+                                <g key={i} transform={`translate(${n.x}, 150)`}>
+                                    <circle r="20" fill={n.c} />
+                                    <text y="40" textAnchor="middle" className="text-xs font-bold">{n.l}</text>
+                                    {/* Buffer Rect Container */}
+                                    <rect x="-20" y="5" width="40" height="20" fill="white" stroke="#94a3b8" />
+                                </g>
+                            ))}
+
+                            {/* Legend */}
+                            <g transform="translate(50, 250)">
+                                <rect width="20" height="10" fill="#f59e0b" />
+                                <text x="25" y="10" fontSize="12">Data Flow (Heavy, Pipelined)</text>
+                            </g>
+                            <g transform="translate(300, 250)">
+                                <circle r="5" fill="#ef4444" />
+                                <text x="10" y="5" fontSize="12">Control Flow (Light, Serialized)</text>
+                            </g>
+                        </svg>
+                    </div>
+                    <div className="mt-4 text-center text-slate-600 h-8">
+                        {status === 'idle' && "Ready to write."}
+                        {status === 'piping' && "Phase 1: Pushing Data to all buffers (Linear Pipeline)..."}
+                        {status === 'control' && "Phase 2: Sending Write Command (Serialized by Primary)..."}
+                        {status === 'done' && "Write Committed!"}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Module 4: Consistency & Atomic Appends ---
+
+        const ModuleConsistency = () => {
+            const [blocks, setBlocks] = useState([]);
+            
+            const append = (clientId) => {
+                // Simulate network latency race
+                const delay = Math.random() * 500;
+                
+                setTimeout(() => {
+                    setBlocks(prev => {
+                        // 20% chance of "failure" causing padding/undefined region
+                        const failure = Math.random() > 0.8;
+                        const newBlocks = [...prev];
+                        
+                        if (failure) {
+                            newBlocks.push({ type: 'padding', width: 10 });
+                        }
+                        
+                        newBlocks.push({ 
+                            type: 'record', 
+                            client: clientId, 
+                            width: 30 
+                        });
+                        return newBlocks;
+                    });
+                }, delay);
+            };
+
+            return (
+                <div className="flex flex-col items-center">
+                    <div className="flex gap-8 mb-8">
+                        <div className="flex flex-col items-center gap-2">
+                            <span className="font-bold text-blue-600">Client A</span>
+                            <Button onClick={() => append('A')} color="blue">Append Record</Button>
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                            <span className="font-bold text-purple-600">Client B</span>
+                            <Button onClick={() => append('B')} color="red">Append Record</Button>
+                        </div>
+                    </div>
+                    
+                    <p className="mb-2 text-sm text-slate-500">Click both rapidly to simulate concurrency & padding.</p>
+
+                    {/* The File Visualization */}
+                    <div className="w-full max-w-2xl h-24 bg-slate-100 border-2 border-slate-300 rounded flex items-center px-2 overflow-hidden relative">
+                        {blocks.map((b, i) => (
+                            <div 
+                                key={i}
+                                className={`h-16 flex-shrink-0 border-r border-white/20 transition-all duration-300 ${
+                                    b.type === 'padding' ? 'bg-slate-400 w-4' : 
+                                    (b.client === 'A' ? 'bg-blue-500 w-12' : 'bg-purple-500 w-12')
+                                }`}
+                                title={b.type === 'padding' ? 'Undefined / Padding' : `Record from Client ${b.client}`}
+                            >
+                                {b.type === 'padding' && <span className="text-[8px] text-white block text-center mt-6">PAD</span>}
+                                {b.type === 'record' && <span className="text-white font-bold block text-center mt-4">{b.client}</span>}
+                            </div>
+                        ))}
+                        {blocks.length === 0 && <span className="absolute left-1/2 -translate-x-1/2 text-slate-400 italic">Empty File</span>}
+                    </div>
+
+                    <div className="mt-4 flex gap-4 text-sm">
+                        <div className="flex items-center gap-1"><div className="w-4 h-4 bg-blue-500"></div> Defined (A)</div>
+                        <div className="flex items-center gap-1"><div className="w-4 h-4 bg-purple-500"></div> Defined (B)</div>
+                        <div className="flex items-center gap-1"><div className="w-4 h-4 bg-slate-400"></div> Inconsistent / Padding</div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Container ---
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState(0);
+
+            const tabs = [
+                { 
+                    title: "1. Architecture", 
+                    component: <ModuleArchitecture />, 
+                    desc: "GFS achieves scalability by decoupling Logical Metadata (RAM) from Physical Storage (Disk). The Master holds the map; Chunkservers hold the weight. Notice how replicas are distributed across 'Racks' to survive hardware failures." 
+                },
+                { title: "2. Read Flow", component: <ModuleReadFlow />, desc: "See how clients cache metadata to avoid bottling-necking the Master." },
+                { title: "3. Write Flow", component: <ModuleWriteFlow />, desc: "Understand the decoupling of Data Flow (Pipelined, Bandwidth-optimized) and Control Flow (Serialized)." },
+                { title: "4. Consistency", component: <ModuleConsistency />, desc: "Simulate 'Atomic Record Appends'. See how GFS trades byte-perfect consistency for performance using 'At Least Once' semantics." }
+            ];
+
+            return (
+                <div className="min-h-screen pb-12">
+                    <header className="bg-slate-900 text-white p-6 shadow-lg">
+                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
+                            <div>
+                                <p className="text-slate-400 text-sm mt-1">Interactive visualization of the Google File System (SOSP '03)</p>
+                            </div>
+                            <div className="text-right text-xs text-slate-500 mt-4 md:mt-0">
+                                Based on Ghemawat et al.
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto mt-8 px-4">
+                        {/* Navigation */}
+                        <div className="flex flex-wrap gap-2 mb-8 justify-center">
+                            {tabs.map((t, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setActiveTab(i)}
+                                    className={`px-4 py-3 rounded-lg font-medium text-sm transition-all ${
+                                        activeTab === i 
+                                        ? "bg-blue-600 text-white shadow-lg scale-105" 
+                                        : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+                                    }`}
+                                >
+                                    {t.title}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="animate-fade-in">
+                            <Card title={tabs[activeTab].title} className="mb-4">
+                                <p className="text-slate-600 mb-6 text-lg leading-relaxed border-l-4 border-blue-500 pl-4 bg-slate-50 py-2">
+                                    {tabs[activeTab].desc}
+                                </p>
+                                {tabs[activeTab].component}
+                            </Card>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
