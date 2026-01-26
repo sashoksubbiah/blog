@@ -207,9 +207,6 @@
 
     <script>
         // --- CONFIGURATION ---
-        // CHANGED: Reduced Logical Resolution further to make elements appear larger
-        // Width: 540 (fits 500px boxes snugly)
-        // Height: 720 (reduced height to prevent vertical shrinking/letterboxing)
         const width = 540;
         const height = 720;
         const centerX = width / 2;
@@ -221,7 +218,6 @@
             .style("height", "100%");
 
         // --- LAYERS DEFINITION (Vertical Stack) ---
-        // Compacted Y-coordinates to fit in 720px height
         const layers = [
             { id: "app", label: "Application Layer", y: 20, height: 80 },
             { id: "server", label: "MySQL Server (Parser/Opt)", y: 130, height: 120 },
@@ -242,12 +238,14 @@
         ];
 
         // --- B+ TREE DATA ---
+        // CORRECTED: Added specific labels for each node range
         const treeData = {
             name: "Root",
+            label: "[10, 50]",
             children: [
-                { name: "< 10", hidden: true },
-                { name: "Leaf Pg 21", target: true, records: [12, 25, 42, 48] },
-                { name: "> 50", hidden: true }
+                { name: "Leaf <10", label: "< 10", hidden: true },
+                { name: "Leaf 10-50", label: "10-50", target: true, records: [12, 25, 42, 48] },
+                { name: "Leaf >50", label: "> 50", hidden: true }
             ]
         };
 
@@ -325,14 +323,18 @@
                 .attr("transform", d => `translate(${d.x - 220}, ${d.y})`);
 
             nodes.append("circle").attr("r", 24); // Bigger nodes
-            nodes.append("text").attr("dy", 5).text(d => d.data.name.includes("Leaf") ? "Leaf" : "Root");
             
-            // Labels for ranges
+            // CORRECTED: Use depth to determine Root vs Leaf label
+            nodes.append("text")
+                .attr("dy", 5)
+                .text(d => d.depth === 0 ? "Root" : "Leaf");
+            
+            // CORRECTED: Use the explicit label property for ranges
             nodes.append("text")
                 .attr("dy", 40)
                 .style("font-size", "12px")
                 .style("fill", "#64748b")
-                .text(d => d.data.name.includes("Leaf") ? "[10-50]" : "[10, 50]");
+                .text(d => d.data.label);
         }
 
         // --- ANIMATION CONTROLLER ---
