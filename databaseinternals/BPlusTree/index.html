@@ -168,6 +168,15 @@
             margin-bottom: 20px;
             border-left: 5px solid var(--accent);
         }
+        
+        .comp-node circle { fill: #fff; stroke: #333; stroke-width: 2px; }
+        .comp-node rect { fill: #fff; stroke: #333; stroke-width: 2px; }
+        .comp-node text { font-size: 12px; text-anchor: middle; font-weight: bold; }
+        .comp-link { fill: none; stroke: #ccc; stroke-width: 2px; }
+        .active-scan { stroke: #e74c3c !important; stroke-width: 4px !important; fill: #fadbd8 !important; transition: all 0.3s; }
+        .active-scan-leaf { stroke: var(--leaf) !important; stroke-width: 4px !important; fill: #d4efdf !important; transition: all 0.3s; }
+        .scan-path { stroke: #e74c3c; stroke-width: 3px; stroke-dasharray: 5; opacity: 0; transition: opacity 0.5s; }
+
 
         /* 3. Playground UI */
         #interactive-wrapper {
@@ -324,7 +333,7 @@
     <ul>
         <li><a href="#hero">Start</a></li>
         <li><a href="#history">History</a></li>
-        <li><a href="#evolution">B+ Logic</a></li>
+        <li><a href="#evolution">Comparison</a></li>
         <li><a href="#playground">Interactive</a></li>
         <li><a href="#analysis">Analysis</a></li>
         <li><a href="#future">Future</a></li>
@@ -362,40 +371,37 @@
     </div>
 </section>
 
-<!-- EVOLUTION SECTION -->
+<!-- EVOLUTION SECTION (UPDATED) -->
 <section id="evolution">
-    <div class="container">
-        <div class="visual-content" style="flex-direction: column; align-items: stretch;">
-            <div class="comparison-card">
-                <h3><i class="fas fa-tree"></i> Standard B-Tree</h3>
-                <p style="font-size: 0.9rem; margin-bottom: 5px;">Data stored in <strong>all nodes</strong>.</p>
-                <div style="height: 10px; background: #ddd; border-radius: 5px; margin-bottom: 5px; width: 60%;"></div>
-                <div style="height: 10px; background: #ddd; border-radius: 5px; margin-bottom: 5px; width: 80%;"></div>
-                <small style="color:red">Problem: Range scans require jumping up and down the tree.</small>
+    <div class="container" style="flex-direction: column;">
+        <h2 style="text-align:center;">The Critical Difference: Range Scans</h2>
+        <p style="text-align:center;">
+            The main reason B+ Trees won is how they handle <strong>Range Queries</strong> (e.g., "Find all users with ID 20 to 60").
+            <br>Click the button below to see the difference in disk head movement.
+        </p>
+        
+        <div style="display: flex; width: 100%; gap: 20px; flex-wrap: wrap; justify-content: center;">
+            
+            <!-- B-TREE SIDE -->
+            <div class="comparison-card" style="flex: 1; min-width: 320px;">
+                <h3><i class="fas fa-tree"></i> Classic B-Tree</h3>
+                <p style="font-size: 0.9em; color:#e74c3c;"><strong>Problem:</strong> Data is scattered. The disk head must jump up and down the tree (In-Order Traversal).</p>
+                <div id="btree-viz" style="height: 250px; position: relative; border: 1px solid #eee; background: #fafafa; border-radius: 8px;"></div>
+                <div id="btree-log" style="margin-top:10px; font-size: 0.85em; color: #555; height: 20px;">Waiting...</div>
             </div>
-            <div class="comparison-card" style="border-left-color: var(--leaf);">
-                <h3><i class="fas fa-network-wired"></i> The B+ Tree</h3>
-                <p style="font-size: 0.9rem; margin-bottom: 5px;">Data stored <strong>only in leaves</strong>.</p>
-                <div style="display: flex; gap: 5px; margin-top: 10px;">
-                    <div style="flex:1; height: 10px; background: var(--leaf);"></div>
-                    <i class="fas fa-arrow-right" style="color:var(--leaf); font-size: 10px; align-self: center;"></i>
-                    <div style="flex:1; height: 10px; background: var(--leaf);"></div>
-                    <i class="fas fa-arrow-right" style="color:var(--leaf); font-size: 10px; align-self: center;"></i>
-                    <div style="flex:1; height: 10px; background: var(--leaf);"></div>
-                </div>
-                <small style="color:green">Solution: Linked leaves make range scans instant.</small>
+
+            <!-- B+ TREE SIDE -->
+            <div class="comparison-card" style="flex: 1; min-width: 320px; border-left-color: var(--leaf);">
+                <h3><i class="fas fa-network-wired"></i> B+ Tree (The Winner)</h3>
+                <p style="font-size: 0.9em; color:var(--leaf);"><strong>Solution:</strong> Data is linked at the bottom. We find the start, then scan sideways.</p>
+                <div id="bplus-viz" style="height: 250px; position: relative; border: 1px solid #eee; background: #fafafa; border-radius: 8px;"></div>
+                <div id="bplus-log" style="margin-top:10px; font-size: 0.85em; color: #555; height: 20px;">Waiting...</div>
             </div>
         </div>
-        <div class="text-content">
-            <h2>The Evolution</h2>
-            <p>Rudolf Bayer and Ed McCreight introduced the B-Tree at Boeing Labs. But the real perfection came with the <strong>B+ Tree</strong>.</p>
-            <p>Two critical rules changed everything:</p>
-            <ol>
-                <li><strong>Internal Nodes are just Signposts:</strong> They contain keys to guide you, but no actual data payload. This keeps them small, so we can fit more keys in memory.</li>
-                <li><strong>The Linked Leaf Layer:</strong> All actual data lives at the bottom. Crucially, these bottom nodes are linked like a daisy chain.</li>
-            </ol>
-            <p>This means to read "Everyone from Age 20 to 30", you find 20, then just zip across the bottom. No jumping required.</p>
-        </div>
+
+        <button onclick="runComparisonDemo()" style="margin-top: 30px; font-size: 1.1rem; padding: 12px 30px;">
+            <i class="fas fa-play"></i> Simulate Range Query (20-60)
+        </button>
     </div>
 </section>
 
@@ -483,13 +489,151 @@
 </section>
 
 <footer>
-    <p>Created for the Interactive Web Project.</p>
-    <p><small>Reference: Bayer, R.; McCreight, E. (1970). "Organization and Maintenance of Large Ordered Indexes".</small></p>
-    <a href="https://github.com" target="_blank"><i class="fab fa-github"></i> View on GitHub</a>
+    
+    <p><small>Reference: <a href="https://infolab.usc.edu/csci585/Spring2010/den_ar/indexing.pdf" target="_blank">Bayer, R.; McCreight, E. (1970). "Organization and Maintenance of Large Ordered Indexes"</a>.</small></p>
+   
 </footer>
 
 <!-- LOGIC -->
 <script>
+    // --- PART 0: COMPARISON DEMO LOGIC (New) ---
+    function initComparison() {
+        const width = 300, height = 250;
+        
+        // --- 1. Draw B-Tree Static ---
+        const bSvg = d3.select("#btree-viz").append("svg").attr("width", "100%").attr("height", "100%").append("g").attr("transform", "translate(0,20)");
+        
+        // Nodes: id, x, y, label, isData
+        const bNodes = [
+            {id: 'b-root', x: 150, y: 30, txt: '40', data: true},
+            {id: 'b-l', x: 70, y: 100, txt: '20', data: true},
+            {id: 'b-r', x: 230, y: 100, txt: '60', data: true},
+            {id: 'b-ll', x: 30, y: 170, txt: '10', data: true},
+            {id: 'b-lr', x: 110, y: 170, txt: '30', data: true},
+            {id: 'b-rl', x: 190, y: 170, txt: '50', data: true},
+            {id: 'b-rr', x: 270, y: 170, txt: '70', data: true}
+        ];
+        
+        const bLinks = [
+            {s: 'b-root', t: 'b-l'}, {s: 'b-root', t: 'b-r'},
+            {s: 'b-l', t: 'b-ll'}, {s: 'b-l', t: 'b-lr'},
+            {s: 'b-r', t: 'b-rl'}, {s: 'b-r', t: 'b-rr'}
+        ];
+
+        bSvg.selectAll("path").data(bLinks).enter().append("path")
+            .attr("d", d => {
+                const s = bNodes.find(n=>n.id===d.s);
+                const t = bNodes.find(n=>n.id===d.t);
+                return `M${s.x},${s.y+15} L${t.x},${t.y-15}`;
+            }).attr("stroke", "#ccc").attr("fill", "none");
+
+        const bNodeG = bSvg.selectAll("g").data(bNodes).enter().append("g")
+            .attr("class", "comp-node b-node")
+            .attr("id", d=>d.id)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+        
+        bNodeG.append("circle").attr("r", 15);
+        bNodeG.append("text").attr("dy", 4).text(d=>d.txt);
+
+        // --- 2. Draw B+ Tree Static ---
+        const bpSvg = d3.select("#bplus-viz").append("svg").attr("width", "100%").attr("height", "100%").append("g").attr("transform", "translate(0,20)");
+        
+        const bpNodes = [
+            {id: 'bp-root', x: 150, y: 30, txt: '40', data: false}, // Internal
+            {id: 'bp-l', x: 70, y: 100, txt: '20', data: false}, // Internal
+            {id: 'bp-r', x: 230, y: 100, txt: '60', data: false}, // Internal
+            // Leaves
+            {id: 'bp-leaf1', x: 50, y: 170, txt: '[10, 20]', data: true, w: 60},
+            {id: 'bp-leaf2', x: 150, y: 170, txt: '[30, 40, 50]', data: true, w: 80},
+            {id: 'bp-leaf3', x: 250, y: 170, txt: '[60, 70]', data: true, w: 60}
+        ];
+
+        const bpLinks = [
+            {s: 'bp-root', t: 'bp-l'}, {s: 'bp-root', t: 'bp-r'},
+            {s: 'bp-l', t: 'bp-leaf1'}, {s: 'bp-l', t: 'bp-leaf2'},
+            {s: 'bp-r', t: 'bp-leaf2'}, {s: 'bp-r', t: 'bp-leaf3'}
+        ];
+
+        // Draw Links
+        bpSvg.selectAll("path.tree-link").data(bpLinks).enter().append("path")
+            .attr("class", "tree-link")
+            .attr("d", d => {
+                const s = bpNodes.find(n=>n.id===d.s);
+                const t = bpNodes.find(n=>n.id===d.t);
+                return `M${s.x},${s.y+15} L${t.x},${t.y-15}`;
+            }).attr("stroke", "#ccc").attr("fill", "none");
+
+        // Draw Next Pointers
+        bpSvg.append("path").attr("d", "M80,170 L110,170").attr("stroke", "#27ae60").attr("stroke-width", 2).attr("stroke-dasharray", "4");
+        bpSvg.append("path").attr("d", "M190,170 L220,170").attr("stroke", "#27ae60").attr("stroke-width", 2).attr("stroke-dasharray", "4");
+
+        const bpNodeG = bpSvg.selectAll("g").data(bpNodes).enter().append("g")
+            .attr("class", "comp-node bp-node")
+            .attr("id", d=>d.id)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        bpNodeG.append("rect")
+            .attr("width", d => d.w || 30)
+            .attr("height", 30)
+            .attr("x", d => -(d.w || 30)/2)
+            .attr("y", -15)
+            .attr("rx", d => d.data ? 0 : 5); // Square for data, rounded for internal
+
+        bpNodeG.append("text").attr("dy", 4).text(d=>d.txt);
+    }
+
+    function runComparisonDemo() {
+        // Reset
+        d3.selectAll(".comp-node circle").classed("active-scan", false);
+        d3.selectAll(".comp-node rect").classed("active-scan", false).classed("active-scan-leaf", false);
+        
+        // --- B-TREE Animation (Zig Zag) ---
+        const bSteps = [
+            {id: '#b-l', delay: 0, msg: "Found 20 (Left Node)"},
+            {id: '#b-lr', delay: 1000, msg: "Down to 30 (Leaf)"},
+            {id: '#b-root', delay: 2000, msg: "Up to 40 (Root)"},
+            {id: '#b-rl', delay: 3000, msg: "Down to 50 (Leaf)"},
+            {id: '#b-r', delay: 4000, msg: "Up to 60 (Right Node)"}
+        ];
+
+        bSteps.forEach(step => {
+            setTimeout(() => {
+                d3.select(step.id).select("circle").classed("active-scan", true)
+                    .transition().duration(500).attr("r", 20).transition().attr("r", 15);
+                document.getElementById('btree-log').innerText = step.msg;
+            }, step.delay);
+        });
+
+        // --- B+ TREE Animation (Linear) ---
+        const bpSteps = [
+            {id: '#bp-l', delay: 0, msg: "Navigating index...", type: 'internal'},
+            {id: '#bp-leaf1', delay: 800, msg: "Found start: 20", type: 'leaf'},
+            {id: '#bp-leaf2', delay: 1600, msg: "Linked Scan: 30, 40, 50", type: 'leaf'},
+            {id: '#bp-leaf3', delay: 2400, msg: "Linked Scan: 60", type: 'leaf'}
+        ];
+
+        bpSteps.forEach(step => {
+            setTimeout(() => {
+                const sel = d3.select(step.id).select("rect");
+                if(step.type === 'leaf') sel.classed("active-scan-leaf", true);
+                else sel.classed("active-scan", true);
+                
+                sel.transition().duration(300).attr("transform", "scale(1.2)")
+                   .transition().attr("transform", "scale(1)");
+                
+                document.getElementById('bplus-log').innerText = step.msg;
+            }, step.delay);
+        });
+    }
+
+    // Call init on load
+    window.onload = function() {
+        initComparison();
+        // Also setup main tree
+        updateViz();
+        d3.select("#tree-svg svg").call(d3.zoom().transform, d3.zoomIdentity.translate(document.getElementById("tree-svg").clientWidth/2, 50).scale(1));
+    };
+
     // --- PART 1: Disk Animation Logic ---
     function simulateSeek() {
         const arm = document.getElementById('disk-arm');
@@ -620,18 +764,25 @@
     const treeOrder = 3;
     let bTree = new BPlusTree(treeOrder);
     
-    // D3 Setup
-    const width = 1000, height = 500;
-    const svg = d3.select("#tree-svg").append("svg")
-        .attr("width", "100%")
-        .attr("height", "100%")
-        .call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)))
-        .append("g");
+    // D3 Setup (Initialized in window.onload now)
+    let svg, g, treeLayout;
     
-    const g = svg.append("g").attr("transform", "translate(40,40)");
-    const treeLayout = d3.tree().nodeSize([70, 80]);
-
     function updateViz() {
+        if(!svg) {
+            const container = document.getElementById("tree-svg");
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            svg = d3.select("#tree-svg").append("svg")
+                .attr("width", "100%")
+                .attr("height", "100%")
+                .call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)))
+                .append("g");
+            
+            g = svg.append("g").attr("transform", "translate(40,40)");
+            treeLayout = d3.tree().nodeSize([70, 80]);
+        }
+
         const root = d3.hierarchy(convertToHierarchy(bTree.root));
         treeLayout(root);
 
@@ -713,12 +864,8 @@
     function resetTree() {
         bTree = new BPlusTree(treeOrder);
         updateViz();
+        d3.select("#tree-svg svg").call(d3.zoom().transform, d3.zoomIdentity.translate(document.getElementById("tree-svg").clientWidth/2, 50).scale(1));
     }
-
-    // Initial render
-    updateViz();
-    // Center tree initially
-    d3.select("svg").call(d3.zoom().transform, d3.zoomIdentity.translate(width/2, 50).scale(1));
 
 </script>
 </body>
