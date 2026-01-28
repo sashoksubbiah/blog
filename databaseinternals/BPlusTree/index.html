@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The B+ Tree: An Interactive Journey</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --highlight: #e74c3c;
+            --leaf: #27ae60;
+            --bg: #f8f9fa;
+            --text: #333;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text);
+            background-color: var(--bg);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* --- Layout & Typography --- */
+        h1, h2, h3 { color: var(--primary); margin-top: 0; }
+        h1 { font-size: 3.5rem; letter-spacing: -1px; margin-bottom: 0.5rem; }
+        h2 { font-size: 2.2rem; margin-bottom: 1rem; border-bottom: 3px solid var(--accent); display: inline-block; padding-bottom: 5px; }
+        p { font-size: 1.15rem; color: #555; max-width: 700px; margin-bottom: 1.5rem; }
+
+        section {
+            padding: 80px 20px;
+            min-height: 90vh; /* Almost full viewport */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            position: relative;
+        }
+
+        section:nth-child(even) { background-color: white; }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .text-content { flex: 1; min-width: 300px; padding: 20px; }
+        .visual-content { flex: 1; min-width: 300px; display: flex; justify-content: center; align-items: center; }
+
+        /* --- Navigation --- */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255,255,255,0.95);
+            padding: 15px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        
+        nav ul {
+            list-style: none;
+            display: flex;
+            justify-content: center;
+            margin: 0;
+            padding: 0;
+            gap: 30px;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.3s;
+        }
+
+        nav a:hover { color: var(--accent); }
+
+        /* --- Hero Section --- */
+        #hero {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            text-align: center;
+            min-height: 100vh;
+        }
+
+        .hero-badge {
+            background: var(--primary);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+
+        /* --- Animations & Visuals --- */
+        
+        /* 1. Disk Animation */
+        .disk-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+        }
+        .platter {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(#ddd 0deg, #fff 90deg, #ddd 180deg, #fff 270deg);
+            border: 10px solid #999;
+            animation: spin 2s linear infinite;
+            position: relative;
+        }
+        .platter::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px; height: 50px;
+            background: #333;
+            border-radius: 50%;
+        }
+        .arm {
+            position: absolute;
+            top: 10px;
+            right: -50px;
+            width: 200px;
+            height: 20px;
+            background: #555;
+            transform-origin: right center;
+            transform: rotate(-20deg);
+            transition: transform 0.1s ease-out;
+        }
+        .arm-head {
+            position: absolute;
+            left: 0;
+            top: -5px;
+            width: 30px;
+            height: 30px;
+            background: var(--highlight);
+            border-radius: 5px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* 2. B vs B+ Visual */
+        .comparison-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border-left: 5px solid var(--accent);
+        }
+
+        /* 3. Playground UI */
+        #interactive-wrapper {
+            width: 100%;
+            height: 600px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .controls-bar {
+            padding: 15px;
+            background: var(--primary);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        input[type="number"] {
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            width: 100px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        button:hover { filter: brightness(110%); transform: translateY(-1px); }
+        button.reset { background: #95a5a6; }
+        button.auto { background: var(--leaf); }
+
+        #tree-svg {
+            flex: 1;
+            background-image: radial-gradient(#eee 1px, transparent 1px);
+            background-size: 20px 20px;
+            cursor: grab;
+        }
+
+        /* D3 Nodes */
+        .node rect {
+            fill: #fff;
+            stroke: var(--primary);
+            stroke-width: 2px;
+            rx: 6;
+        }
+        .node text {
+            font: 14px 'Segoe UI', sans-serif;
+            text-anchor: middle;
+            fill: #333;
+            font-weight: 600;
+        }
+        .node.leaf rect {
+            stroke: var(--leaf);
+            fill: #f0fff4;
+            stroke-width: 2px;
+        }
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+        .leaf-link {
+            fill: none;
+            stroke: var(--leaf);
+            stroke-width: 3px;
+            stroke-dasharray: 5,5;
+            animation: flow 1s linear infinite;
+        }
+        @keyframes flow { to { stroke-dashoffset: -10; } }
+
+        /* 4. Pros/Cons Grid */
+        .grid-box {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: left;
+            transition: transform 0.3s;
+        }
+        .card:hover { transform: translateY(-5px); }
+        .card h3 { display: flex; align-items: center; gap: 10px; }
+        .card.pro h3 i { color: var(--leaf); }
+        .card.con h3 i { color: var(--highlight); }
+
+        /* 5. Future/LSM */
+        .lsm-container {
+            display: flex;
+            gap: 40px;
+            width: 100%;
+        }
+        .lsm-viz {
+            flex: 1;
+            height: 200px;
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 10px;
+            position: relative;
+            background: white;
+        }
+        .block {
+            width: 40px;
+            height: 20px;
+            margin: 2px;
+            border-radius: 3px;
+            color: white;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--primary);
+            color: white;
+            text-align: center;
+            padding: 40px;
+        }
+        footer a { color: var(--accent); }
+
+        /* Utility */
+        .highlight-text { background: rgba(231, 76, 60, 0.1); color: var(--highlight); padding: 0 5px; border-radius: 3px; font-weight: bold; }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .lsm-container { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <ul>
+        <li><a href="#hero">Start</a></li>
+        <li><a href="#history">History</a></li>
+        <li><a href="#evolution">B+ Logic</a></li>
+        <li><a href="#playground">Interactive</a></li>
+        <li><a href="#analysis">Analysis</a></li>
+        <li><a href="#future">Future</a></li>
+    </ul>
+</nav>
+
+<!-- HERO SECTION -->
+<section id="hero">
+    <div class="container" style="flex-direction: column;">
+        <h1>The B+ Tree</h1>
+        <p>From MySQL to NTFS, this structure keeps the world's data organized.</p>
+        <button onclick="document.getElementById('history').scrollIntoView({behavior: 'smooth'})">Begin the Journey</button>
+    </div>
+</section>
+
+<!-- HISTORY SECTION -->
+<section id="history">
+    <div class="container">
+        <div class="text-content">
+            <h2>1970: The Spinning Disk Problem</h2>
+            <p>Imagine computing in 1970. We were transitioning from magnetic tapes to <strong>spinning hard disks</strong>. While disks allowed random access, they had a physical flaw: <strong>Seek Time</strong>.</p>
+            <p>Every time you requested data, a mechanical arm had to physically move across the platter. This took milliseconds—eternity for a CPU.</p>
+            <p><strong>The Challenge:</strong> How do we find one record among millions with the absolute minimum number of arm movements?</p>
+            <button onclick="simulateSeek()" class="reset">Simulate Slow Seek</button>
+            <p id="seek-result" style="margin-top: 10px; font-weight: bold; min-height: 24px;"></p>
+        </div>
+        <div class="visual-content">
+            <div class="disk-container">
+                <div class="platter"></div>
+                <div class="arm" id="disk-arm">
+                    <div class="arm-head"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- EVOLUTION SECTION -->
+<section id="evolution">
+    <div class="container">
+        <div class="visual-content" style="flex-direction: column; align-items: stretch;">
+            <div class="comparison-card">
+                <h3><i class="fas fa-tree"></i> Standard B-Tree</h3>
+                <p style="font-size: 0.9rem; margin-bottom: 5px;">Data stored in <strong>all nodes</strong>.</p>
+                <div style="height: 10px; background: #ddd; border-radius: 5px; margin-bottom: 5px; width: 60%;"></div>
+                <div style="height: 10px; background: #ddd; border-radius: 5px; margin-bottom: 5px; width: 80%;"></div>
+                <small style="color:red">Problem: Range scans require jumping up and down the tree.</small>
+            </div>
+            <div class="comparison-card" style="border-left-color: var(--leaf);">
+                <h3><i class="fas fa-network-wired"></i> The B+ Tree</h3>
+                <p style="font-size: 0.9rem; margin-bottom: 5px;">Data stored <strong>only in leaves</strong>.</p>
+                <div style="display: flex; gap: 5px; margin-top: 10px;">
+                    <div style="flex:1; height: 10px; background: var(--leaf);"></div>
+                    <i class="fas fa-arrow-right" style="color:var(--leaf); font-size: 10px; align-self: center;"></i>
+                    <div style="flex:1; height: 10px; background: var(--leaf);"></div>
+                    <i class="fas fa-arrow-right" style="color:var(--leaf); font-size: 10px; align-self: center;"></i>
+                    <div style="flex:1; height: 10px; background: var(--leaf);"></div>
+                </div>
+                <small style="color:green">Solution: Linked leaves make range scans instant.</small>
+            </div>
+        </div>
+        <div class="text-content">
+            <h2>The Evolution</h2>
+            <p>Rudolf Bayer and Ed McCreight introduced the B-Tree at Boeing Labs. But the real perfection came with the <strong>B+ Tree</strong>.</p>
+            <p>Two critical rules changed everything:</p>
+            <ol>
+                <li><strong>Internal Nodes are just Signposts:</strong> They contain keys to guide you, but no actual data payload. This keeps them small, so we can fit more keys in memory.</li>
+                <li><strong>The Linked Leaf Layer:</strong> All actual data lives at the bottom. Crucially, these bottom nodes are linked like a daisy chain.</li>
+            </ol>
+            <p>This means to read "Everyone from Age 20 to 30", you find 20, then just zip across the bottom. No jumping required.</p>
+        </div>
+    </div>
+</section>
+
+<!-- INTERACTIVE PLAYGROUND -->
+<section id="playground">
+    <div class="container" style="flex-direction: column; align-items: flex-start;">
+        <div style="text-align: center; width: 100%; margin-bottom: 20px;">
+            <h2>The Playground</h2>
+            <p style="margin: 0 auto;">Experience the logic. Notice how the tree grows <strong>upwards</strong> by splitting nodes when they overflow.</p>
+        </div>
+        
+        <div id="interactive-wrapper">
+            <div class="controls-bar">
+                <input type="number" id="insert-val" placeholder="Value (e.g. 42)" onkeypress="if(event.key==='Enter') insertBtn()">
+                <button onclick="insertBtn()">Insert</button>
+                <button onclick="randomInsert()" class="auto">Add Random</button>
+                <button onclick="resetTree()" class="reset">Reset</button>
+                <span style="color: white; margin-left: auto; font-size: 0.9rem;">Order: <b id="order-display">3</b></span>
+            </div>
+            <div id="tree-svg"></div>
+        </div>
+        <p style="font-size: 0.9rem; margin-top: 10px; color: #666;">
+            <i class="fas fa-info-circle"></i> 
+            <strong>Instructions:</strong> Insert numbers. When a node exceeds the limit (Order 3), watch it split. 
+            The middle key moves up. Internal nodes (white) guide the path, Leaves (green) hold the data.
+        </p>
+    </div>
+</section>
+
+<!-- PROS & CONS -->
+<section id="analysis">
+    <div class="container" style="flex-direction: column;">
+        <h2>Advantages & Disadvantages</h2>
+        <div class="grid-box">
+            <!-- PROS -->
+            <div class="card pro">
+                <h3><i class="fas fa-check-circle"></i> Predictable Speed</h3>
+                <p>The B+ Tree is perfectly balanced. Searching for record #1 takes the exact same time as record #1,000,000. No lopsided branches.</p>
+            </div>
+            <div class="card pro">
+                <h3><i class="fas fa-exchange-alt"></i> The Range King</h3>
+                <p>Thanks to the linked leaves, queries like <code>SELECT * WHERE ID > 50</code> are incredibly fast. Just find 50 and scan forward.</p>
+            </div>
+            <div class="card pro">
+                <h3><i class="fas fa-hdd"></i> Disk Friendly</h3>
+                <p>Nodes are tuned to disk page sizes (e.g., 4KB). This minimizes physical I/O operations, which is the bottleneck of databases.</p>
+            </div>
+            
+            <!-- CONS -->
+            <div class="card con">
+                <h3><i class="fas fa-times-circle"></i> Wasted Space</h3>
+                <p>Nodes are often 30-50% empty to leave room for future insertions. This is called "Internal Fragmentation".</p>
+            </div>
+            <div class="card con">
+                <h3><i class="fas fa-pen-square"></i> The Write Penalty</h3>
+                <p>Inserting data isn't free. If a node overflows, the split ripples up the tree. This "Write Amplification" can be heavy for write-intense apps.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- FUTURE -->
+<section id="future">
+    <div class="container">
+        <div class="text-content">
+            <h2>The Future: LSM Trees</h2>
+            <p>B+ Trees are great for reading, but what about writing massive data (like social media logs)?</p>
+            <p>Enter the <strong>LSM Tree (Log-Structured Merge)</strong>. Used by Cassandra and RocksDB.</p>
+            <p>Instead of carefully placing every book on the shelf (B+ Tree), the LSM Tree just tosses new data into a pile and sorts it later in the background.</p>
+            <button onclick="demoLSM()">Visualize Difference</button>
+        </div>
+        <div class="visual-content">
+            <div class="lsm-container">
+                <div style="flex:1; text-align: center;">
+                    <strong>B+ Tree (Organized)</strong>
+                    <div id="viz-bplus" class="lsm-viz"></div>
+                </div>
+                <div style="flex:1; text-align: center;">
+                    <strong>LSM Tree (Fast Write)</strong>
+                    <div id="viz-lsm" class="lsm-viz"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <p>Created for the Interactive Web Project.</p>
+    <p><small>Reference: Bayer, R.; McCreight, E. (1970). "Organization and Maintenance of Large Ordered Indexes".</small></p>
+    <a href="https://github.com" target="_blank"><i class="fab fa-github"></i> View on GitHub</a>
+</footer>
+
+<!-- LOGIC -->
+<script>
+    // --- PART 1: Disk Animation Logic ---
+    function simulateSeek() {
+        const arm = document.getElementById('disk-arm');
+        const res = document.getElementById('seek-result');
+        res.innerHTML = "Seeking...";
+        
+        let jumps = 0;
+        const interval = setInterval(() => {
+            const randomAngle = -20 + Math.random() * 60;
+            arm.style.transform = `rotate(${randomAngle}deg)`;
+            jumps++;
+            if(jumps > 5) {
+                clearInterval(interval);
+                arm.style.transform = `rotate(-20deg)`; // Reset
+                res.innerHTML = `<span style="color:#e74c3c">150ms elapsed. Too slow!</span>`;
+            }
+        }, 300);
+    }
+
+    // --- PART 2: LSM Demo Logic ---
+    function demoLSM() {
+        const bContainer = document.getElementById('viz-bplus');
+        const lContainer = document.getElementById('viz-lsm');
+        bContainer.innerHTML = '';
+        lContainer.innerHTML = '';
+
+        // B+ inserts (Slow, careful)
+        let data = [5, 2, 8, 1];
+        data.forEach((val, i) => {
+            setTimeout(() => {
+                const el = document.createElement('div');
+                el.className = 'block';
+                el.style.backgroundColor = '#2c3e50';
+                el.innerText = val;
+                // Simple sort visual for B+
+                let inserted = false;
+                for(let child of bContainer.children) {
+                    if(parseInt(child.innerText) > val) {
+                        bContainer.insertBefore(el, child);
+                        inserted = true;
+                        break;
+                    }
+                }
+                if(!inserted) bContainer.appendChild(el);
+            }, i * 800);
+        });
+
+        // LSM inserts (Fast stack)
+        data.forEach((val, i) => {
+            setTimeout(() => {
+                const el = document.createElement('div');
+                el.className = 'block';
+                el.style.backgroundColor = '#e74c3c';
+                el.innerText = val;
+                lContainer.appendChild(el); // Just append on top
+            }, i * 300);
+        });
+    }
+
+    // --- PART 3: THE B+ TREE ENGINE ---
+    
+    // Core B+ Tree Classes
+    class BPlusNode {
+        constructor(isLeaf = false) {
+            this.keys = [];
+            this.children = [];
+            this.isLeaf = isLeaf;
+            this.next = null;
+        }
+    }
+
+    class BPlusTree {
+        constructor(order) {
+            this.root = new BPlusNode(true);
+            this.order = order;
+        }
+
+        insert(key) {
+            if (this.root.keys.length === this.order - 1) {
+                const newRoot = new BPlusNode(false);
+                newRoot.children.push(this.root);
+                this.splitChild(newRoot, 0);
+                this.root = newRoot;
+                this.insertNonFull(newRoot, key);
+            } else {
+                this.insertNonFull(this.root, key);
+            }
+        }
+
+        insertNonFull(node, key) {
+            let i = node.keys.length - 1;
+            if (node.isLeaf) {
+                while (i >= 0 && key < node.keys[i]) i--;
+                node.keys.splice(i + 1, 0, key);
+            } else {
+                while (i >= 0 && key < node.keys[i]) i--;
+                i++;
+                if (node.children[i].keys.length === this.order - 1) {
+                    this.splitChild(node, i);
+                    if (key > node.keys[i]) i++;
+                }
+                this.insertNonFull(node.children[i], key);
+            }
+        }
+
+        splitChild(parent, index) {
+            const child = parent.children[index];
+            const mid = Math.floor(this.order / 2);
+            const newNode = new BPlusNode(child.isLeaf);
+
+            if (child.isLeaf) {
+                newNode.keys = child.keys.splice(mid);
+                newNode.next = child.next;
+                child.next = newNode;
+                parent.keys.splice(index, 0, newNode.keys[0]);
+            } else {
+                const upKey = child.keys[mid];
+                newNode.keys = child.keys.splice(mid + 1);
+                child.keys.pop(); // Remove mid
+                newNode.children = child.children.splice(mid + 1);
+                parent.keys.splice(index, 0, upKey);
+            }
+            parent.children.splice(index + 1, 0, newNode);
+        }
+    }
+
+    // Visualization Logic
+    const treeOrder = 3;
+    let bTree = new BPlusTree(treeOrder);
+    
+    // D3 Setup
+    const width = 1000, height = 500;
+    const svg = d3.select("#tree-svg").append("svg")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)))
+        .append("g");
+    
+    const g = svg.append("g").attr("transform", "translate(40,40)");
+    const treeLayout = d3.tree().nodeSize([70, 80]);
+
+    function updateViz() {
+        const root = d3.hierarchy(convertToHierarchy(bTree.root));
+        treeLayout(root);
+
+        // Links
+        const links = g.selectAll(".link").data(root.links(), d => d.target.data.id);
+        links.enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y))
+            .merge(links)
+            .transition().duration(500)
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+        links.exit().remove();
+
+        // Leaf Links (The Linked List)
+        const leaves = root.leaves();
+        const leafLinksData = [];
+        for(let i=0; i<leaves.length-1; i++) {
+            leafLinksData.push({s: leaves[i], t: leaves[i+1]});
+        }
+        
+        const ll = g.selectAll(".leaf-link").data(leafLinksData);
+        ll.enter().append("path")
+            .attr("class", "leaf-link")
+            .merge(ll)
+            .transition().duration(500)
+            .attr("d", d => `M${d.s.x},${d.s.y+15} L${d.t.x},${d.t.y+15}`);
+        ll.exit().remove();
+
+        // Nodes
+        const nodes = g.selectAll(".node").data(root.descendants(), d => d.data.id);
+        const nodeEnter = nodes.enter().append("g")
+            .attr("class", d => "node " + (d.data.isLeaf ? "leaf" : "internal"))
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+        
+        nodeEnter.append("rect")
+            .attr("height", 30)
+            .attr("y", -15);
+        
+        nodeEnter.append("text").attr("dy", ".35em");
+
+        const nodeUpdate = nodeEnter.merge(nodes);
+        nodeUpdate.transition().duration(500)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+        
+        nodeUpdate.select("rect")
+            .attr("width", d => Math.max(40, d.data.keys.length * 20 + 20))
+            .attr("x", d => -(Math.max(40, d.data.keys.length * 20 + 20)) / 2);
+        
+        nodeUpdate.select("text").text(d => d.data.keys.join(" | "));
+        nodes.exit().remove();
+    }
+
+    // Helper: Convert to D3 Hierarchy
+    let idCounter = 0;
+    function convertToHierarchy(node) {
+        idCounter++;
+        let obj = { id: idCounter, keys: node.keys, isLeaf: node.isLeaf, children: [] };
+        if(!node.isLeaf) node.children.forEach(c => obj.children.push(convertToHierarchy(c)));
+        return obj;
+    }
+
+    // Controls
+    function insertBtn() {
+        const input = document.getElementById('insert-val');
+        const val = parseInt(input.value);
+        if(!isNaN(val)) {
+            bTree.insert(val);
+            updateViz();
+            input.value = "";
+            input.focus();
+        }
+    }
+
+    function randomInsert() {
+        bTree.insert(Math.floor(Math.random() * 100));
+        updateViz();
+    }
+
+    function resetTree() {
+        bTree = new BPlusTree(treeOrder);
+        updateViz();
+    }
+
+    // Initial render
+    updateViz();
+    // Center tree initially
+    d3.select("svg").call(d3.zoom().transform, d3.zoomIdentity.translate(width/2, 50).scale(1));
+
+</script>
+</body>
+</html>
