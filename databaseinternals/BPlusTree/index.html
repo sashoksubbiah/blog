@@ -220,13 +220,17 @@
         button:hover { filter: brightness(110%); transform: translateY(-1px); }
         button.reset { background: #95a5a6; }
         button.auto { background: var(--leaf); }
+        button.fit { background: #34495e; }
 
         #tree-svg {
             flex: 1;
+            width: 100%;
+            height: 100%;
             background-image: radial-gradient(#eee 1px, transparent 1px);
             background-size: 20px 20px;
             cursor: grab;
         }
+        #tree-svg:active { cursor: grabbing; }
 
         /* D3 Nodes */
         .node rect {
@@ -371,7 +375,7 @@
     </div>
 </section>
 
-<!-- EVOLUTION SECTION (UPDATED) -->
+<!-- EVOLUTION SECTION -->
 <section id="evolution">
     <div class="container" style="flex-direction: column;">
         <h2 style="text-align:center;">The Critical Difference: Range Scans</h2>
@@ -419,13 +423,14 @@
                 <button onclick="insertBtn()">Insert</button>
                 <button onclick="randomInsert()" class="auto">Add Random</button>
                 <button onclick="resetTree()" class="reset">Reset</button>
-                <span style="color: white; margin-left: auto; font-size: 0.9rem;">Order: <b id="order-display">3</b></span>
+                <button onclick="fitToScreen()" class="fit" title="Center Tree"><i class="fas fa-compress-arrows-alt"></i> Fit</button>
+                <span style="color: white; margin-left: auto; font-size: 0.9rem;">Order: <b id="order-display">4</b></span>
             </div>
             <div id="tree-svg"></div>
         </div>
         <p style="font-size: 0.9rem; margin-top: 10px; color: #666;">
             <i class="fas fa-info-circle"></i> 
-            <strong>Instructions:</strong> Insert numbers. When a node exceeds the limit (Order 3), watch it split. 
+            <strong>Instructions:</strong> Insert numbers. When a node exceeds the limit (Order 4), watch it split. 
             The middle key moves up. Internal nodes (white) guide the path, Leaves (green) hold the data.
         </p>
     </div>
@@ -489,14 +494,12 @@
 </section>
 
 <footer>
-    
     <p><small>Reference: <a href="https://infolab.usc.edu/csci585/Spring2010/den_ar/indexing.pdf" target="_blank">Bayer, R.; McCreight, E. (1970). "Organization and Maintenance of Large Ordered Indexes"</a>.</small></p>
-   
 </footer>
 
 <!-- LOGIC -->
 <script>
-    // --- PART 0: COMPARISON DEMO LOGIC (New) ---
+    // --- PART 0: COMPARISON DEMO LOGIC ---
     function initComparison() {
         const width = 300, height = 250;
         
@@ -539,10 +542,9 @@
         const bpSvg = d3.select("#bplus-viz").append("svg").attr("width", "100%").attr("height", "100%").append("g").attr("transform", "translate(0,20)");
         
         const bpNodes = [
-            {id: 'bp-root', x: 150, y: 30, txt: '40', data: false}, // Internal
-            {id: 'bp-l', x: 70, y: 100, txt: '20', data: false}, // Internal
-            {id: 'bp-r', x: 230, y: 100, txt: '60', data: false}, // Internal
-            // Leaves
+            {id: 'bp-root', x: 150, y: 30, txt: '40', data: false}, 
+            {id: 'bp-l', x: 70, y: 100, txt: '20', data: false}, 
+            {id: 'bp-r', x: 230, y: 100, txt: '60', data: false}, 
             {id: 'bp-leaf1', x: 50, y: 170, txt: '[10, 20]', data: true, w: 60},
             {id: 'bp-leaf2', x: 150, y: 170, txt: '[30, 40, 50]', data: true, w: 80},
             {id: 'bp-leaf3', x: 250, y: 170, txt: '[60, 70]', data: true, w: 60}
@@ -554,7 +556,6 @@
             {s: 'bp-r', t: 'bp-leaf2'}, {s: 'bp-r', t: 'bp-leaf3'}
         ];
 
-        // Draw Links
         bpSvg.selectAll("path.tree-link").data(bpLinks).enter().append("path")
             .attr("class", "tree-link")
             .attr("d", d => {
@@ -563,7 +564,6 @@
                 return `M${s.x},${s.y+15} L${t.x},${t.y-15}`;
             }).attr("stroke", "#ccc").attr("fill", "none");
 
-        // Draw Next Pointers
         bpSvg.append("path").attr("d", "M80,170 L110,170").attr("stroke", "#27ae60").attr("stroke-width", 2).attr("stroke-dasharray", "4");
         bpSvg.append("path").attr("d", "M190,170 L220,170").attr("stroke", "#27ae60").attr("stroke-width", 2).attr("stroke-dasharray", "4");
 
@@ -577,17 +577,16 @@
             .attr("height", 30)
             .attr("x", d => -(d.w || 30)/2)
             .attr("y", -15)
-            .attr("rx", d => d.data ? 0 : 5); // Square for data, rounded for internal
+            .attr("rx", d => d.data ? 0 : 5); 
 
         bpNodeG.append("text").attr("dy", 4).text(d=>d.txt);
     }
 
     function runComparisonDemo() {
-        // Reset
         d3.selectAll(".comp-node circle").classed("active-scan", false);
         d3.selectAll(".comp-node rect").classed("active-scan", false).classed("active-scan-leaf", false);
         
-        // --- B-TREE Animation (Zig Zag) ---
+        // --- B-TREE Animation ---
         const bSteps = [
             {id: '#b-l', delay: 0, msg: "Found 20 (Left Node)"},
             {id: '#b-lr', delay: 1000, msg: "Down to 30 (Leaf)"},
@@ -604,7 +603,7 @@
             }, step.delay);
         });
 
-        // --- B+ TREE Animation (Linear) ---
+        // --- B+ TREE Animation ---
         const bpSteps = [
             {id: '#bp-l', delay: 0, msg: "Navigating index...", type: 'internal'},
             {id: '#bp-leaf1', delay: 800, msg: "Found start: 20", type: 'leaf'},
@@ -626,20 +625,11 @@
         });
     }
 
-    // Call init on load
-    window.onload = function() {
-        initComparison();
-        // Also setup main tree
-        updateViz();
-        d3.select("#tree-svg svg").call(d3.zoom().transform, d3.zoomIdentity.translate(document.getElementById("tree-svg").clientWidth/2, 50).scale(1));
-    };
-
-    // --- PART 1: Disk Animation Logic ---
+    // --- PART 1: Disk Animation ---
     function simulateSeek() {
         const arm = document.getElementById('disk-arm');
         const res = document.getElementById('seek-result');
         res.innerHTML = "Seeking...";
-        
         let jumps = 0;
         const interval = setInterval(() => {
             const randomAngle = -20 + Math.random() * 60;
@@ -647,20 +637,19 @@
             jumps++;
             if(jumps > 5) {
                 clearInterval(interval);
-                arm.style.transform = `rotate(-20deg)`; // Reset
+                arm.style.transform = `rotate(-20deg)`;
                 res.innerHTML = `<span style="color:#e74c3c">150ms elapsed. Too slow!</span>`;
             }
         }, 300);
     }
 
-    // --- PART 2: LSM Demo Logic ---
+    // --- PART 2: LSM Demo ---
     function demoLSM() {
         const bContainer = document.getElementById('viz-bplus');
         const lContainer = document.getElementById('viz-lsm');
         bContainer.innerHTML = '';
         lContainer.innerHTML = '';
 
-        // B+ inserts (Slow, careful)
         let data = [5, 2, 8, 1];
         data.forEach((val, i) => {
             setTimeout(() => {
@@ -668,7 +657,6 @@
                 el.className = 'block';
                 el.style.backgroundColor = '#2c3e50';
                 el.innerText = val;
-                // Simple sort visual for B+
                 let inserted = false;
                 for(let child of bContainer.children) {
                     if(parseInt(child.innerText) > val) {
@@ -681,21 +669,19 @@
             }, i * 800);
         });
 
-        // LSM inserts (Fast stack)
         data.forEach((val, i) => {
             setTimeout(() => {
                 const el = document.createElement('div');
                 el.className = 'block';
                 el.style.backgroundColor = '#e74c3c';
                 el.innerText = val;
-                lContainer.appendChild(el); // Just append on top
+                lContainer.appendChild(el);
             }, i * 300);
         });
     }
 
     // --- PART 3: THE B+ TREE ENGINE ---
     
-    // Core B+ Tree Classes
     class BPlusNode {
         constructor(isLeaf = false) {
             this.keys = [];
@@ -741,7 +727,9 @@
 
         splitChild(parent, index) {
             const child = parent.children[index];
-            const mid = Math.floor(this.order / 2);
+            // Fix: Ensure we don't underflow on small orders by correctly picking the median
+            const mid = Math.floor((this.order - 1) / 2);
+            
             const newNode = new BPlusNode(child.isLeaf);
 
             if (child.isLeaf) {
@@ -752,7 +740,7 @@
             } else {
                 const upKey = child.keys[mid];
                 newNode.keys = child.keys.splice(mid + 1);
-                child.keys.pop(); // Remove mid
+                child.keys.pop(); 
                 newNode.children = child.children.splice(mid + 1);
                 parent.keys.splice(index, 0, upKey);
             }
@@ -760,28 +748,37 @@
         }
     }
 
-    // Visualization Logic
-    const treeOrder = 3;
+    // --- Visualization & Layout Logic (Robust Centering) ---
+    const treeOrder = 4; // Use 4 for cleaner splits
     let bTree = new BPlusTree(treeOrder);
+    let svgSelection, g, treeLayout, zoomBehavior;
     
-    // D3 Setup (Initialized in window.onload now)
-    let svg, g, treeLayout;
-    
+    function initTreeViz() {
+        const container = document.getElementById("tree-svg");
+        
+        zoomBehavior = d3.zoom().on("zoom", (e) => g.attr("transform", e.transform));
+        
+        svgSelection = d3.select("#tree-svg").append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .call(zoomBehavior);
+        
+        g = svgSelection.append("g");
+        treeLayout = d3.tree().nodeSize([70, 80]); // Width, Height spacing
+        
+        // Add Resize Observer to handle window changes
+        const resizeObserver = new ResizeObserver(() => {
+            fitToScreen();
+        });
+        resizeObserver.observe(container);
+    }
+
     function updateViz() {
-        if(!svg) {
-            const container = document.getElementById("tree-svg");
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            
-            svg = d3.select("#tree-svg").append("svg")
-                .attr("width", "100%")
-                .attr("height", "100%")
-                .call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)))
-                .append("g");
-            
-            g = svg.append("g").attr("transform", "translate(40,40)");
-            treeLayout = d3.tree().nodeSize([70, 80]);
-        }
+        if(!svgSelection) initTreeViz();
+        
+        // Fix: Reset idCounter so D3 knows nodes are the "same" across updates.
+        // This prevents destroy/recreate flickering on rapid updates.
+        idCounter = 0; 
 
         const root = d3.hierarchy(convertToHierarchy(bTree.root));
         treeLayout(root);
@@ -792,11 +789,11 @@
             .attr("class", "link")
             .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y))
             .merge(links)
-            .transition().duration(500)
+            .transition().duration(200) // Faster transition for rapid clicks
             .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
         links.exit().remove();
 
-        // Leaf Links (The Linked List)
+        // Leaf Links
         const leaves = root.leaves();
         const leafLinksData = [];
         for(let i=0; i<leaves.length-1; i++) {
@@ -807,7 +804,7 @@
         ll.enter().append("path")
             .attr("class", "leaf-link")
             .merge(ll)
-            .transition().duration(500)
+            .transition().duration(200)
             .attr("d", d => `M${d.s.x},${d.s.y+15} L${d.t.x},${d.t.y+15}`);
         ll.exit().remove();
 
@@ -817,14 +814,11 @@
             .attr("class", d => "node " + (d.data.isLeaf ? "leaf" : "internal"))
             .attr("transform", d => `translate(${d.x},${d.y})`);
         
-        nodeEnter.append("rect")
-            .attr("height", 30)
-            .attr("y", -15);
-        
+        nodeEnter.append("rect").attr("height", 30).attr("y", -15);
         nodeEnter.append("text").attr("dy", ".35em");
 
         const nodeUpdate = nodeEnter.merge(nodes);
-        nodeUpdate.transition().duration(500)
+        nodeUpdate.transition().duration(200)
             .attr("transform", d => `translate(${d.x},${d.y})`);
         
         nodeUpdate.select("rect")
@@ -835,7 +829,36 @@
         nodes.exit().remove();
     }
 
-    // Helper: Convert to D3 Hierarchy
+    // --- FIT TO SCREEN FUNCTION ---
+    function fitToScreen() {
+        if (!g || !svgSelection) return;
+        
+        const container = document.getElementById("tree-svg");
+        const bounds = g.node().getBBox();
+        const fullWidth = container.clientWidth || 800;
+        const fullHeight = container.clientHeight || 600;
+
+        if (bounds.width === 0 || bounds.height === 0) return; // Nothing to fit
+
+        // Calculate Scale to fit (with 10% padding)
+        const scale = 0.9 / Math.max(bounds.width / fullWidth, bounds.height / fullHeight);
+        // Cap scale at 1 (don't zoom in too much on tiny trees)
+        const finalScale = Math.min(scale, 1);
+
+        // Center calculation
+        const midX = bounds.x + bounds.width / 2;
+        const midY = bounds.y + bounds.height / 2;
+        
+        // Translate to center
+        const tX = fullWidth / 2 - finalScale * midX;
+        const tY = 50 - finalScale * bounds.y; // Keep top margin fixed at 50px for tree feel
+
+        svgSelection.transition().duration(750).call(
+            zoomBehavior.transform, 
+            d3.zoomIdentity.translate(tX, tY).scale(finalScale)
+        );
+    }
+
     let idCounter = 0;
     function convertToHierarchy(node) {
         idCounter++;
@@ -844,7 +867,6 @@
         return obj;
     }
 
-    // Controls
     function insertBtn() {
         const input = document.getElementById('insert-val');
         const val = parseInt(input.value);
@@ -864,8 +886,16 @@
     function resetTree() {
         bTree = new BPlusTree(treeOrder);
         updateViz();
-        d3.select("#tree-svg svg").call(d3.zoom().transform, d3.zoomIdentity.translate(document.getElementById("tree-svg").clientWidth/2, 50).scale(1));
+        setTimeout(fitToScreen, 100);
     }
+    
+    // Initial Load
+    window.onload = function() {
+        initComparison();
+        updateViz();
+        // Delay slighty to ensure D3 renders logic before fitting
+        setTimeout(fitToScreen, 200);
+    };
 
 </script>
 </body>
