@@ -476,10 +476,6 @@
             <p>B+ Trees are excellent for <strong>reading</strong>, but what if you need to <strong>write</strong> millions of records per second (like IoT data or chat logs)?</p>
             <p>B+ Trees struggle here because inserting random data requires constantly jumping around the disk to find the right spot.</p>
             <p><strong>The Solution: Log-Structured Merge (LSM) Trees</strong> (used by Cassandra, RocksDB).</p>
-            <p><strong>The Analogy:</strong>
-                <br>• <strong>B+ Tree:</strong> A librarian who walks to the shelf to place every returned book in its exact alphabetical spot immediately. (Slow Writes, Fast Reads).
-                <br>• <strong>LSM Tree:</strong> A clerk who just stacks all returned books in a pile on the counter. When the pile gets too high, they sort them all at once. (Fast Writes, Slower Reads).
-            </p>
             <button onclick="demoLSM()">Visualize Difference</button>
         </div>
         <div class="visual-content">
