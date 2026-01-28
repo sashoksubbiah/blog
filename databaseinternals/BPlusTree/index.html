@@ -472,20 +472,24 @@
 <section id="future">
     <div class="container">
         <div class="text-content">
-            <h2>The Future: LSM Trees</h2>
-            <p>B+ Trees are great for reading, but what about writing massive data (like social media logs)?</p>
-            <p>Enter the <strong>LSM Tree (Log-Structured Merge)</strong>. Used by Cassandra and RocksDB.</p>
-            <p>Instead of carefully placing every book on the shelf (B+ Tree), the LSM Tree just tosses new data into a pile and sorts it later in the background.</p>
+            <h2>The Challenger: LSM Trees</h2>
+            <p>B+ Trees are excellent for <strong>reading</strong>, but what if you need to <strong>write</strong> millions of records per second (like IoT data or chat logs)?</p>
+            <p>B+ Trees struggle here because inserting random data requires constantly jumping around the disk to find the right spot.</p>
+            <p><strong>The Solution: Log-Structured Merge (LSM) Trees</strong> (used by Cassandra, RocksDB).</p>
+            <p><strong>The Analogy:</strong>
+                <br>• <strong>B+ Tree:</strong> A librarian who walks to the shelf to place every returned book in its exact alphabetical spot immediately. (Slow Writes, Fast Reads).
+                <br>• <strong>LSM Tree:</strong> A clerk who just stacks all returned books in a pile on the counter. When the pile gets too high, they sort them all at once. (Fast Writes, Slower Reads).
+            </p>
             <button onclick="demoLSM()">Visualize Difference</button>
         </div>
         <div class="visual-content">
             <div class="lsm-container">
                 <div style="flex:1; text-align: center;">
-                    <strong>B+ Tree (Organized)</strong>
+                    <strong>B+ Tree (Immediate Sort)</strong>
                     <div id="viz-bplus" class="lsm-viz"></div>
                 </div>
                 <div style="flex:1; text-align: center;">
-                    <strong>LSM Tree (Fast Write)</strong>
+                    <strong>LSM Tree (Fast Stack)</strong>
                     <div id="viz-lsm" class="lsm-viz"></div>
                 </div>
             </div>
