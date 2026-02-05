@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: HNSW Vector Index Visualizer</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --text: #e2e8f0;
+            --accent: #38bdf8;
+            --secondary: #64748b;
+            --node-base: #94a3b8;
+            --highlight: #f43f5e;
+            --path: #22c55e;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* Sidebar Controls */
+        #sidebar {
+            width: 350px;
+            padding: 20px;
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+        }
+        h1, h2, h3 { margin: 0; font-weight: 600; }
+        h1 { font-size: 1.2rem; color: var(--accent); }
+        h2 { font-size: 1rem; margin-top: 10px; color: #cbd5e1; }
+        p { font-size: 0.9rem; line-height: 1.5; color: #94a3b8; }
+        
+        .control-group {
+            background: #334155;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        button {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 5px;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button.secondary { background: var(--secondary); color: white; }
+
+        /* Canvas Area */
+        #main {
+            flex-grow: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            cursor: crosshair;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        /* Educational Overlay */
+        #overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--accent);
+            max-width: 400px;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        .stat-box {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+        .concept-note {
+            font-size: 0.85rem;
+            color: #fca5a5;
+            margin-top: 10px;
+            font-style: italic;
+            border-left: 3px solid #fca5a5;
+            padding-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h1>HNSW Intuition Builder</h1>
+    <p>Hierarchical Navigable Small World graphs optimize vector search by creating "express highways" (upper layers) and "local roads" (lower layers).</p>
+    
+    <div class="control-group">
+        <h2>1. Build the Index</h2>
+        <p>Insert random vectors. Watch how few make it to the top layers (probabilistic skip list).</p>
+        <button onclick="addRandomNodes(50)">Insert 50 Vectors</button>
+        <button class="secondary" onclick="resetGraph()">Reset Index</button>
+        <div class="stat-box">
+            <span>Total Nodes:</span> <span id="nodeCount">0</span>
+        </div>
+        <div class="stat-box">
+            <span>Max Layer:</span> <span id="maxLayerDisp">0</span>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <h2>2. Visualize Search</h2>
+        <p>Click anywhere on the canvas to simulate a Query Vector.</p>
+        <div style="display: flex; gap: 10px; align-items: center; margin-top:10px;">
+            <input type="checkbox" id="showAllConnections" checked>
+            <label for="showAllConnections" style="font-size: 0.9rem;">Show All Edges (Layer 0)</label>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <h2>3. Active Learning Challenge</h2>
+        <p>Can you guess the entry point? Why does the algorithm jump far at first, then make small steps?</p>
+        <button class="secondary" onclick="toggleLayerView()">Toggle Layer View (Focus)</button>
+    </div>
+
+    <div id="log" style="font-family: monospace; font-size: 0.8rem; color: #cbd5e1; height: 150px; overflow-y: auto; background: #020617; padding: 10px; border-radius: 4px;">
+        > System ready.
+    </div>
+</div>
+
+<div id="main">
+    <div id="overlay">
+        <h3 id="statusTitle">Waiting for Data...</h3>
+        <p id="statusDesc">Add vectors to build the graph structure.</p>
+    </div>
+    <canvas id="canvas"></canvas>
+</div>
+
+<script>
+/**
+ * HNSW TECHNICAL EXPLANATION FOR THE USER:
+ * * HNSW relies on two main structures:
+ * 1. Hierarchy (Layers): Logarithmic scaling. Top layers are sparse (long-range links), 
+ * bottom layers are dense (short-range links).
+ * 2. NSW (Navigable Small World): Within a layer, we use a greedy graph traversal.
+ * * In this script:
+ * - We simulate `M` (max connections) visually.
+ * - We use `mL` (level multiplier) to determine node promotion probability.
+ * - Distance metric: Euclidean (L2).
+ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const logDiv = document.getElementById('log');
+
+// HNSW Parameters
+const M = 5; // Max neighbors per node per layer
+const M0 = 10; // Max neighbors for layer 0 (usually 2*M)
+const levelMult = 1 / Math.log(M); // Probability factor for level generation
+
+// Graph State
+let nodes = [];
+let entryPoint = null; // The global entry point (node at the highest layer)
+let maxLayer = -1;
+let hoverNode = null;
+let queryPoint = null;
+let searchPath = []; // Array of nodes visited during search
+let isFocusMode = false; // Toggle to see specific layers
+
+// Setup Canvas
+function resize() {
+    canvas.width = document.getElementById('main').offsetWidth;
+    canvas.height = document.getElementById('main').offsetHeight;
+    draw();
+}
+window.addEventListener('resize', resize);
+
+// --- CORE HNSW LOGIC ---
+
+class Node {
+    constructor(id, x, y, level) {
+        this.id = id;
+        this.x = x;
+        this.y = y;
+        this.level = level; // Highest layer this node exists in
+        this.connections = {}; // Map layer_index -> [neighbor_nodes]
+        
+        // Initialize connections arrays for all levels up to this node's max level
+        for (let i = 0; i <= level; i++) {
+            this.connections[i] = [];
+        }
+    }
+}
+
+function dist(n1, n2) {
+    return Math.sqrt((n1.x - n2.x)**2 + (n1.y - n2.y)**2);
+}
+
+// Generate a random level for a new node (like flipping a coin)
+function getRandomLevel() {
+    let lvl = 0;
+    while (Math.random() < 0.5 && lvl < 5) { // Capped at 5 for visual clarity
+        lvl++;
+    }
+    return lvl;
+}
+
+function insertNode(x, y) {
+    const level = getRandomLevel();
+    const newNode = new Node(nodes.length, x, y, level);
+    
+    // If graph is empty
+    if (entryPoint === null) {
+        entryPoint = newNode;
+        maxLayer = level;
+        nodes.push(newNode);
+        log(`Initialized Entry Point at Layer ${level}`);
+        return;
+    }
+
+    let currObj = entryPoint;
+    
+    // Phase 1: Zoom down from maxLayer to newNode.level + 1
+    // We just find the closest node at each layer but don't link yet
+    for (let l = maxLayer; l > level; l--) {
+        let changed = true;
+        while(changed) {
+            changed = false;
+            let d = dist(currObj, newNode);
+            // Check neighbors at this layer
+            if (currObj.connections[l]) {
+                for (let neighbor of currObj.connections[l]) {
+                    let d2 = dist(neighbor, newNode);
+                    if (d2 < d) {
+                        currObj = neighbor;
+                        d = d2;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase 2: From newNode.level down to 0, insert and link
+    for (let l = Math.min(maxLayer, level); l >= 0; l--) {
+        // Greedy search to find insertion location at this layer
+        // (Simplified: In real HNSW we collect efConstruction candidates, here we take closest)
+        let changed = true;
+        while(changed) {
+            changed = false;
+            let d = dist(currObj, newNode);
+            if (currObj.connections[l]) {
+                for (let neighbor of currObj.connections[l]) {
+                    let d2 = dist(neighbor, newNode);
+                    if (d2 < d) {
+                        currObj = neighbor;
+                        d = d2;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        // CONNECT logic: Bidirectional connection
+        // Simple heuristic: Connect to the closest found node (currObj)
+        // In real HNSW, we connect to M neighbors. Here we simplify for visual clarity.
+        
+        addConnection(l, newNode, currObj);
+        
+        // Also connect to currObj's neighbors if they are close (triangulation intuition)
+        let neighbors = currObj.connections[l] || [];
+        // Sort by distance to newNode
+        neighbors.sort((a,b) => dist(a, newNode) - dist(b, newNode));
+        
+        for (let i = 0; i < Math.min(neighbors.length, M-1); i++) {
+             addConnection(l, newNode, neighbors[i]);
+        }
+    }
+
+    // Update global entry point if new node is higher
+    if (level > maxLayer) {
+        maxLayer = level;
+        entryPoint = newNode;
+    }
+
+    nodes.push(newNode);
+    updateStats();
+}
+
+function addConnection(layer, nodeA, nodeB) {
+    if (nodeA === nodeB) return;
+    if (!nodeA.connections[layer].includes(nodeB)) {
+        nodeA.connections[layer].push(nodeB);
+    }
+    if (!nodeB.connections[layer].includes(nodeA)) {
+        nodeB.connections[layer].push(nodeA);
+    }
+}
+
+// --- SEARCH LOGIC (The Core Intuition) ---
+
+function searchHNSW(targetX, targetY) {
+    if (!entryPoint) return;
+
+    let curr = entryPoint;
+    let target = {x: targetX, y: targetY};
+    let path = []; // record logic path: {from, to, layer}
+
+    // Top-down traversal
+    for (let l = maxLayer; l >= 0; l--) {
+        let changed = true;
+        while(changed) {
+            changed = false;
+            let d = dist(curr, target);
+            let bestNeighbor = null;
+
+            if (curr.connections[l]) {
+                for (let neighbor of curr.connections[l]) {
+                    let d2 = dist(neighbor, target);
+                    if (d2 < d) {
+                        bestNeighbor = neighbor;
+                        d = d2;
+                    }
+                }
+            }
+
+            if (bestNeighbor) {
+                path.push({from: curr, to: bestNeighbor, layer: l});
+                curr = bestNeighbor;
+                changed = true;
+            }
+        }
+        // When we switch layers, we stay on 'curr' but drop down level
+        if (l > 0) {
+            path.push({from: curr, to: curr, layer: l, type: 'drop'});
+        }
+    }
+    
+    searchPath = path;
+    
+    // Update UI explanation
+    const overlayTitle = document.getElementById('statusTitle');
+    const overlayDesc = document.getElementById('statusDesc');
+    overlayTitle.innerText = "Greedy Search Complete";
+    overlayDesc.innerHTML = `
+        Found Node #${curr.id} via ${path.length} hops.<br>
+        <span class="concept-note">Notice how the search takes long leaps in upper layers (blue/purple) and short adjustments in layer 0 (green).</span>
+    `;
+    
+    draw();
+}
+
+// --- RENDERING ---
+
+function draw() {
+    // Clear
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Edges (Layer 0) - Base Mesh
+    if (document.getElementById('showAllConnections').checked) {
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        nodes.forEach(node => {
+            if (node.connections[0]) {
+                node.connections[0].forEach(neighbor => {
+                    ctx.beginPath();
+                    ctx.moveTo(node.x, node.y);
+                    ctx.lineTo(neighbor.x, neighbor.y);
+                    ctx.stroke();
+                });
+            }
+        });
+    }
+
+    // Draw Higher Layer Edges (The "Express Highways")
+    nodes.forEach(node => {
+        for (let l = 1; l <= node.level; l++) {
+            if (node.connections[l]) {
+                ctx.strokeStyle = l === 1 ? '#334155' : (l === 2 ? '#475569' : '#64748b');
+                ctx.lineWidth = l + 1;
+                node.connections[l].forEach(neighbor => {
+                    ctx.beginPath();
+                    ctx.moveTo(node.x, node.y);
+                    ctx.lineTo(neighbor.x, neighbor.y);
+                    ctx.stroke();
+                });
+            }
+        }
+    });
+
+    // Draw Search Path
+    if (searchPath.length > 0) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        let alpha = 1.0;
+        
+        searchPath.forEach((step, i) => {
+            if (step.type === 'drop') return; // Don't draw line for layer drop
+            
+            // Color code based on layer
+            ctx.strokeStyle = step.layer === 0 ? '#22c55e' : (step.layer === 1 ? '#38bdf8' : '#a855f7');
+            ctx.lineWidth = 4 + (step.layer * 2);
+            ctx.globalAlpha = 0.8;
+            
+            ctx.beginPath();
+            ctx.moveTo(step.from.x, step.from.y);
+            ctx.lineTo(step.to.x, step.to.y);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        });
+        
+        // Draw Query Target
+        if (queryPoint) {
+            ctx.fillStyle = '#f43f5e';
+            ctx.beginPath();
+            ctx.arc(queryPoint.x, queryPoint.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = '12px sans-serif';
+            ctx.fillText("Query", queryPoint.x + 12, queryPoint.y);
+        }
+    }
+
+    // Draw Nodes
+    nodes.forEach(node => {
+        // Size depends on max level (higher level nodes = bigger hubs)
+        const radius = 3 + (node.level * 2); 
+        
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        
+        // Color depends on level
+        if (node.level === 0) ctx.fillStyle = '#94a3b8'; // Grey
+        else if (node.level === 1) ctx.fillStyle = '#38bdf8'; // Blue
+        else if (node.level >= 2) ctx.fillStyle = '#a855f7'; // Purple
+        
+        // Highlight Entry Point
+        if (node === entryPoint) {
+            ctx.strokeStyle = '#facc15'; // Yellow
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        ctx.fill();
+    });
+}
+
+// --- INTERACTION ---
+
+canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    queryPoint = {x, y};
+    searchHNSW(x, y);
+});
+
+function addRandomNodes(count) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const margin = 50;
+    
+    for (let i = 0; i < count; i++) {
+        insertNode(
+            margin + Math.random() * (w - margin*2),
+            margin + Math.random() * (h - margin*2)
+        );
+    }
+    draw();
+    log(`Added ${count} nodes.`);
+}
+
+function resetGraph() {
+    nodes = [];
+    entryPoint = null;
+    maxLayer = -1;
+    searchPath = [];
+    queryPoint = null;
+    draw();
+    updateStats();
+    log("Graph reset.");
+}
+
+function toggleLayerView() {
+    isFocusMode = !isFocusMode;
+    // Logic to hide/dim specific layers could go here
+    log("Toggled View Mode (Visual only implementation pending user interaction)");
+}
+
+function updateStats() {
+    document.getElementById('nodeCount').innerText = nodes.length;
+    document.getElementById('maxLayerDisp').innerText = maxLayer;
+}
+
+function log(msg) {
+    const p = document.createElement('div');
+    p.innerText = `> ${msg}`;
+    logDiv.prepend(p);
+}
+
+// Init
+resize();
+log("HNSW Visualizer Initialized. Click 'Insert 50 Vectors' to start.");
+
+</script>
+</body>
+</html>
