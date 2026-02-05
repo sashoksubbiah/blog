@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: Materialized Views Internals</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #e2e8f0;
+            --accent: #38bdf8;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warn: #eab308;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        header {
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 20px;
+        }
+
+        h1 { margin: 0; color: var(--accent); }
+        h2 { font-size: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+
+        .card {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .full-width { grid-column: 1 / -1; }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        th { color: var(--accent); }
+        tr.highlight { background-color: rgba(56, 189, 248, 0.2); transition: background 0.5s; }
+        
+        /* Badges & Metrics */
+        .metric-box {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .metric {
+            background: #000;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .stale { border: 1px solid var(--danger); color: var(--danger); }
+        .fresh { border: 1px solid var(--success); color: var(--success); }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        button {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        button:hover { filter: brightness(1.1); }
+        button.secondary { background: var(--border); color: var(--text); }
+        button.refresh-btn { background: var(--warn); }
+        
+        .log-terminal {
+            font-family: monospace;
+            background: #000;
+            color: #33ff00;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .diagram {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 20px;
+            background: #000;
+            border-radius: 8px;
+        }
+        .node {
+            padding: 10px;
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+        .arrow { flex-grow: 1; height: 2px; background: var(--border); margin: 0 10px; position: relative; }
+        .arrow::after { content: '>'; position: absolute; right: -5px; top: -10px; color: var(--border); }
+
+        /* Exercise Section */
+        .exercise-box {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid var(--success);
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Interactive Database Internals: Materialized Views</h1>
+        <p>A simulation of Storage, Compute Cost, and Data Consistency strategies.</p>
+    </header>
+
+    <div class="card full-width">
+        <h2>Control Center</h2>
+        <div class="controls">
+            <button onclick="simulateTraffic()">🚀 Simulate 100 Transactions</button>
+            <button class="secondary" onclick="insertOne()">+ Insert Single Record</button>
+            <button class="refresh-btn" onclick="refreshMV('complete')">🔄 Refresh Complete (Slow)</button>
+            <button class="refresh-btn" onclick="refreshMV('fast')">⚡ Refresh Fast (Incremental)</button>
+        </div>
+        <div class="metric-box">
+            <div class="metric" id="status-indicator">MV Status: Synced</div>
+            <div class="metric">Base Rows: <span id="base-count">0</span></div>
+            <div class="metric">MV Rows: <span id="mv-count">0</span></div>
+            <div class="metric">MV Lag: <span id="lag-count">0</span> rows</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Base Table: `orders`</h2>
+        <p style="font-size:0.8rem; color:#aaa;">(Normalized, High Write Throughput)</p>
+        <div style="max-height: 300px; overflow-y: auto;">
+            <table id="base-table">
+                <thead><tr><th>ID</th><th>Region</th><th>Amount ($)</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Materialized View: `mv_sales_by_region`</h2>
+        <p style="font-size:0.8rem; color:#aaa;">SELECT region, SUM(amount) FROM orders GROUP BY region;</p>
+        
+        <div class="metric-box">
+             <div class="metric" style="width:100%">Last Refresh Cost: <span id="refresh-cost">0</span>ms</div>
+        </div>
+
+        <table id="mv-table">
+            <thead><tr><th>Region</th><th>Total Sales ($)</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>MV Log / Delta Log</h2>
+        <p style="font-size:0.8rem; color:#aaa;">Used for "Fast Refresh". Tracks changes since last snapshot.</p>
+        <div style="max-height: 150px; overflow-y: auto;">
+            <table id="log-table">
+                <thead><tr><th>Op</th><th>Region</th><th>Delta</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Query Performance Simulator</h2>
+        <p>Compare running a report against the Base Table vs the MV.</p>
+        
+        <div class="controls">
+            <button class="secondary" onclick="queryBase()">Query Base Table</button>
+            <button onclick="queryMV()">Query MV</button>
+        </div>
+        
+        <div id="query-result" style="margin-top:10px; font-family: monospace;">Waiting for query...</div>
+    </div>
+
+    <div class="card full-width">
+        <h2>System Logs</h2>
+        <div class="log-terminal" id="sys-log">
+            > System initialized...<br>
+        </div>
+    </div>
+
+    <div class="card full-width exercise-box">
+        <h3>🧠 Check Your Intuition</h3>
+        <p id="question-text"><strong>Problem 1:</strong> If you run "Simulate 100 Transactions" and then immediately "Query MV", what will happen?</p>
+        <div class="controls" style="margin-top:10px;">
+            <button class="secondary" onclick="checkAnswer(1)">The result will be accurate but slow.</button>
+            <button class="secondary" onclick="checkAnswer(2)">The result will be fast but inaccurate (stale).</button>
+            <button class="secondary" onclick="checkAnswer(3)">The database will throw an error.</button>
+        </div>
+        <p id="answer-feedback" style="font-weight: bold; margin-top: 10px;"></p>
+    </div>
+</div>
+
+<script>
+    // --- STATE ---
+    let baseData = [];
+    let mvData = {}; // { Region: Total }
+    let mvLog = [];  // List of changes since last refresh
+    let lastRefreshTime = Date.now();
+    let isStale = false;
+    
+    const regions = ['NA', 'EU', 'APAC', 'LATAM'];
+
+    // --- INITIALIZATION ---
+    function init() {
+        // Seed some initial data
+        for(let i=0; i<5; i++) insertOne(true);
+        refreshMV('complete');
+        log("System Ready. MV initialized.");
+    }
+
+    // --- CORE LOGIC ---
+
+    function insertOne(silent = false) {
+        const id = baseData.length + 1;
+        const region = regions[Math.floor(Math.random() * regions.length)];
+        const amount = Math.floor(Math.random() * 100) + 10;
+
+        // 1. Write to Base Table
+        baseData.push({ id, region, amount });
+
+        // 2. Write to MV Log (The secret to Fast Refresh)
+        // In real DBs (like Oracle/Postgres), this is a trigger-based or WAL-based log
+        mvLog.push({ op: 'INSERT', region, amount });
+
+        isStale = true;
+        updateUI();
+        if(!silent) log(`Inserted Order #${id} (${region}, $${amount})`);
+    }
+
+    function simulateTraffic() {
+        log("Simulating high-velocity write traffic (100 rows)...");
+        // Batch insert for performance in JS
+        for(let i=0; i<100; i++) {
+            insertOne(true);
+        }
+        log("Batch insert complete. Base table updated.");
+        updateUI();
+    }
+
+    // The Expensive Operation (Standard View behavior)
+    function calculateFromScratch() {
+        // Artificial delay based on data size to simulate table scan
+        const start = performance.now();
+        const result = {};
+        
+        // Simulating O(N) scan
+        baseData.forEach(row => {
+            if (!result[row.region]) result[row.region] = 0;
+            result[row.region] += row.amount;
+        });
+
+        const end = performance.now();
+        // Add fake delay for demonstration if N is small
+        const scanTime = Math.max((end - start), baseData.length * 0.5); 
+        return { result, cost: scanTime };
+    }
+
+    function refreshMV(type) {
+        const start = performance.now();
+        
+        if (type === 'complete') {
+            log("Starting COMPLETE REFRESH (Scanning entire base table)...");
+            const calculation = calculateFromScratch();
+            mvData = calculation.result;
+            mvLog = []; // Log is cleared on complete refresh
+            
+            const cost = calculation.cost + 500; // Penalty for write locks/swapping
+            setTimeout(() => finishRefresh(cost), cost);
+            
+        } else if (type === 'fast') {
+            log("Starting FAST REFRESH (Processing Delta Log only)...");
+            
+            // Only process the log
+            if (mvLog.length === 0) {
+                log("Log empty. Nothing to do.");
+                return;
+            }
+
+            mvLog.forEach(entry => {
+                if (!mvData[entry.region]) mvData[entry.region] = 0;
+                mvData[entry.region] += entry.amount;
+            });
+            
+            // Artificial delay based on LOG size, not TABLE size
+            const cost = (mvLog.length * 0.1) + 100; 
+            mvLog = []; // Clear log
+            
+            setTimeout(() => finishRefresh(cost), cost);
+        }
+    }
+
+    function finishRefresh(cost) {
+        isStale = false;
+        document.getElementById('refresh-cost').innerText = cost.toFixed(2);
+        updateUI();
+        log(`Refresh Complete. Cost: ${cost.toFixed(2)}ms`);
+    }
+
+    // --- QUERY SIMULATION ---
+
+    function queryBase() {
+        const el = document.getElementById('query-result');
+        el.innerText = "Running Full Table Scan on 'orders'...";
+        el.style.color = "var(--warn)";
+        
+        const calculation = calculateFromScratch();
+        // Adding dramatic delay for effect
+        setTimeout(() => {
+            el.innerHTML = `Result: $${JSON.stringify(calculation.result).substring(0, 30)}...<br>Time: <span style="color:red">${calculation.cost.toFixed(2)}ms</span> (Scanned ${baseData.length} rows)`;
+        }, calculation.cost + 500);
+    }
+
+    function queryMV() {
+        const el = document.getElementById('query-result');
+        el.innerText = "Reading Materialized View...";
+        
+        // MV Read is O(1) or very fast index scan
+        setTimeout(() => {
+            const warning = isStale ? "WARNING: Data is Stale" : "Data is Fresh";
+            const color = isStale ? "orange" : "#33ff00";
+            
+            el.innerHTML = `Result: $${JSON.stringify(mvData).substring(0, 30)}...<br>Time: <span style="color:#33ff00">5ms</span> (${warning})`;
+            el.style.color = color;
+        }, 100);
+    }
+
+    // --- UI UPDATES ---
+
+    function updateUI() {
+        // Update Metrics
+        document.getElementById('base-count').innerText = baseData.length;
+        document.getElementById('mv-count').innerText = Object.keys(mvData).length;
+        document.getElementById('lag-count').innerText = mvLog.length;
+        
+        const statusEl = document.getElementById('status-indicator');
+        if (isStale) {
+            statusEl.innerText = "MV Status: Stale";
+            statusEl.className = "metric stale";
+        } else {
+            statusEl.innerText = "MV Status: Fresh";
+            statusEl.className = "metric fresh";
+        }
+
+        // Render Base Table (Last 5 only)
+        const baseTbody = document.querySelector('#base-table tbody');
+        baseTbody.innerHTML = '';
+        baseData.slice(-5).reverse().forEach(row => {
+            baseTbody.innerHTML += `<tr><td>${row.id}</td><td>${row.region}</td><td>${row.amount}</td></tr>`;
+        });
+
+        // Render MV Table
+        const mvTbody = document.querySelector('#mv-table tbody');
+        mvTbody.innerHTML = '';
+        Object.entries(mvData).forEach(([region, total]) => {
+            mvTbody.innerHTML += `<tr><td>${region}</td><td>${total}</td></tr>`;
+        });
+
+        // Render Log Table
+        const logTbody = document.querySelector('#log-table tbody');
+        logTbody.innerHTML = '';
+        mvLog.slice(-5).reverse().forEach(entry => {
+            logTbody.innerHTML += `<tr><td>${entry.op}</td><td>${entry.region}</td><td>${entry.amount}</td></tr>`;
+        });
+    }
+
+    function log(msg) {
+        const term = document.getElementById('sys-log');
+        const time = new Date().toLocaleTimeString();
+        term.innerHTML += `[${time}] ${msg}<br>`;
+        term.scrollTop = term.scrollHeight;
+    }
+
+    function checkAnswer(ans) {
+        const feedback = document.getElementById('answer-feedback');
+        if (ans === 2) {
+            feedback.innerHTML = "Correct! ✅ <br>MVs are snapshots. They are extremely fast to read (because the math is already done), but they do not reflect new writes until you Refresh.";
+            feedback.style.color = "var(--success)";
+        } else {
+            feedback.innerHTML = "Not quite. <br>Remember: An MV is a physical table sitting on the disk. It doesn't know the Base Table changed until you tell it.";
+            feedback.style.color = "var(--danger)";
+        }
+    }
+
+    // Start
+    init();
+
+</script>
+</body>
+</html>
