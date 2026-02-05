@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Read Replica & Eventual Consistency Simulator</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --replica-color: #10b981;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); color: var(--text-main); padding: 20px; line-height: 1.5; }
+        
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .h1 { font-size: 2rem; font-weight: 800; color: #0f172a; }
+        
+        /* Architecture Layout */
+        .system-diagram { display: flex; gap: 40px; justify-content: center; align-items: flex-start; margin-bottom: 40px; flex-wrap: wrap;}
+        
+        .node {
+            background: var(--card-bg);
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            width: 280px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .node.primary { border-color: var(--primary-color); }
+        .node.replica { border-color: var(--replica-color); }
+        
+        .node-header { font-weight: 700; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .role-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; color: white; }
+        .bg-primary { background: var(--primary-color); }
+        .bg-replica { background: var(--replica-color); }
+
+        .data-store { 
+            background: #f1f5f9; 
+            padding: 10px; 
+            border-radius: 6px; 
+            font-family: monospace; 
+            min-height: 60px;
+        }
+
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #cbd5e1; }
+        .data-row:last-child { border-bottom: none; }
+
+        /* Animation Classes */
+        .pulse { animation: pulse-animation 0.5s ease-in-out; }
+        .stale { background-color: #fee2e2; border: 1px solid #ef4444; } /* Red tint for stale data */
+        .fresh { background-color: #dcfce7; } /* Green tint for fresh data */
+
+        @keyframes pulse-animation {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); box-shadow: 0 0 15px rgba(37, 99, 235, 0.3); }
+            100% { transform: scale(1); }
+        }
+
+        /* Control Panel */
+        .controls { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .control-group { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .btn-write { background: var(--primary-color); color: white; }
+        .btn-read { background: var(--replica-color); color: white; }
+        .btn-write:hover { background: #1d4ed8; }
+        .btn-read:hover { background: #059669; }
+
+        input[type="range"] { width: 200px; }
+        
+        .log-console {
+            background: #1e293b;
+            color: #10b981;
+            font-family: 'Courier New', monospace;
+            padding: 15px;
+            border-radius: 8px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+        }
+        .log-entry { margin-bottom: 5px; border-left: 3px solid transparent; padding-left: 5px; }
+        .log-write { border-color: var(--primary-color); color: #93c5fd; }
+        .log-sync { border-color: #fbbf24; color: #fcd34d; }
+        .log-read { border-color: var(--replica-color); color: #6ee7b7; }
+        .log-alert { color: #f87171; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1 class="h1">Read Replica & Lag Visualizer</h1>
+        <p>Simulating <strong>Asynchronous Replication</strong>. Writes go to Primary. Reads go to Replicas.</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <h3>1. Simulate Traffic</h3>
+            <button class="btn-write" onclick="performWrite()">WR: Update 'UserStatus'</button>
+            <button class="btn-read" onclick="performRead()">RD: Read from Random Replica</button>
+        </div>
+        <div class="control-group">
+            <h3>2. Network Conditions</h3>
+            <label for="latency">Replication Lag (ms): <span id="latencyVal">1500</span></label>
+            <input type="range" id="latency" min="100" max="5000" value="1500" oninput="updateLatency(this.value)">
+            <small>Higher lag = Higher chance of stale reads</small>
+        </div>
+    </div>
+
+    <div class="system-diagram">
+        <div class="node primary" id="primaryNode">
+            <div class="node-header">
+                <span>Primary DB</span>
+                <span class="role-badge bg-primary">Writer</span>
+            </div>
+            <div class="data-store" id="primaryStore">
+                <div class="data-row">
+                    <span>Key: UserStatus</span>
+                    <span id="p-val-status">Offline</span>
+                </div>
+                <div class="data-row">
+                    <span>Version (LSN)</span>
+                    <span id="p-val-ver">0</span>
+                </div>
+            </div>
+            <p style="font-size:0.8rem; color:#64748b; margin-top:10px;">Handles all INSERT/UPDATE.</p>
+        </div>
+
+        <div class="node replica" id="replica1">
+            <div class="node-header">
+                <span>Replica A</span>
+                <span class="role-badge bg-replica">Reader</span>
+            </div>
+            <div class="data-store" id="r1Store">
+                <div class="data-row">
+                    <span>Key: UserStatus</span>
+                    <span id="r1-val-status">Offline</span>
+                </div>
+                <div class="data-row">
+                    <span>Version (LSN)</span>
+                    <span id="r1-val-ver">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="node replica" id="replica2">
+            <div class="node-header">
+                <span>Replica B</span>
+                <span class="role-badge bg-replica">Reader</span>
+            </div>
+            <div class="data-store" id="r2Store">
+                <div class="data-row">
+                    <span>Key: UserStatus</span>
+                    <span id="r2-val-status">Offline</span>
+                </div>
+                <div class="data-row">
+                    <span>Version (LSN)</span>
+                    <span id="r2-val-ver">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h3>System Logs</h3>
+    <div class="log-console" id="console">
+        <div class="log-entry">> System initialized. Replication Mode: ASYNC</div>
+    </div>
+</div>
+
+<script>
+    // State
+    let state = {
+        primary: { status: 'Offline', version: 0 },
+        replica1: { status: 'Offline', version: 0 },
+        replica2: { status: 'Offline', version: 0 },
+        latency: 1500
+    };
+
+    const statuses = ['Active', 'Idle', 'Do Not Disturb', 'Offline', 'In Meeting'];
+
+    function updateLatency(val) {
+        state.latency = parseInt(val);
+        document.getElementById('latencyVal').innerText = val;
+    }
+
+    function log(msg, type = '') {
+        const consoleEl = document.getElementById('console');
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        entry.innerText = `[${time}] ${msg}`;
+        consoleEl.insertBefore(entry, consoleEl.firstChild);
+    }
+
+    // 1. WRITE OPERATION (Always to Primary)
+    function performWrite() {
+        // Pick random status
+        const newStatus = statuses[Math.floor(Math.random() * statuses.length)];
+        const newVersion = state.primary.version + 1;
+
+        // Update Primary State
+        state.primary.status = newStatus;
+        state.primary.version = newVersion;
+
+        // Visual Update Primary
+        updateNodeUI('p', state.primary.status, state.primary.version);
+        flashNode('primaryNode');
+        log(`WRITE: Primary updated UserStatus to '${newStatus}' (v${newVersion})`, 'write');
+
+        // Trigger Async Replication
+        replicateTo('replica1', newStatus, newVersion, 'r1');
+        replicateTo('replica2', newStatus, newVersion, 'r2');
+    }
+
+    // 2. REPLICATION (Simulates Lag)
+    function replicateTo(replicaKey, status, version, uiPrefix) {
+        // Calculate randomized network jitter ( +/- 30% of latency)
+        const jitter = state.latency * (0.7 + Math.random() * 0.6);
+        
+        setTimeout(() => {
+            state[replicaKey].status = status;
+            state[replicaKey].version = version;
+            
+            updateNodeUI(uiPrefix, status, version);
+            flashNode(uiPrefix === 'r1' ? 'replica1' : 'replica2');
+            log(`SYNC: ${replicaKey} caught up to v${version}`, 'sync');
+        }, jitter);
+    }
+
+    // 3. READ OPERATION (Load Balanced across Replicas)
+    function performRead() {
+        // Simple Round-Robin or Random Load Balancing
+        const targets = ['replica1', 'replica2'];
+        const targetKey = targets[Math.floor(Math.random() * targets.length)];
+        const targetUI = targetKey === 'replica1' ? 'r1' : 'r2';
+        const targetNodeId = targetKey === 'replica1' ? 'replica1' : 'replica2';
+
+        const readData = state[targetKey];
+        const primaryData = state.primary;
+
+        // Check for Stale Read (Consistency Check)
+        const isStale = readData.version < primaryData.version;
+
+        flashNode(targetNodeId);
+        
+        if (isStale) {
+            log(`READ: Reading from ${targetKey}... returned '${readData.status}' (v${readData.version}). ⚠️ STALE! Primary is v${primaryData.version}`, 'alert');
+            markStale(targetUI);
+        } else {
+            log(`READ: Reading from ${targetKey}... returned '${readData.status}' (v${readData.version}). ✅ Fresh.`, 'read');
+            markFresh(targetUI);
+        }
+    }
+
+    // UI Helpers
+    function updateNodeUI(prefix, status, version) {
+        document.getElementById(`${prefix}-val-status`).innerText = status;
+        document.getElementById(`${prefix}-val-ver`).innerText = version;
+    }
+
+    function flashNode(elementId) {
+        const el = document.getElementById(elementId);
+        el.classList.remove('pulse');
+        void el.offsetWidth; // trigger reflow
+        el.classList.add('pulse');
+    }
+
+    function markStale(prefix) {
+        const el = document.getElementById(`${prefix}Store`);
+        el.style.backgroundColor = '#fee2e2';
+        setTimeout(() => el.style.backgroundColor = '#f1f5f9', 500);
+    }
+    
+    function markFresh(prefix) {
+        const el = document.getElementById(`${prefix}Store`);
+        el.style.backgroundColor = '#dcfce7';
+        setTimeout(() => el.style.backgroundColor = '#f1f5f9', 500);
+    }
+
+</script>
+</body>
+</html>
