@@ -2,155 +2,273 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Interactive MapReduce: The Factory</title>
+    <title>MapReduce Visualizer</title>
     <style>
-        body { font-family: 'Courier New', monospace; background: #f4f4f4; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        
-        /* The Zones */
-        .zone { 
-            background: white; 
-            border: 2px solid #333; 
-            margin-bottom: 20px; 
-            padding: 20px; 
-            border-radius: 8px;
-            box-shadow: 4px 4px 0px #aaa;
-        }
-        h2 { border-bottom: 2px solid #333; padding-bottom: 10px; }
-        
-        /* Interactive Elements */
-        .data-packet {
-            display: inline-block;
-            background: #ffeba7;
-            border: 1px solid #d4a017;
-            padding: 5px 10px;
-            margin: 5px;
-            font-weight: bold;
-            transition: all 0.5s ease;
-        }
-        
-        .reducer-bin {
-            border: 2px dashed #666;
-            padding: 10px;
-            margin: 10px 0;
-            min-height: 50px;
+        /* 1. The Setup: Clean, Professional Styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
         }
 
-        button {
-            background: #333; color: white; border: none; padding: 10px 20px; 
-            font-size: 16px; cursor: pointer;
+        h1 { color: #2c3e50; margin-bottom: 10px; }
+        p { color: #7f8c8d; margin-bottom: 30px; }
+
+        /* The Main Pipeline Container */
+        .pipeline {
+            width: 800px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            overflow: hidden;
         }
-        button:hover { background: #555; }
+
+        /* The 4 Stages */
+        .stage {
+            padding: 30px;
+            border-bottom: 1px solid #eee;
+            position: relative;
+        }
+        
+        .stage-header {
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #95a5a6;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* The Interactive Elements (Cards) */
+        .card-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            min-height: 60px;
+        }
+
+        /* The Data "Card" Look */
+        .data-card {
+            background: #fff;
+            border: 2px solid #3498db;
+            color: #2c3e50;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            animation: popIn 0.3s ease-out;
+            font-family: monospace;
+        }
+
+        .data-card.final {
+            background-color: #2ecc71; /* Green for success */
+            border-color: #27ae60;
+            color: white;
+        }
+
+        /* Grouping Box for the Shuffle Phase */
+        .group-box {
+            border: 2px dashed #bdc3c7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-right: 15px;
+            background: #f9f9f9;
+        }
+
+        /* Buttons */
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        /* Animation */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #bdc3c7;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>MapReduce: Under the Hood</h1>
-    <p><i>Input a sentence to see how a cluster of machines counts words.</i></p>
+    <h1>MapReduce Interactive Flow</h1>
+    <p>Visualizing the data lifecycle from Input to Reduced Output.</p>
 
-    <div class="zone" id="input-zone">
-        <h2>1. Input Split</h2>
-        <textarea id="inputText" rows="3" style="width: 100%; font-size: 18px;">apple banana apple carrot banana apple</textarea>
-        <br><br>
-        <button onclick="runMap()">Run Map Phase</button>
+    <div class="pipeline">
+        
+        <div class="stage">
+            <div class="stage-header">
+                1. Input Data (Splits)
+                <button onclick="runMap()" id="btn-map">Run Map &darr;</button>
+            </div>
+            <input type="text" id="input-text" value="deer bear deer river bear deer">
+            <small style="color: #999; display: block; margin-top: 5px;">Try changing the text above.</small>
+        </div>
+
+        <div class="stage" style="background-color: #fafafa;">
+            <div class="stage-header">
+                2. Map Phase (Key-Value Pairs)
+                <button onclick="runShuffle()" id="btn-shuffle" disabled>Run Shuffle &darr;</button>
+            </div>
+            <div class="card-container" id="map-container">
+                <span style="color:#ccc; font-style:italic;">Waiting for input...</span>
+            </div>
+        </div>
+
+        <div class="stage">
+            <div class="stage-header">
+                3. Shuffle Phase (Grouping by Key)
+                <button onclick="runReduce()" id="btn-reduce" disabled>Run Reduce &darr;</button>
+            </div>
+            <div class="card-container" id="shuffle-container">
+                <span style="color:#ccc; font-style:italic;">Waiting for map...</span>
+            </div>
+        </div>
+
+        <div class="stage" style="background-color: #e8f8f5;">
+            <div class="stage-header">
+                4. Reduce Phase (Final Aggregation)
+                <button onclick="reset()">Reset &#8635;</button>
+            </div>
+            <div class="card-container" id="reduce-container">
+                <span style="color:#ccc; font-style:italic;">Waiting for shuffle...</span>
+            </div>
+        </div>
+
     </div>
 
-    <div class="zone" id="map-zone">
-        <h2>2. Map Phase (Local Processing)</h2>
-        <p>Workers break text into (Key, Value) pairs.</p>
-        <div id="map-output"></div>
-    </div>
+    <script>
+        // Global State to hold our data between steps
+        let mappedData = [];
+        let shuffledData = {};
 
-    <div class="zone" id="shuffle-zone">
-        <h2>3. Shuffle & Sort (The Magic)</h2>
-        <p>The system groups all identical keys together.</p>
-        <button onclick="runShuffle()">Run Shuffle</button>
-        <div id="shuffle-output"></div>
-    </div>
+        // --- STEP 1: MAP FUNCTION ---
+        function runMap() {
+            const rawText = document.getElementById('input-text').value;
+            // Split text by spaces to simulate "Splits"
+            const words = rawText.trim().split(/\s+/);
+            
+            const container = document.getElementById('map-container');
+            container.innerHTML = ''; // Clear previous
+            mappedData = [];
 
-    <div class="zone" id="reduce-zone">
-        <h2>4. Reduce Phase (Aggregation)</h2>
-        <p>Reducers sum up the lists.</p>
-        <button onclick="runReduce()">Run Reduce</button>
-        <div id="reduce-output"></div>
-    </div>
-</div>
-
-<script>
-    // DATA STORE
-    let mapResults = [];
-    let shuffleResults = {};
-
-    // --- PHASE 1: MAP ---
-    function runMap() {
-        const text = document.getElementById('inputText').value;
-        const words = text.trim().split(/\s+/);
-        const container = document.getElementById('map-output');
-        container.innerHTML = '';
-        mapResults = [];
-
-        words.forEach((word, index) => {
-            // Simulate distributed delay
-            setTimeout(() => {
-                const packet = document.createElement('div');
-                packet.className = 'data-packet';
-                packet.innerText = `("${word}", 1)`;
-                container.appendChild(packet);
+            // The Logic: Create (Key, 1) for every word
+            words.forEach((word, index) => {
+                if(word === "") return;
                 
-                // Store purely for logic
-                mapResults.push({ key: word, val: 1 });
-            }, index * 200); // Staggered animation
-        });
-    }
+                // Visualization delay for effect
+                setTimeout(() => {
+                    const cleanWord = word.toLowerCase();
+                    
+                    // Add to data state
+                    mappedData.push({ key: cleanWord, value: 1 });
+                    
+                    // Create Visual Card
+                    const card = document.createElement('div');
+                    card.className = 'data-card';
+                    card.innerText = `('${cleanWord}', 1)`;
+                    container.appendChild(card);
+                }, index * 100);
+            });
 
-    // --- PHASE 2: SHUFFLE ---
-    function runShuffle() {
-        const container = document.getElementById('shuffle-output');
-        container.innerHTML = '';
-        shuffleResults = {};
+            // Enable next step
+            document.getElementById('btn-map').disabled = true;
+            document.getElementById('btn-shuffle').disabled = false;
+        }
 
-        // Group by Key
-        mapResults.forEach(item => {
-            if (!shuffleResults[item.key]) {
-                shuffleResults[item.key] = [];
+        // --- STEP 2: SHUFFLE FUNCTION ---
+        function runShuffle() {
+            const container = document.getElementById('shuffle-container');
+            container.innerHTML = '';
+            shuffledData = {};
+
+            // The Logic: Group by Key
+            mappedData.forEach(item => {
+                if (!shuffledData[item.key]) {
+                    shuffledData[item.key] = [];
+                }
+                shuffledData[item.key].push(item.value);
+            });
+
+            // Visualization: Create "Buckets" or Groups
+            let delay = 0;
+            for (const [key, values] of Object.entries(shuffledData)) {
+                setTimeout(() => {
+                    const groupBox = document.createElement('div');
+                    groupBox.className = 'group-box';
+                    
+                    // Label the bucket
+                    const label = document.createElement('div');
+                    label.innerText = `Key: "${key}"`;
+                    label.style.marginBottom = '5px';
+                    label.style.fontWeight = 'bold';
+                    label.style.color = '#7f8c8d';
+                    groupBox.appendChild(label);
+
+                    // Show the list of values inside: [1, 1, 1]
+                    const valuesDisplay = document.createElement('div');
+                    valuesDisplay.className = 'data-card';
+                    valuesDisplay.style.borderColor = '#95a5a6';
+                    valuesDisplay.innerText = `Values: [${values.join(', ')}]`;
+                    groupBox.appendChild(valuesDisplay);
+
+                    container.appendChild(groupBox);
+                }, delay);
+                delay += 300;
             }
-            shuffleResults[item.key].push(item.val);
-        });
 
-        // Visualize Bins
-        for (const [key, values] of Object.entries(shuffleResults)) {
-            const bin = document.createElement('div');
-            bin.className = 'reducer-bin';
-            bin.innerHTML = `<strong>Bin for "${key}":</strong> `;
-            
-            // Create the list visual: [1, 1, 1]
-            const listVisual = document.createElement('span');
-            listVisual.className = 'data-packet';
-            listVisual.innerText = `[${values.join(', ')}]`;
-            bin.appendChild(listVisual);
-            
-            container.appendChild(bin);
+            document.getElementById('btn-shuffle').disabled = true;
+            document.getElementById('btn-reduce').disabled = false;
         }
-    }
 
-    // --- PHASE 3: REDUCE ---
-    function runReduce() {
-        const container = document.getElementById('reduce-output');
-        container.innerHTML = '';
+        // --- STEP 3: REDUCE FUNCTION ---
+        function runReduce() {
+            const container = document.getElementById('reduce-container');
+            container.innerHTML = '';
 
-        for (const [key, values] of Object.entries(shuffleResults)) {
-            // THE USER LOGIC: Summing the array
-            const sum = values.reduce((a, b) => a + b, 0);
+            // The Logic: Sum the values in each group
+            let delay = 0;
+            for (const [key, values] of Object.entries(shuffledData)) {
+                setTimeout(() => {
+                    // Actual Math: Sum the array
+                    const finalSum = values.reduce((a, b) => a + b, 0);
 
-            const result = document.createElement('div');
-            result.className = 'data-packet';
-            result.style.backgroundColor = '#a7ffeb'; // Different color for final output
-            result.innerText = `("${key}", ${sum})`;
-            container.appendChild(result);
+                    // Visual Result
+                    const card = document.createElement('div');
+                    card.className = 'data-card final';
+                    card.innerText = `Result: ('${key}', ${finalSum})`;
+                    container.appendChild(card);
+                }, delay);
+                delay += 300;
+            }
+            
+            document.getElementById('btn-reduce').disabled = true;
         }
-    }
-</script>
 
+        function reset() {
+            location.reload();
+        }
+    </script>
 </body>
 </html>
