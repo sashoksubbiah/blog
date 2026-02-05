@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: Database Query Cache Simulator</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #e2e8f0;
+            --accent: #38bdf8;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --mono: 'Fira Code', 'Courier New', monospace;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+        
+        header { margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 1.5rem; color: var(--accent); }
+        .stats { font-size: 0.9rem; color: var(--warning); font-family: var(--mono); }
+
+        .container { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; flex: 1; overflow: hidden; }
+        
+        /* Panels */
+        .panel { background: var(--card-bg); border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column; overflow: hidden; }
+        .panel-header { background: #0f172a; padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; }
+        .panel-body { padding: 15px; overflow-y: auto; flex: 1; }
+
+        /* DB Table */
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #334155; }
+        th { color: var(--accent); }
+        tr.highlight { animation: flash 1s; }
+
+        /* Cache Blocks */
+        .cache-entry { background: #0f172a; border-left: 3px solid var(--success); padding: 10px; margin-bottom: 10px; font-size: 0.8rem; position: relative; }
+        .cache-entry .hash { font-family: var(--mono); color: #64748b; font-size: 0.7rem; margin-bottom: 4px; }
+        .cache-entry .query { font-family: var(--mono); color: var(--accent); margin-bottom: 4px; }
+        .cache-entry .meta { display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.7rem; }
+        
+        /* Console */
+        .console-input { background: #0f172a; border: 1px solid #334155; color: var(--success); font-family: var(--mono); padding: 15px; width: 100%; box-sizing: border-box; outline: none; resize: none; height: 100px; font-size: 1rem; }
+        .controls { display: flex; gap: 10px; margin-top: 10px; }
+        button { background: var(--accent); color: #0f172a; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.secondary { background: transparent; border: 1px solid #475569; color: var(--text); }
+        
+        /* Logs */
+        .log-entry { font-family: var(--mono); font-size: 0.8rem; margin-bottom: 6px; padding-left: 10px; border-left: 2px solid #334155; }
+        .log-hit { border-color: var(--success); color: var(--success); }
+        .log-miss { border-color: var(--warning); color: var(--warning); }
+        .log-write { border-color: var(--danger); color: var(--danger); }
+        .log-info { border-color: var(--accent); color: #94a3b8; }
+
+        @keyframes flash {
+            0% { background-color: var(--accent); color: #000; }
+            100% { background-color: transparent; }
+        }
+        
+        /* Educational Tooltips */
+        .tooltip { position: relative; cursor: help; border-bottom: 1px dotted #94a3b8; }
+        .tooltip:hover::after {
+            content: attr(data-tip);
+            position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+            background: #000; color: #fff; padding: 5px 10px; border-radius: 4px; font-size: 0.75rem; width: 200px; z-index: 10;
+        }
+
+        .latency-bar { height: 4px; width: 0%; background: var(--accent); transition: width 0.2s; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>Query Cache Deep Dive</h1>
+        <div style="font-size: 0.8rem; color: #94a3b8;">Interactive System Architecture Model</div>
+    </div>
+    <div class="stats" id="stats-display">
+        Hits: 0 | Misses: 0 | Prunes: 0
+    </div>
+</header>
+
+<div class="container">
+    <div class="panel">
+        <div class="panel-header">
+            <span>Disk Storage (Table: 'employees')</span>
+            <span style="font-size: 0.7rem; opacity: 0.7">InnoDB Sim</span>
+        </div>
+        <div class="panel-body" id="db-view">
+            </div>
+    </div>
+
+    <div class="panel" style="flex: 2;">
+        <div class="panel-header">Query Executor & Parser</div>
+        <div class="panel-body" style="display: flex; flex-direction: column;">
+            <div id="logs" style="flex: 1; overflow-y: auto; background: #000; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                <div class="log-info">System initialized. Waiting for queries...</div>
+            </div>
+            
+            <div style="margin-bottom: 5px; font-size: 0.8rem; color: #94a3b8;">SQL Console</div>
+            <textarea id="sql-input" class="console-input" spellcheck="false">SELECT * FROM employees WHERE department = 'Engineering'</textarea>
+            <div class="latency-bar" id="latency-viz"></div>
+            <div class="controls">
+                <button onclick="executeQuery()">Execute Query</button>
+                <button class="secondary" onclick="insertRandom()">Simulate External INSERT</button>
+                <button class="secondary" onclick="clearCache()">Flush Cache</button>
+            </div>
+            
+            <div style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 10px;">
+                <h4 style="margin: 0 0 10px 0; font-size: 0.9rem;">Try these scenarios to build intuition:</h4>
+                <ul style="font-size: 0.8rem; padding-left: 20px; color: #94a3b8; line-height: 1.6;">
+                    <li><a href="#" onclick="setQuery(`SELECT * FROM employees WHERE id = 1`); return false;" style="color: var(--accent)">Scenario A:</a> Run twice. Observe the "Hit".</li>
+                    <li><a href="#" onclick="setQuery(`select * from employees where id = 1`); return false;" style="color: var(--accent)">Scenario B:</a> Change case/spacing. Observe "Miss" (Hashing Sensitivity).</li>
+                    <li><a href="#" onclick="setQuery(`SELECT * FROM employees WHERE id = 1 AND 1=1`); return false;" style="color: var(--accent)">Scenario C:</a> Add logical tautology. Observe "Miss".</li>
+                    <li><a href="#" onclick="setQuery(`SELECT * FROM employees WHERE created_at < NOW()`); return false;" style="color: var(--accent)">Scenario D:</a> Use NOW(). Observe "Bypass" (Nondeterminism).</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <span>Query Cache (RAM)</span>
+            <span id="mem-usage" style="font-size: 0.7rem; color: var(--success)">0% Used</span>
+        </div>
+        <div class="panel-body" id="cache-view">
+            <div style="text-align: center; color: #64748b; margin-top: 50px; font-size: 0.8rem;">Cache is empty</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- STATE ---
+    const DB = [
+        { id: 1, name: "Alice", role: "Dev", department: "Engineering", salary: 120000 },
+        { id: 2, name: "Bob", role: "Manager", department: "Sales", salary: 95000 },
+        { id: 3, name: "Charlie", role: "Dev", department: "Engineering", salary: 115000 },
+        { id: 4, name: "Diana", role: "Designer", department: "Product", salary: 105000 },
+        { id: 5, name: "Evan", role: "Dev", department: "Engineering", salary: 125000 },
+    ];
+
+    const CACHE = new Map(); // Key: Hash, Value: { query, result, timestamp }
+    const STATS = { hits: 0, misses: 0, prunes: 0 };
+
+    // --- UTILS ---
+    const log = (msg, type = 'info') => {
+        const logs = document.getElementById('logs');
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        entry.textContent = `> ${msg}`;
+        logs.appendChild(entry);
+        logs.scrollTop = logs.scrollHeight;
+    };
+
+    // Simple string hash function for demo
+    const hashQuery = (str) => {
+        let hash = 0;
+        if (str.length === 0) return hash;
+        for (let i = 0; i < str.length; i++) {
+            const chr = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + chr;
+            hash |= 0;
+        }
+        return "0x" + Math.abs(hash).toString(16).substring(0, 8);
+    };
+
+    // --- CORE LOGIC ---
+
+    function renderDB() {
+        const container = document.getElementById('db-view');
+        let html = '<table><thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Role</th></tr></thead><tbody>';
+        DB.forEach(row => {
+            html += `<tr id="row-${row.id}"><td>${row.id}</td><td>${row.name}</td><td>${row.department}</td><td>${row.role}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    function renderCache() {
+        const container = document.getElementById('cache-view');
+        const usageEl = document.getElementById('mem-usage');
+        container.innerHTML = '';
+        
+        if (CACHE.size === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #64748b; margin-top: 50px; font-size: 0.8rem;">Cache is empty</div>';
+            usageEl.textContent = "0% Used";
+            return;
+        }
+
+        usageEl.textContent = `${Math.min(CACHE.size * 10, 100)}% Used`;
+
+        CACHE.forEach((val, key) => {
+            const div = document.createElement('div');
+            div.className = 'cache-entry';
+            div.innerHTML = `
+                <div class="hash">HASH: ${key}</div>
+                <div class="query">${val.query}</div>
+                <div class="meta">
+                    <span>Rows: ${val.result.length}</span>
+                    <span>Age: ${((Date.now() - val.timestamp)/1000).toFixed(1)}s</span>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function updateStats() {
+        document.getElementById('stats-display').textContent = `Hits: ${STATS.hits} | Misses: ${STATS.misses} | Prunes: ${STATS.prunes}`;
+    }
+
+    function setQuery(q) {
+        document.getElementById('sql-input').value = q;
+    }
+
+    function simulateLatency(duration, callback) {
+        const bar = document.getElementById('latency-viz');
+        bar.style.width = "0%";
+        bar.style.transition = 'none';
+        
+        // Force reflow
+        void bar.offsetWidth;
+
+        bar.style.transition = `width ${duration}ms linear`;
+        bar.style.width = "100%";
+
+        setTimeout(() => {
+            bar.style.width = "0%";
+            callback();
+        }, duration);
+    }
+
+    // --- EXECUTION ENGINE ---
+
+    function executeQuery() {
+        const rawSql = document.getElementById('sql-input').value.trim();
+        if(!rawSql) return;
+
+        // 1. Check for Nondeterminism (Bypass Logic)
+        const upperSql = rawSql.toUpperCase();
+        if (upperSql.includes('NOW()') || upperSql.includes('RAND()') || upperSql.includes('UUID()')) {
+            log(`Nondeterministic function detected. Bypassing Cache.`, 'info');
+            simulateLatency(800, () => { // Slow disk read
+                runSelect(rawSql, false);
+            });
+            return;
+        }
+
+        // 2. Check for Writes
+        if (upperSql.startsWith('INSERT') || upperSql.startsWith('UPDATE') || upperSql.startsWith('DELETE')) {
+            simulateLatency(1000, () => {
+                log(`Write command detected. Executing...`, 'write');
+                // For demo, we just simulate the cache invalidation effect
+                invalidateTable('employees'); 
+                log(`Write complete. Affected tables invalidated.`, 'write');
+            });
+            return;
+        }
+
+        // 3. Select Logic (Cache Check)
+        const queryHash = hashQuery(rawSql); // Strict string hashing
+        
+        if (CACHE.has(queryHash)) {
+            // CACHE HIT
+            log(`Cache HIT! (Hash: ${queryHash})`, 'hit');
+            STATS.hits++;
+            simulateLatency(50, () => { // Fast RAM read
+                 // Just visual feedback
+            });
+        } else {
+            // CACHE MISS
+            log(`Cache MISS. Reading from Disk... (Hash: ${queryHash})`, 'miss');
+            STATS.misses++;
+            
+            simulateLatency(800, () => { // Slow disk read
+                const result = runSelect(rawSql, true);
+                if (result) {
+                    CACHE.set(queryHash, {
+                        query: rawSql,
+                        result: result,
+                        timestamp: Date.now()
+                    });
+                    renderCache();
+                    log(`Result stored in Cache.`, 'info');
+                }
+            });
+        }
+        updateStats();
+    }
+
+    // A fake SQL parser/executor for the demo
+    function runSelect(sql, isSelect) {
+        // Very basic parsing just for the demo rows
+        const lower = sql.toLowerCase();
+        let results = DB;
+
+        if (lower.includes('where id =')) {
+            const id = parseInt(lower.split('id =')[1]);
+            results = DB.filter(d => d.id === id);
+        } else if (lower.includes('where department =')) {
+            const dept = lower.split("department =")[1].replace(/['"]/g, '').trim();
+            results = DB.filter(d => d.department.toLowerCase() === dept.toLowerCase());
+        }
+        
+        // Highlight rows in UI
+        results.forEach(r => {
+            const el = document.getElementById(`row-${r.id}`);
+            if(el) {
+                el.classList.remove('highlight');
+                void el.offsetWidth; // trigger reflow
+                el.classList.add('highlight');
+            }
+        });
+        
+        return results;
+    }
+
+    function invalidateTable(tableName) {
+        // In a real Query Cache, ANY write to a table invalidates ALL queries referencing that table.
+        // This is the "Thundering Herd" problem source.
+        let prunedCount = 0;
+        
+        // We delete EVERYTHING for this demo as we only have one table
+        prunedCount = CACHE.size;
+        CACHE.clear();
+        
+        STATS.prunes += prunedCount;
+        updateStats();
+        renderCache();
+        
+        if(prunedCount > 0) {
+            log(`Invalidation: ${prunedCount} queries flushed due to write on '${tableName}'`, 'write');
+        }
+    }
+
+    function insertRandom() {
+        // Simulate an external write
+        simulateLatency(500, () => {
+            const newId = DB.length + 1;
+            DB.push({ id: newId, name: "New Hire", role: "Intern", department: "Ops", salary: 60000 });
+            renderDB();
+            log(`External INSERT into 'employees'.`, 'write');
+            invalidateTable('employees');
+        });
+    }
+
+    function clearCache() {
+        CACHE.clear();
+        renderCache();
+        log("Cache manually flushed.", 'info');
+    }
+
+    // Init
+    renderDB();
+    renderCache();
+
+</script>
+</body>
+</html>
