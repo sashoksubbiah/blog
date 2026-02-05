@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: Composite Indexes Simulator</title>
+    <style>
+        :root { --primary: #2563eb; --sec: #1e293b; --accent: #f59e0b; --bg: #f8fafc; --err: #ef4444; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--sec); line-height: 1.6; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        /* Layout */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; position: relative; }
+        
+        /* Visuals */
+        .row { display: flex; padding: 8px; border-bottom: 1px solid #eee; transition: all 0.3s; align-items: center; font-size: 0.9em; }
+        .row:last-child { border-bottom: none; }
+        .row.scanned { background-color: #fee2e2; border-left: 4px solid var(--err); } 
+        .row.hit { background-color: #dcfce7; border-left: 4px solid #22c55e; font-weight: bold; }
+        .row.index-node { justify-content: space-between; cursor: default; }
+        .row.index-hit { background-color: #dbeafe; border-left: 4px solid var(--primary); }
+        .row.disabled { opacity: 0.3; }
+
+        /* Controls */
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: transform 0.1s; }
+        button:hover { transform: translateY(-1px); filter: brightness(110%); }
+        button.secondary { background: white; border: 2px solid var(--primary); color: var(--primary); }
+        input, select { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+        .control-group { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+
+        /* Stats & Logs */
+        .stats-box { background: #1e293b; color: #a5f3fc; padding: 15px; border-radius: 8px; font-family: monospace; margin-top: 15px; height: 150px; overflow-y: auto; }
+        .log-entry { margin: 4px 0; border-bottom: 1px solid #334155; padding-bottom: 2px; }
+        .log-warn { color: #fca5a5; }
+        
+        h2 { border-bottom: 2px solid var(--primary); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .badge { font-size: 0.8em; background: var(--accent); color: white; padding: 2px 8px; border-radius: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header style="text-align: center; margin-bottom: 30px;">
+        <h1>Composite Index Simulator</h1>
+        <p>Visualize <strong>Leftmost Prefixing</strong> and Multi-Column Sorting</p>
+    </header>
+
+    <div class="panel">
+        <div style="display: flex; gap: 20px;">
+            
+            <div style="flex: 1;">
+                <h3>1. Construct Query</h3>
+                <div class="control-group">
+                    <code>SELECT * FROM Users WHERE</code><br><br>
+                    <div style="display:flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                        <input type="checkbox" id="filterDept" checked>
+                        <label>Department = </label>
+                        <select id="valDept">
+                            <option value="Engineering">Engineering</option>
+                            <option value="Sales">Sales</option>
+                            <option value="HR">HR</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap: 10px; align-items: center;">
+                        <input type="checkbox" id="filterSalary">
+                        <label>Salary > </label>
+                        <input type="number" id="valSalary" value="80000" step="10000" style="width: 100px;">
+                    </div>
+                </div>
+                <button onclick="runQuery()">Run Query</button>
+                <button class="secondary" onclick="generateData()">New Data</button>
+            </div>
+
+            <div style="flex: 1; border-left: 1px solid #e2e8f0; padding-left: 20px;">
+                <h3>2. Database Schema Strategy</h3>
+                <div class="control-group">
+                    <label style="display:block; margin-bottom:5px; font-weight:bold;">Active Index:</label>
+                    <select id="indexStrategy" onchange="buildIndex()" style="width: 100%; padding: 10px;">
+                        <option value="none">No Index (Heap Scan)</option>
+                        <option value="simple">Simple Index (Department)</option>
+                        <option value="composite">Composite Index (Department, Salary)</option>
+                    </select>
+                    <div id="indexDesc" style="margin-top: 10px; font-size: 0.85em; color: #64748b;">
+                        Table scan only. O(N).
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+        
+        <div class="panel" id="tablePanel">
+            <h2>Disk Storage (Heap)</h2>
+            <div id="tableContainer"></div>
+        </div>
+
+        <div class="panel" id="indexPanel" style="opacity: 0.5;">
+            <h2>
+                Index Structure
+                <span class="badge" id="idxBadge">Inactive</span>
+            </h2>
+            <div id="indexContainer"></div>
+        </div>
+
+    </div>
+
+    <div class="stats-box" id="consoleOutput">
+        <div>> System Ready.</div>
+    </div>
+</div>
+
+<script>
+    // --- State ---
+    const DEPTS = ['Engineering', 'Sales', 'HR', 'Marketing'];
+    let tableData = [];
+    let indexData = []; 
+    
+    // --- Setup ---
+    function generateData() {
+        tableData = [];
+        for(let i=0; i<16; i++) {
+            tableData.push({
+                id: i,
+                dept: DEPTS[Math.floor(Math.random() * DEPTS.length)],
+                salary: Math.floor(Math.random() * 60000) + 40000 // 40k to 100k
+            });
+        }
+        buildIndex(); // Rebuild index based on current strategy
+    }
+
+    function buildIndex() {
+        const strategy = document.getElementById('indexStrategy').value;
+        const indexPanel = document.getElementById('indexPanel');
+        const desc = document.getElementById('indexDesc');
+        const badge = document.getElementById('idxBadge');
+
+        // Reset
+        indexData = [];
+        indexPanel.style.opacity = (strategy === 'none') ? "0.5" : "1";
+
+        if (strategy === 'none') {
+            desc.innerText = "No helper structure. Database must read every row.";
+            badge.innerText = "Inactive";
+        } 
+        else if (strategy === 'simple') {
+            desc.innerHTML = "Sorted by <strong>Department</strong>. Useful for finding Departments.";
+            badge.innerText = "Sorted: Dept";
+            // Map and Sort
+            indexData = tableData.map(r => ({ keys: [r.dept], ptr: r.id }));
+            indexData.sort((a, b) => a.keys[0].localeCompare(b.keys[0]));
+        } 
+        else if (strategy === 'composite') {
+            desc.innerHTML = "Sorted by <strong>Department</strong>, THEN <strong>Salary</strong>.<br>Think: Phonebook (Last Name, First Name).";
+            badge.innerText = "Sorted: Dept, Salary";
+            // Map and Multi-Sort
+            indexData = tableData.map(r => ({ keys: [r.dept, r.salary], ptr: r.id }));
+            indexData.sort((a, b) => {
+                // Sort by Dept first
+                if (a.keys[0] !== b.keys[0]) return a.keys[0].localeCompare(b.keys[0]);
+                // Then by Salary
+                return a.keys[1] - b.keys[1];
+            });
+        }
+
+        render();
+    }
+
+    // --- Rendering ---
+    function render() {
+        // Render Table
+        const tableCont = document.getElementById('tableContainer');
+        tableCont.innerHTML = `<div style="display:flex; font-weight:bold; padding:5px; border-bottom:2px solid #ddd;"><div style="width:30px">ID</div><div style="flex:1">Dept</div><div style="flex:1">Salary</div></div>`;
+        
+        tableData.forEach(row => {
+            const d = document.createElement('div');
+            d.className = 'row';
+            d.id = `row-${row.id}`;
+            d.innerHTML = `<div style="width:30px; color:#aaa">#${row.id}</div><div style="flex:1">${row.dept}</div><div style="flex:1">$${row.salary.toLocaleString()}</div>`;
+            tableCont.appendChild(d);
+        });
+
+        // Render Index
+        const idxCont = document.getElementById('indexContainer');
+        idxCont.innerHTML = '';
+        if (indexData.length > 0) {
+            idxCont.innerHTML = `<div style="display:flex; font-weight:bold; padding:5px; border-bottom:2px solid #ddd;"><div style="flex:1">Key</div><div style="width:40px">Ptr</div></div>`;
+            indexData.forEach((node, i) => {
+                const d = document.createElement('div');
+                d.className = 'row index-node';
+                d.id = `idx-${i}`;
+                
+                // Format Key Display
+                let keyDisplay = node.keys[0];
+                if(node.keys[1]) keyDisplay += ` | <span style="color:var(--accent)">$${node.keys[1].toLocaleString()}</span>`;
+
+                d.innerHTML = `<div style="flex:1">${keyDisplay}</div><div style="width:40px; font-family:monospace;">#${node.ptr}</div>`;
+                idxCont.appendChild(d);
+            });
+        } else {
+            idxCont.innerHTML = `<div style="padding:20px; text-align:center; color:#999;">Index Does Not Exist</div>`;
+        }
+    }
+
+    // --- Execution Engine ---
+    async function runQuery() {
+        // Inputs
+        const filterDept = document.getElementById('filterDept').checked;
+        const valDept = document.getElementById('valDept').value;
+        const filterSalary = document.getElementById('filterSalary').checked;
+        const valSalary = parseInt(document.getElementById('valSalary').value);
+        const strategy = document.getElementById('indexStrategy').value;
+
+        // Reset
+        document.querySelectorAll('.row').forEach(r => {
+            r.className = r.classList.contains('index-node') ? 'row index-node' : 'row';
+        });
+
+        // Validation
+        if (!filterDept && !filterSalary) {
+            log("❌ Query Error: Please select at least one filter.");
+            return;
+        }
+
+        let queryDesc = "SELECT * FROM Users WHERE ";
+        if (filterDept) queryDesc += `Dept='${valDept}' `;
+        if (filterDept && filterSalary) queryDesc += "AND ";
+        if (filterSalary) queryDesc += `Salary > ${valSalary}`;
+        
+        log(`\n> EXECUTING: ${queryDesc}`);
+
+        // Optimizer Logic: Choose Path
+        if (strategy === 'none') {
+            await tableScan(filterDept, valDept, filterSalary, valSalary);
+        } 
+        else if (strategy === 'simple') {
+            // Index is on DEPT
+            if (filterDept) {
+                await indexSeek(filterDept, valDept, filterSalary, valSalary, 'simple');
+            } else {
+                log("⚠️ Index Skipped: Index is on 'Dept', but query does not filter by 'Dept'.");
+                await tableScan(filterDept, valDept, filterSalary, valSalary);
+            }
+        } 
+        else if (strategy === 'composite') {
+            // Index is on (DEPT, SALARY)
+            if (filterDept) {
+                await indexSeek(filterDept, valDept, filterSalary, valSalary, 'composite');
+            } else {
+                log("⚠️ Index Skipped: Violates Leftmost Prefix Rule! Query filters 'Salary' but Index starts with 'Dept'.");
+                await tableScan(filterDept, valDept, filterSalary, valSalary);
+            }
+        }
+    }
+
+    async function tableScan(fDept, vDept, fSal, vSal) {
+        log("Strategy: 🔍 FULL TABLE SCAN");
+        let ops = 0; 
+        for(const row of tableData) {
+            const el = document.getElementById(`row-${row.id}`);
+            el.classList.add('scanned');
+            ops++;
+            await sleep(100);
+
+            // Check Logic
+            let match = true;
+            if (fDept && row.dept !== vDept) match = false;
+            if (fSal && row.salary <= vSal) match = false;
+
+            if (match) {
+                el.classList.add('hit');
+                el.classList.remove('scanned');
+            }
+        }
+        log(`Finished. Scanned ${ops} rows.`);
+    }
+
+    async function indexSeek(fDept, vDept, fSal, vSal, type) {
+        log("Strategy: ⚡ INDEX SEEK");
+        let ops = 0;
+        let found = 0;
+
+        // Visual Scan of Index
+        for(let i=0; i<indexData.length; i++) {
+            const node = indexData[i];
+            const el = document.getElementById(`idx-${i}`);
+            
+            // Optimization: Stop if we passed the Department
+            // Since index is sorted by Dept, if node.dept > target, we are done.
+            if (node.keys[0] > vDept) break;
+            
+            // In a real B-Tree we jump, here we visually skip non-matches quickly
+            if (node.keys[0] < vDept) continue; 
+
+            // Matches Department!
+            // Now check Salary inside the index (if composite)
+            let isCandidate = true;
+            
+            if (type === 'composite' && fSal) {
+                // We can filter Salary directly IN THE INDEX without going to table
+                if (node.keys[1] <= vSal) isCandidate = false;
+            }
+
+            if (isCandidate) {
+                el.classList.add('index-hit');
+                ops++; // Read index
+                
+                // Lookup Table (Pointer Chase)
+                const tableRow = document.getElementById(`row-${node.ptr}`);
+                tableRow.classList.add('hit');
+                ops++; // Read table
+                
+                // Double check logic (Simulating "Residual Predicate")
+                // If it was a simple index, we haven't checked salary yet!
+                if (type === 'simple' && fSal) {
+                    const realRow = tableData.find(r => r.id === node.ptr);
+                    if (realRow.salary <= vSal) {
+                        tableRow.classList.remove('hit'); // Oops, false positive from index
+                        tableRow.classList.add('scanned'); // Still had to read it though!
+                        log(`  (Filter reject: Dept matched, but Salary ${realRow.salary} too low)`);
+                    } else {
+                        found++;
+                    }
+                } else {
+                    found++;
+                }
+                await sleep(200);
+            }
+        }
+        log(`Finished. Found ${found}. Total Ops: ${ops}`);
+    }
+
+    function log(msg) {
+        const c = document.getElementById('consoleOutput');
+        const d = document.createElement('div');
+        d.className = 'log-entry';
+        if (msg.includes('⚠️')) d.className += ' log-warn';
+        d.innerText = msg;
+        c.insertBefore(d, c.firstChild);
+    }
+    
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    
+    // Init
+    generateData();
+</script>
+</body>
+</html>
