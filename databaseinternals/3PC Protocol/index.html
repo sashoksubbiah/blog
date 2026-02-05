@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3PC Visualizer: The Non-Blocking Protocol</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
+        .node { transition: all 0.3s ease; }
+        .message-line { stroke-dasharray: 10; animation: dash 1s linear infinite; }
+        @keyframes dash { to { stroke-dashoffset: -20; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Constants & Types ---
+        const PHASES = {
+            INIT: 'INIT',
+            CAN_COMMIT: 'PHASE 1: CAN_COMMIT (Voting)',
+            PRE_COMMIT: 'PHASE 2: PRE_COMMIT (Preparation)',
+            DO_COMMIT: 'PHASE 3: DO_COMMIT (Finalization)',
+            FINISHED: 'FINISHED'
+        };
+
+        const NODE_STATE = {
+            WAITING: 'WAITING',
+            PREPARED: 'PREPARED (Voted Yes)',
+            PRE_COMMITTED: 'PRE_COMMITTED',
+            COMMITTED: 'COMMITTED',
+            ABORTED: 'ABORTED'
+        };
+
+        // --- Main Component ---
+        function App() {
+            // System State
+            const [logs, setLogs] = useState(["System initialized. Ready to start transaction."]);
+            const [coordinator, setCoordinator] = useState({ alive: true, state: NODE_STATE.WAITING });
+            const [cohorts, setCohorts] = useState([
+                { id: 1, alive: true, state: NODE_STATE.WAITING, vote: true },
+                { id: 2, alive: true, state: NODE_STATE.WAITING, vote: true }
+            ]);
+            const [currentPhase, setCurrentPhase] = useState(PHASES.INIT);
+            const [messages, setMessages] = useState([]); // Visual floating messages
+
+            // Helper to add log
+            const addLog = (msg) => setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
+
+            // --- Protocol Logic ---
+
+            // Step 1: Start Transaction (Coordinator sends CanCommit)
+            const startTransaction = () => {
+                if (!coordinator.alive) { addLog("❌ Cannot start: Coordinator is dead."); return; }
+                setCurrentPhase(PHASES.CAN_COMMIT);
+                addLog("COORD: Sending 'CanCommit?' request to cohorts...");
+                broadcastMessage("CanCommit?");
+                
+                // Simulate Network Delay then Process Votes
+                setTimeout(() => processVotes(), 2000);
+            };
+
+            // Step 1.5: Cohorts receive request and Vote
+            const processVotes = () => {
+                let allYes = true;
+                const newCohorts = cohorts.map(c => {
+                    if (!c.alive) { allYes = false; return c; }
+                    // Logic: If cohort is alive, it votes based on user setting
+                    if (c.vote) {
+                        addLog(`COHORT ${c.id}: Voted YES. State -> PREPARED`);
+                        return { ...c, state: NODE_STATE.PREPARED };
+                    } else {
+                        addLog(`COHORT ${c.id}: Voted NO. State -> ABORTED`);
+                        allYes = false;
+                        return { ...c, state: NODE_STATE.ABORTED };
+                    }
+                });
+                setCohorts(newCohorts);
+
+                // Coordinator Decision Logic
+                setTimeout(() => {
+                    if (!coordinator.alive) return; // Coordinator crash simulation
+
+                    if (allYes) {
+                        addLog("COORD: All votes YES. Entering Phase 2.");
+                        enterPreCommit();
+                    } else {
+                        addLog("COORD: Received a NO (or Timeout). Aborting.");
+                        abortTransaction();
+                    }
+                }, 1500);
+            };
+
+            // Step 2: PreCommit Phase
+            const enterPreCommit = () => {
+                setCurrentPhase(PHASES.PRE_COMMIT);
+                setCoordinator(prev => ({ ...prev, state: NODE_STATE.PRE_COMMITTED }));
+                addLog("COORD: Sending 'PreCommit' message...");
+                broadcastMessage("PreCommit");
+
+                setTimeout(() => {
+                    // Cohorts acknowledge
+                    const newCohorts = cohorts.map(c => {
+                        if (c.alive && c.state === NODE_STATE.PREPARED) {
+                            addLog(`COHORT ${c.id}: Received PreCommit. Ack sent. State -> PRE_COMMITTED`);
+                            return { ...c, state: NODE_STATE.PRE_COMMITTED };
+                        }
+                        return c;
+                    });
+                    setCohorts(newCohorts);
+                    
+                    setTimeout(() => finalizeCommit(), 2000);
+                }, 1500);
+            };
+
+            // Step 3: DoCommit Phase
+            const finalizeCommit = () => {
+                if (!coordinator.alive) return;
+
+                setCurrentPhase(PHASES.DO_COMMIT);
+                setCoordinator(prev => ({ ...prev, state: NODE_STATE.COMMITTED }));
+                addLog("COORD: Received Acks. Sending 'DoCommit'...");
+                broadcastMessage("DoCommit");
+
+                setTimeout(() => {
+                    const newCohorts = cohorts.map(c => {
+                        if (c.alive && c.state === NODE_STATE.PRE_COMMITTED) {
+                            addLog(`COHORT ${c.id}: Received DoCommit. Committing. State -> COMMITTED`);
+                            return { ...c, state: NODE_STATE.COMMITTED };
+                        }
+                        return c;
+                    });
+                    setCohorts(newCohorts);
+                    setCurrentPhase(PHASES.FINISHED);
+                    addLog("--- Transaction Successful ---");
+                }, 1500);
+            };
+
+            const abortTransaction = () => {
+                setCoordinator(prev => ({ ...prev, state: NODE_STATE.ABORTED }));
+                broadcastMessage("Abort");
+                const newCohorts = cohorts.map(c => c.alive ? { ...c, state: NODE_STATE.ABORTED } : c);
+                setCohorts(newCohorts);
+                setCurrentPhase(PHASES.FINISHED);
+                addLog("--- Transaction Aborted ---");
+            };
+
+            // --- Visualization Helpers ---
+            const broadcastMessage = (text) => {
+                setMessages([{ text, id: Date.now() }]);
+                setTimeout(() => setMessages([]), 1000);
+            };
+
+            const toggleCohortAlive = (id) => {
+                setCohorts(prev => prev.map(c => c.id === id ? { ...c, alive: !c.alive } : c));
+                addLog(`User Action: Toggled Cohort ${id} alive status.`);
+            };
+
+            const toggleCohortVote = (id) => {
+                setCohorts(prev => prev.map(c => c.id === id ? { ...c, vote: !c.vote } : c));
+            };
+
+            const killCoordinator = () => {
+                setCoordinator(prev => ({ ...prev, alive: !prev.alive }));
+                addLog(`User Action: Toggled Coordinator alive status.`);
+            };
+
+            const reset = () => {
+                setCoordinator({ alive: true, state: NODE_STATE.WAITING });
+                setCohorts([
+                    { id: 1, alive: true, state: NODE_STATE.WAITING, vote: true },
+                    { id: 2, alive: true, state: NODE_STATE.WAITING, vote: true }
+                ]);
+                setCurrentPhase(PHASES.INIT);
+                setLogs(["System Reset."]);
+            };
+
+            // --- Render ---
+            return (
+                <div className="flex flex-col h-screen p-6 max-w-6xl mx-auto">
+                    <header className="mb-6 border-b border-slate-700 pb-4">
+                        <h1 className="text-3xl font-bold text-blue-400">Three-Phase Commit (3PC) Interactive</h1>
+                        <p className="text-slate-400 mt-2">
+                            A non-blocking consensus protocol. Watch how the <b>PreCommit</b> phase acts as a safety buffer.
+                        </p>
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow">
+                        
+                        {/* LEFT: Simulation Visualizer */}
+                        <div className="md:col-span-2 bg-slate-800 rounded-xl p-6 relative border border-slate-700 shadow-xl">
+                            <div className="absolute top-4 left-4 bg-slate-900 px-3 py-1 rounded text-xs font-mono text-yellow-400 border border-yellow-400/30">
+                                {currentPhase}
+                            </div>
+
+                            {/* Coordinator Node */}
+                            <div className="flex justify-center mb-16 mt-10">
+                                <div className={`relative p-6 rounded-full w-32 h-32 flex flex-col items-center justify-center border-4 ${coordinator.alive ? 'border-blue-500 bg-blue-900/20' : 'border-red-600 bg-red-900/50'}`}>
+                                    <span className="font-bold">Coordinator</span>
+                                    <span className="text-xs mt-1 text-slate-300">{coordinator.state}</span>
+                                    {!coordinator.alive && <span className="absolute -top-2 -right-2 bg-red-600 text-white px-2 rounded-full text-xs">DEAD</span>}
+                                    
+                                    {/* Messages broadcasting down */}
+                                    {messages.map(m => (
+                                        <div key={m.id} className="absolute -bottom-8 bg-white text-black text-xs px-2 py-1 rounded shadow-lg animate-bounce">
+                                            {m.text} ↓
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Cohort Nodes */}
+                            <div className="flex justify-around mt-10">
+                                {cohorts.map(c => (
+                                    <div key={c.id} className={`relative p-4 rounded-xl w-40 flex flex-col items-center border-2 ${c.alive ? 'border-green-500 bg-green-900/10' : 'border-red-600 bg-red-900/50 grayscale'}`}>
+                                        <span className="font-bold">Cohort {c.id}</span>
+                                        <span className="text-xs text-slate-400 my-1">{c.state}</span>
+                                        <div className="flex gap-2 mt-2">
+                                            <button onClick={() => toggleCohortVote(c.id)} className={`px-2 py-0.5 text-xs rounded ${c.vote ? 'bg-green-600' : 'bg-red-600'}`}>
+                                                Vote: {c.vote ? 'YES' : 'NO'}
+                                            </button>
+                                            <button onClick={() => toggleCohortAlive(c.id)} className="px-2 py-0.5 text-xs bg-slate-600 rounded">
+                                                {c.alive ? 'Kill' : 'Revive'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* RIGHT: Controls & Logs */}
+                        <div className="flex flex-col gap-4">
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                <h3 className="font-bold text-lg mb-3 text-white">Controls</h3>
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={startTransaction} disabled={currentPhase !== PHASES.INIT} className="bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed transition">
+                                        ▶ Start Transaction
+                                    </button>
+                                    <button onClick={reset} className="bg-slate-600 hover:bg-slate-500 text-white py-2 rounded transition">
+                                        ↺ Reset System
+                                    </button>
+                                    <div className="border-t border-slate-600 my-2"></div>
+                                    <p className="text-xs text-slate-400 mb-1">Fault Injection:</p>
+                                    <button onClick={killCoordinator} className={`py-2 rounded font-bold border ${coordinator.alive ? 'border-red-500 text-red-400 hover:bg-red-900/30' : 'bg-green-600 text-white border-transparent'}`}>
+                                        {coordinator.alive ? '💀 Kill Coordinator' : '❤ Revive Coordinator'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="bg-black/50 p-4 rounded-xl border border-slate-700 flex-grow overflow-hidden flex flex-col">
+                                <h3 className="font-bold text-sm mb-2 text-slate-300">Transaction Log</h3>
+                                <div className="overflow-y-auto text-xs font-mono space-y-1 pr-2 flex-grow text-green-400">
+                                    {logs.map((log, i) => (
+                                        <div key={i} className="border-b border-slate-800 pb-1">{log}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
