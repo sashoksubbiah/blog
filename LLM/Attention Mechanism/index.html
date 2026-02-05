@@ -11,273 +11,409 @@
             --h1-color: #ec4899; /* Pink */
             --h2-color: #3b82f6; /* Blue */
             --panel: #1e293b;
+            --border: #334155;
         }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; overflow: hidden; }
-        .container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; height: 95vh; }
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            margin: 0; 
+            padding: 0; 
+            overflow-x: hidden; /* Prevent horizontal scroll only */
+            min-height: 100vh;
+        }
         
-        /* Controls */
-        .controls { background: var(--panel); padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10; }
-        input { background: #334155; border: 1px solid #475569; color: white; padding: 8px; width: 300px; border-radius: 4px; }
-        button { padding: 8px 16px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; margin-left: 10px; }
-        .btn-h1 { background: rgba(236, 72, 153, 0.2); color: var(--h1-color); border: 1px solid var(--h1-color); }
-        .btn-h2 { background: rgba(59, 130, 246, 0.2); color: var(--h2-color); border: 1px solid var(--h2-color); }
-        .btn-active { background: currentColor; color: #000; }
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding-bottom: 50px;
+            position: relative;
+        }
+        
+        /* Sticky Controls */
+        .controls { 
+            background: rgba(30, 41, 59, 0.95); 
+            padding: 20px; 
+            position: sticky; 
+            top: 0; 
+            z-index: 50; 
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .input-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+        
+        input { 
+            background: #0f172a; 
+            border: 1px solid var(--border); 
+            color: white; 
+            padding: 10px; 
+            flex-grow: 1; 
+            min-width: 200px; 
+            border-radius: 6px; 
+            font-size: 1rem;
+        }
+        
+        button { 
+            padding: 10px 20px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            border: none; 
+            font-weight: bold; 
+            transition: all 0.2s;
+        }
+        
+        /* Button Styles */
+        .btn-random { background: #475569; color: white; }
+        .btn-random:hover { background: #64748b; }
+        
+        .btn-h1 { background: transparent; color: var(--h1-color); border: 1px solid var(--h1-color); }
+        .btn-h2 { background: transparent; color: var(--h2-color); border: 1px solid var(--h2-color); }
+        
+        .btn-h1.active { background: var(--h1-color); color: white; }
+        .btn-h2.active { background: var(--h2-color); color: white; }
 
         /* Visualization Area */
-        .viz-area { flex-grow: 1; position: relative; display: flex; justify-content: space-between; padding: 0 50px; }
+        .viz-wrapper { 
+            position: relative; 
+            margin-top: 40px; 
+            padding: 0 20px;
+        }
         
-        .column { display: flex; flex-direction: column; justify-content: center; gap: 40px; z-index: 2; }
-        .column-label { text-align: center; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 20px; }
+        .columns-container {
+            display: flex; 
+            justify-content: space-between; 
+            position: relative; 
+            z-index: 2;
+        }
+        
+        .column { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 30px; 
+            width: 150px;
+        }
+        
+        .column-label { 
+            text-align: center; 
+            font-size: 0.9rem; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            color: #94a3b8; 
+            margin-bottom: 20px; 
+            font-weight: bold;
+        }
         
         .token {
-            padding: 10px 20px; background: var(--panel); border: 1px solid #475569;
-            border-radius: 20px; cursor: pointer; transition: all 0.2s; text-align: center;
-            min-width: 80px; user-select: none;
+            padding: 12px; 
+            background: var(--panel); 
+            border: 1px solid var(--border);
+            border-radius: 8px; 
+            cursor: pointer; 
+            text-align: center;
+            user-select: none;
+            position: relative;
+            transition: transform 0.2s, background 0.2s;
         }
-        .token:hover, .token.active { background: #fff; color: #000; transform: scale(1.1); font-weight: bold; box-shadow: 0 0 15px rgba(255,255,255,0.3); }
+        
+        .token:hover { background: #334155; transform: scale(1.05); }
+        .token.selected { background: #f8fafc; color: #0f172a; font-weight: bold; border-color: white; transform: scale(1.1); box-shadow: 0 0 20px rgba(255,255,255,0.2); }
 
         /* SVG Canvas */
-        #connections { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        path { fill: none; transition: stroke-opacity 0.3s; mix-blend-mode: screen; }
+        #connections-svg { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 1; 
+            pointer-events: none; 
+            /* Ensure it sits behind tokens */
+        }
+        
+        path { fill: none; mix-blend-mode: screen; transition: stroke-opacity 0.2s; }
 
         /* Tooltip */
         #tooltip {
-            position: absolute; background: rgba(0,0,0,0.9); padding: 10px; border-radius: 4px;
-            font-size: 0.8rem; pointer-events: none; display: none; border: 1px solid #666;
-            max-width: 250px; z-index: 100;
+            position: fixed; /* Fixed relative to viewport */
+            background: rgba(15, 23, 42, 0.95); 
+            padding: 12px; 
+            border-radius: 6px;
+            font-size: 0.85rem; 
+            pointer-events: none; 
+            display: none; 
+            border: 1px solid #475569;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            width: 200px;
         }
-        .bar-container { display: flex; align-items: center; margin-top: 5px; gap: 5px; }
-        .bar { height: 6px; border-radius: 3px; }
+        .bar-bg { width: 100%; background: #334155; height: 6px; border-radius: 3px; margin-top: 6px; overflow: hidden;}
+        .bar-fill { height: 100%; transition: width 0.2s; }
+
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="controls">
-        <h3>Multi-Head Attention: The Connection View</h3>
-        <div style="margin-bottom: 10px;">
-            <label>Sentence:</label>
-            <input type="text" id="inputText" value="The animal didn't cross it" onkeyup="init()">
-            <button onclick="randomizeWeights()">🎲 New Random Weights</button>
+        <h2 style="margin: 0 0 15px 0;">Multi-Head Attention Visualizer</h2>
+        
+        <div class="input-row">
+            <input type="text" id="inputText" value="The animal did not cross the street because it was too tired" onkeyup="debounceInit()">
+            <button class="btn-random" onclick="init(true)">🎲 Randomize Weights</button>
         </div>
-        <div>
-            <strong>Toggle Heads:</strong>
-            <button id="btnH1" class="btn-h1 btn-active" onclick="toggleHead(1)">Head 1 (Grammar)</button>
-            <button id="btnH2" class="btn-h2 btn-active" onclick="toggleHead(2)">Head 2 (Context)</button>
+        
+        <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
+            <span style="font-size:0.9em; color:#94a3b8;">Active Heads:</span>
+            <button id="btnH1" class="btn-h1 active" onclick="toggleHead(1)">Head 1 (Pink)</button>
+            <button id="btnH2" class="btn-h2 active" onclick="toggleHead(2)">Head 2 (Blue)</button>
         </div>
-        <div style="margin-top:10px; font-size: 0.9em; opacity: 0.8;">
-            Hover over a word on the <strong>Left</strong> to see what it is paying attention to on the <strong>Right</strong>.
+        
+        <div style="margin-top:10px; font-size: 0.85em; color: #94a3b8;">
+            <strong>Instructions:</strong> Hover over a word on the <strong>LEFT</strong> (Query) to see who it attends to on the <strong>RIGHT</strong> (Key).
         </div>
     </div>
 
-    <div class="viz-area">
-        <svg id="connections"></svg>
+    <div class="viz-wrapper">
+        <svg id="connections-svg"></svg>
         
-        <div class="column" id="col-query">
-            <div class="column-label">Query (Looking For)</div>
-            </div>
+        <div class="columns-container">
+            <div class="column" id="col-query">
+                <div class="column-label">Query (Source)</div>
+                </div>
 
-        <div class="column" id="col-key">
-            <div class="column-label">Key (Being Looked At)</div>
-            </div>
+            <div class="column" id="col-key">
+                <div class="column-label">Key (Target)</div>
+                </div>
+        </div>
     </div>
 </div>
 
 <div id="tooltip"></div>
 
 <script>
-    // --- Configuration ---
+    // --- State ---
     let words = [];
     let attentionScores = { h1: [], h2: [] };
-    let activeTokenIndex = null;
+    let activeIndex = null;
     let showH1 = true;
     let showH2 = true;
 
-    // --- Math Logic (Simplified for Visualization) ---
-    function randomizeWeights() {
-        // We simulate attention scores rather than doing full matrix math 
-        // to ensure the visualization is always "interesting" to look at.
-        // In a real app, you'd run the dot products here.
-        
-        const N = words.length;
-        attentionScores.h1 = [];
-        attentionScores.h2 = [];
-
+    // --- Logic ---
+    function generateRandomScores(N) {
+        // Create interesting attention patterns
+        const scores = [];
         for (let i = 0; i < N; i++) {
-            // Head 1: Likes "Diagonal" (Self-Attention) and Previous word
-            let row1 = Array(N).fill(0).map(() => Math.random() * 0.1); 
-            row1[i] += 2.0; // Strong self-bias
-            if(i > 0) row1[i-1] += 1.5; // Previous word bias
-            attentionScores.h1.push(softmax(row1));
-
-            // Head 2: Likes "Random" long distance connections (Context)
-            let row2 = Array(N).fill(0).map(() => Math.random());
-            // Bias towards nouns or specific connections
-            if (i === words.length - 1) { // The last word usually looks back
-                row2[1] += 3.0; // Force attention to 2nd word
-            }
-            attentionScores.h2.push(softmax(row2));
+            // Raw logits
+            let row = Array(N).fill(0).map(() => Math.random() * 2); 
+            
+            // Add Structure (so it's not pure noise)
+            row[i] += 3.0; // Bias to self
+            if (i > 0) row[i-1] += 2.0; // Bias to previous
+            
+            // Softmax
+            const exps = row.map(Math.exp);
+            const sum = exps.reduce((a, b) => a + b, 0);
+            scores.push(exps.map(e => e / sum));
         }
-        renderLines();
+        return scores;
     }
 
-    function softmax(arr) {
-        const exps = arr.map(Math.exp);
-        const sum = exps.reduce((a, b) => a + b, 0);
-        return exps.map(e => e / sum);
-    }
-
-    // --- Visualization Logic ---
-    function init() {
+    function init(forceRandom = false) {
         const text = document.getElementById('inputText').value;
-        words = text.trim().split(/\s+/);
+        // Split by space, preserve non-empty
+        words = text.trim().split(/\s+/).filter(w => w.length > 0);
         
-        // Render Columns
+        // Setup DOM
         const qCol = document.getElementById('col-query');
         const kCol = document.getElementById('col-key');
-        qCol.innerHTML = '<div class="column-label">Query (Source)</div>';
-        kCol.innerHTML = '<div class="column-label">Key (Target)</div>';
+        
+        // Clear previous
+        qCol.querySelectorAll('.token').forEach(e => e.remove());
+        kCol.querySelectorAll('.token').forEach(e => e.remove());
 
         words.forEach((w, i) => {
-            const t1 = createToken(w, i, 'q');
-            const t2 = createToken(w, i, 'k');
-            qCol.appendChild(t1);
-            kCol.appendChild(t2);
+            qCol.appendChild(createToken(w, i, true));
+            kCol.appendChild(createToken(w, i, false));
         });
 
-        // Generate Data
-        randomizeWeights();
+        // Generate Scores
+        if (forceRandom || attentionScores.h1.length !== words.length) {
+            attentionScores.h1 = generateRandomScores(words.length);
+            // Make H2 different (reverse bias for fun)
+            const h2 = generateRandomScores(words.length);
+            // Shuffle h2 rows slightly to make it distinct from h1
+            attentionScores.h2 = h2.map(row => {
+                const newRow = [...row];
+                const last = newRow.pop();
+                newRow.unshift(last);
+                return newRow;
+            });
+        }
+
+        // Resize SVG to match content
+        requestAnimationFrame(updateSvgSize);
     }
 
-    function createToken(word, index, type) {
+    function createToken(word, index, isQuery) {
         const div = document.createElement('div');
         div.className = 'token';
         div.innerText = word;
         div.dataset.index = index;
         
-        if (type === 'q') {
+        if (isQuery) {
             div.onmouseenter = () => {
-                activeTokenIndex = index;
-                highlightToken(index);
+                activeIndex = index;
                 renderLines();
+                div.classList.add('selected');
             };
-            // div.onmouseleave = () => {
-            //    activeTokenIndex = null;
-            //    renderLines();
-            // };
+            div.onmouseleave = () => {
+                div.classList.remove('selected');
+            };
         }
         return div;
     }
 
-    function highlightToken(index) {
-        document.querySelectorAll('.token').forEach(t => t.classList.remove('active'));
-        // Highlight Query
-        const qTokens = document.getElementById('col-query').querySelectorAll('.token');
-        if(qTokens[index]) qTokens[index].classList.add('active');
+    function updateSvgSize() {
+        const wrapper = document.querySelector('.columns-container');
+        const svg = document.getElementById('connections-svg');
+        svg.style.height = wrapper.scrollHeight + 'px';
     }
 
     function renderLines() {
-        const svg = document.getElementById('connections');
-        svg.innerHTML = '';
-        if (activeTokenIndex === null) return;
-
-        const qTokens = document.getElementById('col-query').querySelectorAll('.token');
-        const kTokens = document.getElementById('col-key').querySelectorAll('.token');
+        const svg = document.getElementById('connections-svg');
+        svg.innerHTML = ''; // Clear lines
         
-        const startElem = qTokens[activeTokenIndex];
-        const startRect = startElem.getBoundingClientRect();
-        const svgRect = svg.getBoundingClientRect();
+        if (activeIndex === null) return;
 
-        // Calculate Start Point (Right side of Query token)
-        const x1 = startRect.right - svgRect.left;
-        const y1 = startRect.top + startRect.height/2 - svgRect.top;
+        const qTokens = document.querySelectorAll('#col-query .token');
+        const kTokens = document.querySelectorAll('#col-key .token');
+        
+        if (!qTokens[activeIndex]) return;
 
-        // Draw lines to ALL key tokens
-        kTokens.forEach((endElem, targetIndex) => {
-            const endRect = endElem.getBoundingClientRect();
-            const x2 = endRect.left - svgRect.left;
-            const y2 = endRect.top + endRect.height/2 - svgRect.top;
+        const startRect = getRelativeRect(qTokens[activeIndex]);
+        const startX = startRect.right; 
+        const startY = startRect.centerY;
 
-            // Bezier Control Points
-            const c1x = x1 + (x2 - x1) / 2;
-            const c1y = y1;
-            const c2x = x2 - (x2 - x1) / 2;
-            const c2y = y2;
-            const pathData = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+        kTokens.forEach((kTok, targetIdx) => {
+            const endRect = getRelativeRect(kTok);
+            const endX = endRect.left;
+            const endY = endRect.centerY;
 
-            // Draw Head 1
+            // Draw Head 1 (Pink)
             if (showH1) {
-                const score1 = attentionScores.h1[activeTokenIndex][targetIndex];
-                if (score1 > 0.05) { // Threshold to reduce clutter
-                    drawPath(svg, pathData, '#ec4899', score1 * 4, score1, targetIndex, 'Head 1');
+                const score = attentionScores.h1[activeIndex][targetIdx];
+                if (score > 0.02) { // Threshold
+                   drawBezier(svg, startX, startY, endX, endY, score, '#ec4899', 'Head 1', targetIdx);
                 }
             }
 
-            // Draw Head 2
+            // Draw Head 2 (Blue)
             if (showH2) {
-                const score2 = attentionScores.h2[activeTokenIndex][targetIndex];
-                if (score2 > 0.05) {
-                    // Offset slightly so they don't perfectly overlap
-                    drawPath(svg, pathData, '#3b82f6', score2 * 4, score2, targetIndex, 'Head 2', 3);
+                const score = attentionScores.h2[activeIndex][targetIdx];
+                if (score > 0.02) {
+                    // Slight vertical offset for Head 2 so lines don't perfectly overlap
+                   drawBezier(svg, startX, startY + 4, endX, endY + 4, score, '#3b82f6', 'Head 2', targetIdx);
                 }
             }
         });
     }
 
-    function drawPath(svg, d, color, width, opacity, targetIdx, headName, offset=0) {
+    function getRelativeRect(element) {
+        const wrapper = document.querySelector('.viz-wrapper');
+        const rect = element.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+        
+        return {
+            left: rect.left - wrapperRect.left,
+            right: (rect.left - wrapperRect.left) + rect.width,
+            top: rect.top - wrapperRect.top,
+            centerY: (rect.top - wrapperRect.top) + (rect.height / 2)
+        };
+    }
+
+    function drawBezier(svg, x1, y1, x2, y2, score, color, headName, targetIdx) {
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        
+        // Control points for smooth S-curve
+        const c1x = x1 + (x2 - x1) / 2;
+        const c1y = y1;
+        const c2x = x2 - (x2 - x1) / 2;
+        const c2y = y2;
+        
+        const d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+        
         path.setAttribute("d", d);
         path.setAttribute("stroke", color);
-        path.setAttribute("stroke-width", width);
-        path.setAttribute("stroke-opacity", opacity);
-        if(offset) path.setAttribute("transform", `translate(0, ${offset})`);
-        
-        path.onmouseenter = (e) => showTooltip(e, headName, opacity, words[targetIdx]);
-        path.onmousemove = (e) => showTooltip(e, headName, opacity, words[targetIdx]);
+        // Thickness based on score (min 1px, max 8px)
+        path.setAttribute("stroke-width", Math.max(1, score * 10)); 
+        // Opacity based on score
+        path.setAttribute("stroke-opacity", Math.max(0.1, score));
+
+        // Tooltip Interaction
+        path.onmousemove = (e) => showTooltip(e, headName, score, words[targetIdx], color);
         path.onmouseleave = hideTooltip;
-        
+
         svg.appendChild(path);
     }
 
-    // --- Interactivity ---
-    function toggleHead(h) {
-        if (h === 1) {
-            showH1 = !showH1;
-            document.getElementById('btnH1').classList.toggle('btn-active');
-        } else {
-            showH2 = !showH2;
-            document.getElementById('btnH2').classList.toggle('btn-active');
-        }
-        renderLines();
-    }
-
-    // --- Tooltip ---
+    // --- Tooltip & UI Helpers ---
     const tooltip = document.getElementById('tooltip');
-    function showTooltip(e, head, value, word) {
+
+    function showTooltip(e, head, score, word, color) {
         tooltip.style.display = 'block';
-        tooltip.style.left = e.pageX + 10 + 'px';
-        tooltip.style.top = e.pageY + 10 + 'px';
+        tooltip.style.left = (e.clientX + 15) + 'px';
+        tooltip.style.top = (e.clientY + 15) + 'px';
+        
         tooltip.innerHTML = `
-            <strong>${head}</strong><br>
-            Attending to: "<em>${word}</em>"<br>
-            Strength: ${(value*100).toFixed(1)}%
-            <div class="bar-container">
-                <div class="bar" style="width: ${value*100}%; background: ${head === 'Head 1' ? '#ec4899' : '#3b82f6'}"></div>
-            </div>
+            <div style="color:${color}; font-weight:bold">${head}</div>
+            <div>Attends to: <strong>"${word}"</strong></div>
+            <div style="font-size:0.8em; margin-top:4px">Attention Score: ${(score*100).toFixed(1)}%</div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${score*100}%; background:${color}"></div></div>
         `;
     }
+
     function hideTooltip() {
         tooltip.style.display = 'none';
     }
 
-    // Start
-    init();
-    // Auto-select the last word to show "it" resolution immediately
-    setTimeout(() => {
-        activeTokenIndex = words.length - 1;
-        highlightToken(activeTokenIndex);
+    function toggleHead(h) {
+        if (h === 1) {
+            showH1 = !showH1;
+            document.getElementById('btnH1').classList.toggle('active');
+        } else {
+            showH2 = !showH2;
+            document.getElementById('btnH2').classList.toggle('active');
+        }
         renderLines();
-    }, 100);
+    }
+
+    let timeout;
+    function debounceInit() {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => init(true), 500);
+    }
+
+    // Run on load
+    window.onload = () => {
+        init(true);
+        // Highlight middle word to show initial state
+        setTimeout(() => {
+            const tokens = document.querySelectorAll('#col-query .token');
+            if(tokens.length > 2) {
+                activeIndex = Math.floor(tokens.length / 2);
+                tokens[activeIndex].classList.add('selected');
+                renderLines();
+            }
+        }, 200);
+    };
+
+    // Handle window resize
+    window.onresize = () => {
+        updateSvgSize();
+        renderLines();
+    };
 
 </script>
 </body>
