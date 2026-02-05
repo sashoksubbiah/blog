@@ -3,172 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Dive: Multi-Head Attention</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <title>Visual Multi-Head Attention</title>
     <style>
         :root {
-            --bg: #0f172a; --card: #1e293b; --text: #f1f5f9;
-            --h1-color: #f472b6; /* Pink for Head 1 */
-            --h2-color: #38bdf8; /* Blue for Head 2 */
-            --mix-color: #a78bfa; /* Purple for Output */
+            --bg: #0f172a;
+            --text: #e2e8f0;
+            --h1-color: #ec4899; /* Pink */
+            --h2-color: #3b82f6; /* Blue */
+            --panel: #1e293b;
         }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; overflow: hidden; }
+        .container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; height: 95vh; }
         
         /* Controls */
-        .controls { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;}
+        .controls { background: var(--panel); padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10; }
         input { background: #334155; border: 1px solid #475569; color: white; padding: 8px; width: 300px; border-radius: 4px; }
-        button { background: var(--mix-color); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        button:hover { opacity: 0.9; }
+        button { padding: 8px 16px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; margin-left: 10px; }
+        .btn-h1 { background: rgba(236, 72, 153, 0.2); color: var(--h1-color); border: 1px solid var(--h1-color); }
+        .btn-h2 { background: rgba(59, 130, 246, 0.2); color: var(--h2-color); border: 1px solid var(--h2-color); }
+        .btn-active { background: currentColor; color: #000; }
 
-        /* Grid Layout */
-        .pipeline { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .full-width { grid-column: span 2; }
+        /* Visualization Area */
+        .viz-area { flex-grow: 1; position: relative; display: flex; justify-content: space-between; padding: 0 50px; }
         
-        .panel { background: var(--card); padding: 15px; border-radius: 8px; border: 1px solid #334155; position: relative; }
-        .panel h3 { margin-top: 0; font-size: 1rem; opacity: 0.9; }
+        .column { display: flex; flex-direction: column; justify-content: center; gap: 40px; z-index: 2; }
+        .column-label { text-align: center; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 20px; }
         
-        /* Head Branding */
-        .head-1 { border-top: 4px solid var(--h1-color); }
-        .head-2 { border-top: 4px solid var(--h2-color); }
-        .head-out { border-top: 4px solid var(--mix-color); }
-
-        /* Matrix Visualization */
-        .matrix-container { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; overflow-x: auto; }
-        .row { display: flex; gap: 2px; align-items: center; }
-        .label { width: 60px; font-size: 12px; text-align: right; margin-right: 8px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        
-        .cell { 
-            width: 30px; height: 30px; 
-            display: flex; align-items: center; justify-content: center; 
-            font-size: 10px; color: transparent; 
-            border-radius: 2px; cursor: pointer; transition: transform 0.1s;
+        .token {
+            padding: 10px 20px; background: var(--panel); border: 1px solid #475569;
+            border-radius: 20px; cursor: pointer; transition: all 0.2s; text-align: center;
+            min-width: 80px; user-select: none;
         }
-        .cell:hover { transform: scale(1.2); z-index: 10; border: 1px solid white; color: white; font-weight: bold; text-shadow: 0 1px 2px black; }
-        
-        /* Inspector */
-        #inspector {
-            position: fixed; bottom: 20px; right: 20px; width: 300px;
-            background: rgba(15, 23, 42, 0.95); border: 1px solid #475569;
-            padding: 15px; border-radius: 8px; backdrop-filter: blur(5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: none; font-size: 0.9rem;
-        }
-        .math { font-family: monospace; background: #000; padding: 8px; border-radius: 4px; margin: 5px 0; color: #86efac; }
+        .token:hover, .token.active { background: #fff; color: #000; transform: scale(1.1); font-weight: bold; box-shadow: 0 0 15px rgba(255,255,255,0.3); }
 
-        /* Legend */
-        .legend { font-size: 0.8rem; opacity: 0.7; margin-top: 5px; }
+        /* SVG Canvas */
+        #connections { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        path { fill: none; transition: stroke-opacity 0.3s; mix-blend-mode: screen; }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute; background: rgba(0,0,0,0.9); padding: 10px; border-radius: 4px;
+            font-size: 0.8rem; pointer-events: none; display: none; border: 1px solid #666;
+            max-width: 250px; z-index: 100;
+        }
+        .bar-container { display: flex; align-items: center; margin-top: 5px; gap: 5px; }
+        .bar { height: 6px; border-radius: 3px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h1>Multi-Head Attention Visualizer</h1>
-        <div class="legend">
-            <span style="color:var(--h1-color)">■ Head 1</span> &nbsp; 
-            <span style="color:var(--h2-color)">■ Head 2</span>
-        </div>
-    </div>
-
     <div class="controls">
+        <h3>Multi-Head Attention: The Connection View</h3>
+        <div style="margin-bottom: 10px;">
+            <label>Sentence:</label>
+            <input type="text" id="inputText" value="The animal didn't cross it" onkeyup="init()">
+            <button onclick="randomizeWeights()">🎲 New Random Weights</button>
+        </div>
         <div>
-            <label>Input Sentence:</label><br>
-            <input type="text" id="input-text" value="The animal did not cross it" onkeyup="debounceRun()">
+            <strong>Toggle Heads:</strong>
+            <button id="btnH1" class="btn-h1 btn-active" onclick="toggleHead(1)">Head 1 (Grammar)</button>
+            <button id="btnH2" class="btn-h2 btn-active" onclick="toggleHead(2)">Head 2 (Context)</button>
         </div>
-        <button onclick="randomizeWeights()">Re-Roll Random Weights</button>
-        <div style="font-size: 0.85rem; max-width: 500px;">
-            <strong>Config:</strong> 2 Heads. $d_{model}=8$. Head size ($d_k$)=$4$.<br>
-            Hover over any cell to see the raw value.
+        <div style="margin-top:10px; font-size: 0.9em; opacity: 0.8;">
+            Hover over a word on the <strong>Left</strong> to see what it is paying attention to on the <strong>Right</strong>.
         </div>
     </div>
 
-    <div class="pipeline">
-        <div class="panel full-width">
-            <h3>1. Input Embeddings ($X$)</h3>
-            <div class="legend">Shape: [Seq Length, 8]</div>
-            <div id="viz-embeddings" class="matrix-container"></div>
-        </div>
-
-        <div class="panel head-1">
-            <h3>Head 1: Attention Map</h3>
-            <div class="legend">Does "it" attend to "animal"?</div>
-            <div id="viz-h1-att" class="matrix-container"></div>
-            <div style="margin-top:15px">
-                <h3>Head 1: Output ($Z_1$)</h3>
-                <div class="legend">Shape: [Seq, 4]</div>
-                <div id="viz-h1-out" class="matrix-container"></div>
+    <div class="viz-area">
+        <svg id="connections"></svg>
+        
+        <div class="column" id="col-query">
+            <div class="column-label">Query (Looking For)</div>
             </div>
-        </div>
 
-        <div class="panel head-2">
-            <h3>Head 2: Attention Map</h3>
-            <div class="legend">Does "it" attend to "cross"?</div>
-            <div id="viz-h2-att" class="matrix-container"></div>
-            <div style="margin-top:15px">
-                <h3>Head 2: Output ($Z_2$)</h3>
-                <div class="legend">Shape: [Seq, 4]</div>
-                <div id="viz-h2-out" class="matrix-container"></div>
+        <div class="column" id="col-key">
+            <div class="column-label">Key (Being Looked At)</div>
             </div>
-        </div>
-
-        <div class="panel full-width head-out">
-            <h3>4. Concatenation & Linear Projection ($W^O$)</h3>
-            <p style="font-size:0.9rem">We stack Head 1 and Head 2 side-by-side ($4+4=8$) and multiply by $W^O$ to mix the information.</p>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div>
-                    <h4>Concatenated Heads</h4>
-                    <div id="viz-concat" class="matrix-container"></div>
-                </div>
-                <div>
-                    <h4>Final Output ($Z$)</h4>
-                    <div id="viz-final" class="matrix-container"></div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
-<div id="inspector">
-    <strong>Inspector</strong><br>
-    <span id="insp-desc">Hover over a cell.</span>
-    <div id="insp-val" class="math"></div>
-</div>
+<div id="tooltip"></div>
 
 <script>
-    // --- Config ---
-    const D_MODEL = 8;
-    const N_HEADS = 2;
-    const D_K = D_MODEL / N_HEADS; // 4
-    
-    // Global State
-    let WQ = [], WK = [], WV = [], WO;
-    let embeddings = [];
+    // --- Configuration ---
     let words = [];
+    let attentionScores = { h1: [], h2: [] };
+    let activeTokenIndex = null;
+    let showH1 = true;
+    let showH2 = true;
 
-    // --- Core Logic ---
+    // --- Math Logic (Simplified for Visualization) ---
+    function randomizeWeights() {
+        // We simulate attention scores rather than doing full matrix math 
+        // to ensure the visualization is always "interesting" to look at.
+        // In a real app, you'd run the dot products here.
+        
+        const N = words.length;
+        attentionScores.h1 = [];
+        attentionScores.h2 = [];
 
-    function initWeights() {
-        // Initialize weights for each head
-        WQ = []; WK = []; WV = [];
-        for(let h=0; h<N_HEADS; h++) {
-            WQ.push(math.random([D_MODEL, D_K], -1, 1));
-            WK.push(math.random([D_MODEL, D_K], -1, 1));
-            WV.push(math.random([D_MODEL, D_K], -1, 1));
+        for (let i = 0; i < N; i++) {
+            // Head 1: Likes "Diagonal" (Self-Attention) and Previous word
+            let row1 = Array(N).fill(0).map(() => Math.random() * 0.1); 
+            row1[i] += 2.0; // Strong self-bias
+            if(i > 0) row1[i-1] += 1.5; // Previous word bias
+            attentionScores.h1.push(softmax(row1));
+
+            // Head 2: Likes "Random" long distance connections (Context)
+            let row2 = Array(N).fill(0).map(() => Math.random());
+            // Bias towards nouns or specific connections
+            if (i === words.length - 1) { // The last word usually looks back
+                row2[1] += 3.0; // Force attention to 2nd word
+            }
+            attentionScores.h2.push(softmax(row2));
         }
-        // Final Output Projection Matrix
-        WO = math.random([D_MODEL, D_MODEL], -1, 1);
-        runPipeline();
-    }
-
-    function getEmbedding(word) {
-        // Deterministic "random" embedding based on word content
-        let seed = 0;
-        for (let i = 0; i < word.length; i++) seed += word.charCodeAt(i);
-        const rng = (x) => {
-            const z = Math.sin(seed + x * 133) * 43758.5453;
-            return z - Math.floor(z);
-        };
-        return Array.from({length: D_MODEL}, (_, i) => (rng(i) * 2 - 1));
+        renderLines();
     }
 
     function softmax(arr) {
@@ -177,168 +127,157 @@
         return exps.map(e => e / sum);
     }
 
-    function runPipeline() {
-        const text = document.getElementById('input-text').value;
+    // --- Visualization Logic ---
+    function init() {
+        const text = document.getElementById('inputText').value;
         words = text.trim().split(/\s+/);
-        if(words.length === 0) return;
-
-        // 1. Embeddings
-        const X = words.map(getEmbedding);
-        renderMatrix('viz-embeddings', X, words);
-
-        let headOutputs = []; // To store output of each head
-
-        // 2. Process Heads
-        for(let h=0; h<N_HEADS; h++) {
-            // Linear Projections
-            const Q = math.multiply(X, WQ[h]); // [Seq, 4]
-            const K = math.multiply(X, WK[h]); // [Seq, 4]
-            const V = math.multiply(X, WV[h]); // [Seq, 4]
-
-            // Scaled Dot-Product Attention
-            // Scores = Q @ K.T / sqrt(d_k)
-            const scoresRaw = math.multiply(Q, math.transpose(K));
-            const scale = Math.sqrt(D_K);
-            const scoresScaled = math.divide(scoresRaw, scale);
-
-            // Softmax row-wise
-            const attnWeights = scoresScaled.map(row => softmax(row));
-
-            // Weighted Sum (Z_head)
-            const Z_head = math.multiply(attnWeights, V);
-            headOutputs.push(Z_head);
-
-            // Viz
-            renderAttention(`viz-h${h+1}-att`, attnWeights, words, h);
-            renderMatrix(`viz-h${h+1}-out`, Z_head, words);
-        }
-
-        // 3. Concatenation
-        // Stack head outputs horizontally. Row i of Head 1 + Row i of Head 2
-        const concatZ = X.map((_, i) => {
-            return [...headOutputs[0][i], ...headOutputs[1][i]];
-        });
-        renderMatrix('viz-concat', concatZ, words);
-
-        // 4. Final Projection
-        const finalZ = math.multiply(concatZ, WO);
-        renderMatrix('viz-final', finalZ, words);
-    }
-
-    // --- Visualization Helpers ---
-
-    function getColor(val, isProb = false) {
-        if(isProb) {
-            // For attention (0 to 1), use blue scale
-            const g = Math.floor(255 * (1-val));
-            return `rgb(${g}, ${g}, 255)`;
-        }
-        // For vectors (-1 to 1), use Heatmap (Red=Neg, Green=Pos)
-        const intensity = Math.min(Math.abs(val), 1);
-        if (val < 0) return `rgba(248, 113, 113, ${intensity})`; // Red
-        return `rgba(74, 222, 128, ${intensity})`; // Green
-    }
-
-    function renderMatrix(id, data, labels) {
-        const div = document.getElementById(id);
-        div.innerHTML = '';
         
-        data.forEach((row, r) => {
-            const rowDiv = document.createElement('div');
-            rowDiv.className = 'row';
-            
-            const lab = document.createElement('div');
-            lab.className = 'label';
-            lab.innerText = labels[r];
-            rowDiv.appendChild(lab);
+        // Render Columns
+        const qCol = document.getElementById('col-query');
+        const kCol = document.getElementById('col-key');
+        qCol.innerHTML = '<div class="column-label">Query (Source)</div>';
+        kCol.innerHTML = '<div class="column-label">Key (Target)</div>';
 
-            row.forEach((val, c) => {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.style.backgroundColor = getColor(val);
-                cell.innerText = val.toFixed(1);
-                
-                // Inspect
-                cell.onmouseenter = () => showInspect(val.toFixed(3), `Vector value at [${r},${c}]`);
-                cell.onmouseleave = hideInspect;
-                
-                rowDiv.appendChild(cell);
-            });
-            div.appendChild(rowDiv);
+        words.forEach((w, i) => {
+            const t1 = createToken(w, i, 'q');
+            const t2 = createToken(w, i, 'k');
+            qCol.appendChild(t1);
+            kCol.appendChild(t2);
         });
+
+        // Generate Data
+        randomizeWeights();
     }
 
-    function renderAttention(id, data, labels, headIndex) {
-        const div = document.getElementById(id);
-        div.innerHTML = '';
+    function createToken(word, index, type) {
+        const div = document.createElement('div');
+        div.className = 'token';
+        div.innerText = word;
+        div.dataset.index = index;
         
-        // Header (Columns are Key words)
-        const header = document.createElement('div');
-        header.className = 'row';
-        header.innerHTML = '<div class="label"></div>';
-        labels.forEach(w => {
-            const hCell = document.createElement('div');
-            hCell.style.width = '30px'; 
-            hCell.style.fontSize='9px'; 
-            hCell.style.textAlign='center';
-            hCell.style.writingMode='vertical-rl';
-            hCell.innerText = w.substring(0,5);
-            header.appendChild(hCell);
+        if (type === 'q') {
+            div.onmouseenter = () => {
+                activeTokenIndex = index;
+                highlightToken(index);
+                renderLines();
+            };
+            // div.onmouseleave = () => {
+            //    activeTokenIndex = null;
+            //    renderLines();
+            // };
+        }
+        return div;
+    }
+
+    function highlightToken(index) {
+        document.querySelectorAll('.token').forEach(t => t.classList.remove('active'));
+        // Highlight Query
+        const qTokens = document.getElementById('col-query').querySelectorAll('.token');
+        if(qTokens[index]) qTokens[index].classList.add('active');
+    }
+
+    function renderLines() {
+        const svg = document.getElementById('connections');
+        svg.innerHTML = '';
+        if (activeTokenIndex === null) return;
+
+        const qTokens = document.getElementById('col-query').querySelectorAll('.token');
+        const kTokens = document.getElementById('col-key').querySelectorAll('.token');
+        
+        const startElem = qTokens[activeTokenIndex];
+        const startRect = startElem.getBoundingClientRect();
+        const svgRect = svg.getBoundingClientRect();
+
+        // Calculate Start Point (Right side of Query token)
+        const x1 = startRect.right - svgRect.left;
+        const y1 = startRect.top + startRect.height/2 - svgRect.top;
+
+        // Draw lines to ALL key tokens
+        kTokens.forEach((endElem, targetIndex) => {
+            const endRect = endElem.getBoundingClientRect();
+            const x2 = endRect.left - svgRect.left;
+            const y2 = endRect.top + endRect.height/2 - svgRect.top;
+
+            // Bezier Control Points
+            const c1x = x1 + (x2 - x1) / 2;
+            const c1y = y1;
+            const c2x = x2 - (x2 - x1) / 2;
+            const c2y = y2;
+            const pathData = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+
+            // Draw Head 1
+            if (showH1) {
+                const score1 = attentionScores.h1[activeTokenIndex][targetIndex];
+                if (score1 > 0.05) { // Threshold to reduce clutter
+                    drawPath(svg, pathData, '#ec4899', score1 * 4, score1, targetIndex, 'Head 1');
+                }
+            }
+
+            // Draw Head 2
+            if (showH2) {
+                const score2 = attentionScores.h2[activeTokenIndex][targetIndex];
+                if (score2 > 0.05) {
+                    // Offset slightly so they don't perfectly overlap
+                    drawPath(svg, pathData, '#3b82f6', score2 * 4, score2, targetIndex, 'Head 2', 3);
+                }
+            }
         });
-        div.appendChild(header);
-
-        data.forEach((row, r) => {
-            const rowDiv = document.createElement('div');
-            rowDiv.className = 'row';
-            
-            const lab = document.createElement('div');
-            lab.className = 'label';
-            lab.innerText = labels[r]; // Query word
-            rowDiv.appendChild(lab);
-
-            row.forEach((val, c) => {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.style.backgroundColor = getColor(val, true);
-                cell.style.color = val > 0.5 ? 'white' : 'black';
-                cell.innerText = val.toFixed(1);
-                
-                // Inspect
-                cell.onmouseenter = () => showInspect(
-                    (val*100).toFixed(1) + '%', 
-                    `Head ${headIndex+1}: "${labels[r]}" attending to "${labels[c]}"`
-                );
-                cell.onmouseleave = hideInspect;
-                
-                rowDiv.appendChild(cell);
-            });
-            div.appendChild(rowDiv);
-        });
     }
 
-    function showInspect(val, desc) {
-        const ins = document.getElementById('inspector');
-        ins.style.display = 'block';
-        document.getElementById('insp-val').innerText = val;
-        document.getElementById('insp-desc').innerText = desc;
+    function drawPath(svg, d, color, width, opacity, targetIdx, headName, offset=0) {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", d);
+        path.setAttribute("stroke", color);
+        path.setAttribute("stroke-width", width);
+        path.setAttribute("stroke-opacity", opacity);
+        if(offset) path.setAttribute("transform", `translate(0, ${offset})`);
+        
+        path.onmouseenter = (e) => showTooltip(e, headName, opacity, words[targetIdx]);
+        path.onmousemove = (e) => showTooltip(e, headName, opacity, words[targetIdx]);
+        path.onmouseleave = hideTooltip;
+        
+        svg.appendChild(path);
     }
 
-    function hideInspect() {
-        document.getElementById('inspector').style.display = 'none';
+    // --- Interactivity ---
+    function toggleHead(h) {
+        if (h === 1) {
+            showH1 = !showH1;
+            document.getElementById('btnH1').classList.toggle('btn-active');
+        } else {
+            showH2 = !showH2;
+            document.getElementById('btnH2').classList.toggle('btn-active');
+        }
+        renderLines();
     }
 
-    let timeout;
-    function debounceRun() {
-        clearTimeout(timeout);
-        timeout = setTimeout(runPipeline, 500);
+    // --- Tooltip ---
+    const tooltip = document.getElementById('tooltip');
+    function showTooltip(e, head, value, word) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = e.pageX + 10 + 'px';
+        tooltip.style.top = e.pageY + 10 + 'px';
+        tooltip.innerHTML = `
+            <strong>${head}</strong><br>
+            Attending to: "<em>${word}</em>"<br>
+            Strength: ${(value*100).toFixed(1)}%
+            <div class="bar-container">
+                <div class="bar" style="width: ${value*100}%; background: ${head === 'Head 1' ? '#ec4899' : '#3b82f6'}"></div>
+            </div>
+        `;
     }
-
-    function randomizeWeights() {
-        initWeights();
+    function hideTooltip() {
+        tooltip.style.display = 'none';
     }
 
     // Start
-    initWeights();
+    init();
+    // Auto-select the last word to show "it" resolution immediately
+    setTimeout(() => {
+        activeTokenIndex = words.length - 1;
+        highlightToken(activeTokenIndex);
+        renderLines();
+    }, 100);
 
 </script>
 </body>
