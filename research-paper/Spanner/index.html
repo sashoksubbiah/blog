@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spanner TrueTime Simulator</title>
+    <style>
+        :root {
+            --google-blue: #4285f4;
+            --google-red: #ea4335;
+            --google-yellow: #fbbc04;
+            --google-green: #34a853;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-main: #202124;
+            --text-secondary: #5f6368;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            color: var(--text-main);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        /* Controls */
+        .controls {
+            background: #e8f0fe;
+            padding: 20px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        label {
+            font-weight: bold;
+            color: var(--google-blue);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: var(--google-blue);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        button:hover {
+            background-color: #3367d6;
+        }
+
+        button:disabled {
+            background-color: #a0c2f9;
+            cursor: not-allowed;
+        }
+
+        /* Visualization Area */
+        .vis-container {
+            position: relative;
+            height: 350px;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            background: #fafafa;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .axis-label {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .timeline-cursor {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: var(--google-red);
+            z-index: 10;
+            transition: left 0.1s linear;
+        }
+
+        .cursor-label {
+            position: absolute;
+            top: 10px;
+            left: 5px;
+            background: var(--google-red);
+            color: white;
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+
+        /* Transaction Items */
+        .txn-block {
+            position: absolute;
+            height: 60px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            top: 100px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: width 0.1s linear;
+        }
+
+        .txn-start {
+            background-color: var(--google-green);
+            z-index: 2;
+        }
+
+        .txn-wait {
+            background-color: var(--google-yellow);
+            color: #333;
+            top: 100px;
+            border-left: 2px dashed #666;
+            z-index: 1;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        
+        .txn-wait::after {
+            content: "Commit Wait...";
+            padding-left: 10px;
+        }
+
+        .txn-final {
+            background-color: var(--google-blue);
+            top: 180px;
+            height: 40px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .visible {
+            opacity: 1;
+        }
+
+        .marker {
+            position: absolute;
+            top: 80px;
+            bottom: 80px;
+            width: 1px;
+            border-left: 2px dotted #aaa;
+            z-index: 0;
+        }
+        
+        .marker-label {
+            position: absolute;
+            top: -20px;
+            left: -50px;
+            width: 100px;
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            font-weight: bold;
+        }
+
+        /* Metrics Panel */
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: #fff;
+            border: 1px solid #dadce0;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--google-blue);
+            display: block;
+            margin-top: 5px;
+        }
+
+        .status-msg {
+            grid-column: 1 / -1;
+            padding: 10px;
+            background: #e6f4ea;
+            color: #137333;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        .status-error {
+            background: #fce8e6;
+            color: #c5221f;
+        }
+
+        /* Tooltip explaining the math */
+        .math-explainer {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f1f3f4;
+            border-radius: 8px;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+        
+        code {
+            background: #e0e0e0;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Spanner "TrueTime" Simulator</h1>
+    <div class="subtitle">Experience why Spanner must <strong>Wait</strong> to guarantee consistency.</div>
+
+    <div class="controls">
+        <div class="slider-group">
+            <label for="epsilon">Clock Uncertainty (ε): <span id="epsilon-display">10</span>ms</label>
+            <input type="range" id="epsilon" min="10" max="200" value="10" step="10">
+            <small style="color: #666">Low ε = Atomic Clocks (Fast). High ε = Broken Clocks (Slow).</small>
+        </div>
+        <button id="btn-commit" onclick="startTransaction()">Start Transaction</button>
+    </div>
+
+    <div class="vis-container" id="timeline">
+        <div class="axis-label">Time (milliseconds) &rarr;</div>
+        
+        <!-- Cursor representing Real Absolute Time -->
+        <div class="timeline-cursor" id="cursor" style="left: 0px;">
+            <div class="cursor-label">Real Time</div>
+        </div>
+
+        <!-- Elements will be injected here via JS -->
+    </div>
+
+    <div class="metrics">
+        <div class="status-msg" id="status-box">Transaction Committed!</div>
+        
+        <div class="metric-card">
+            <small>Chosen Timestamp (T)</small>
+            <span class="metric-val" id="val-t">-</span>
+        </div>
+        <div class="metric-card">
+            <small>Wait Duration (Latency)</small>
+            <span class="metric-val" id="val-wait">-</span>
+        </div>
+        <div class="metric-card">
+            <small>Data Consistency</small>
+            <span class="metric-val" style="color: var(--google-green);">SAFE</span>
+        </div>
+    </div>
+
+    <div class="math-explainer">
+        <strong>The Logic:</strong> Spanner picks a timestamp <code>T = Now + ε</code>. It cannot make data visible until it is 100% sure real time has passed <code>T</code>. Because the clock has uncertainty <code>ε</code>, it must wait until its own clock reads <code>T + ε</code>. <br><br>
+        <strong>Total Latency Cost = ~2 × ε</strong>
+    </div>
+</div>
+
+<script>
+    const timeline = document.getElementById('timeline');
+    const cursor = document.getElementById('cursor');
+    const btn = document.getElementById('btn-commit');
+    const epsilonInput = document.getElementById('epsilon');
+    const epsilonDisplay = document.getElementById('epsilon-display');
+    const statusBox = document.getElementById('status-box');
+    
+    // State
+    let isRunning = false;
+    let startTime = null;
+    let animationId = null;
+    let epsilon = 10;
+    
+    // Constants for visualization
+    const PIXELS_PER_MS = 2; // 1ms = 2px
+    const START_OFFSET_MS = 20; // Start visual 20ms in
+
+    // Update Slider
+    epsilonInput.addEventListener('input', (e) => {
+        epsilon = parseInt(e.target.value);
+        epsilonDisplay.textContent = epsilon;
+    });
+
+    function reset() {
+        // Remove old transaction elements
+        const oldEls = document.querySelectorAll('.dynamic-el');
+        oldEls.forEach(el => el.remove());
+        
+        statusBox.style.display = 'none';
+        document.getElementById('val-t').innerText = "-";
+        document.getElementById('val-wait').innerText = "-";
+        
+        // Reset Cursor
+        cursor.style.left = "0px";
+        if (animationId) cancelAnimationFrame(animationId);
+    }
+
+    function createBar(className, top, text, msStart) {
+        const div = document.createElement('div');
+        div.className = `txn-block ${className} dynamic-el`;
+        div.style.left = (msStart * PIXELS_PER_MS) + "px";
+        div.style.top = top + "px";
+        div.style.width = "0px"; // Starts at 0 width
+        if(text) div.innerText = text;
+        timeline.appendChild(div);
+        return div;
+    }
+
+    function createMarker(msTime, labelText) {
+        const div = document.createElement('div');
+        div.className = 'marker dynamic-el';
+        div.style.left = (msTime * PIXELS_PER_MS) + "px";
+        
+        const label = document.createElement('div');
+        label.className = 'marker-label';
+        label.innerText = labelText;
+        
+        div.appendChild(label);
+        timeline.appendChild(div);
+    }
+
+    function startTransaction() {
+        if(isRunning) return;
+        isRunning = true;
+        btn.disabled = true;
+        reset();
+
+        const startMs = START_OFFSET_MS; 
+        
+        // LOGIC: 
+        // 1. Spanner sees Start Time.
+        // 2. It picks a Timestamp T in the future to be safe. T = Start + Epsilon.
+        // 3. It must WAIT until TT.after(T) is true.
+        // 4. TT.after(T) is true when (LocalClock - Epsilon) > T.
+        // 5. Therefore LocalClock > T + Epsilon.
+        
+        const t_chosen = startMs + epsilon;
+        const commit_visible_time = t_chosen + epsilon; // This is the end of the wait
+        const total_wait = commit_visible_time - startMs;
+
+        // Create visual elements
+        const startBar = createBar('txn-start', 100, "Start", startMs);
+        const waitBar = createBar('txn-wait', 100, "", t_chosen); // Starts where Start ends
+        const finalBar = createBar('txn-final', 180, "VISIBLE (Data Committed)", commit_visible_time);
+        
+        // Draw T Marker
+        createMarker(t_chosen, `T = ${t_chosen}ms`);
+
+        // Animation Loop
+        startTime = performance.now();
+        
+        function tick(now) {
+            const elapsed = (now - startTime) / 20; // Slow down time for visualization factor
+            
+            // Move Real Time Cursor
+            cursor.style.left = (elapsed * PIXELS_PER_MS) + "px";
+
+            // 1. Expand Start Bar (Simulation of processing/picking timestamp)
+            if (elapsed < t_chosen) {
+                // We are in the "Start" phase (visual simplification)
+                startBar.style.width = ((elapsed - startMs) * PIXELS_PER_MS) + "px";
+            } else {
+                startBar.style.width = (epsilon * PIXELS_PER_MS) + "px"; // Fixed width
+            }
+
+            // 2. Expand Wait Bar
+            if (elapsed > t_chosen && elapsed < commit_visible_time) {
+                waitBar.style.width = ((elapsed - t_chosen) * PIXELS_PER_MS) + "px";
+            } else if (elapsed >= commit_visible_time) {
+                waitBar.style.width = (epsilon * PIXELS_PER_MS) + "px";
+                
+                // 3. Show Final Bar
+                finalBar.style.width = "200px";
+                finalBar.classList.add('visible');
+                
+                finish(t_chosen, total_wait);
+                return; // End animation
+            }
+
+            animationId = requestAnimationFrame(tick);
+        }
+
+        requestAnimationFrame(tick);
+    }
+
+    function finish(t, wait) {
+        isRunning = false;
+        btn.disabled = false;
+        
+        document.getElementById('val-t').innerText = Math.round(t) + "ms";
+        document.getElementById('val-wait').innerText = Math.round(wait) + "ms";
+        
+        statusBox.style.display = 'block';
+        if(epsilon > 50) {
+            statusBox.innerText = "Commit Successful, but HIGH LATENCY due to uncertainty!";
+            statusBox.className = "status-msg status-error";
+        } else {
+            statusBox.innerText = "Commit Successful with low latency.";
+            statusBox.className = "status-msg";
+        }
+    }
+
+</script>
+
+</body>
+</html>
