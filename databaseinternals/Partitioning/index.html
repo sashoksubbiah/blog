@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB Partitioning Internals: Interactive Playground</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border: #334155;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --part-1: #c084fc;
+            --part-2: #f472b6;
+            --part-3: #fbbf24;
+            --part-4: #4ade80;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Layout */
+        .sidebar {
+            width: 320px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        h1, h2, h3 { margin: 0; }
+        h1 { font-size: 1.2rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+        h2 { font-size: 1.5rem; margin-bottom: 10px; }
+
+        /* Controls */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; }
+
+        select, button, input {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-main);
+            font-family: inherit;
+        }
+
+        button {
+            background: var(--accent);
+            color: var(--bg-color);
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        button:hover { background: var(--accent-hover); }
+        button.secondary { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); }
+        button.secondary:hover { border-color: var(--accent); }
+
+        /* Visualization Area */
+        .viz-container {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .partition {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 200px;
+            min-height: 250px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .partition-header {
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+            color: var(--text-muted);
+        }
+
+        .partition.highlight {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+            border-color: var(--accent);
+            transform: translateY(-5px);
+        }
+
+        .row-item {
+            background: var(--bg-color);
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            animation: fadeIn 0.4s ease-out;
+            border-left: 3px solid transparent;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Explainer Box */
+        .explainer {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .code-snippet {
+            font-family: monospace;
+            background: #000;
+            padding: 2px 5px;
+            border-radius: 4px;
+            color: var(--accent);
+        }
+
+        /* Quiz Mode */
+        .quiz-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            text-align: center;
+        }
+        
+        .quiz-overlay.active { display: flex; }
+
+        .quiz-card {
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            max-width: 500px;
+        }
+
+        .quiz-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* Color Coding */
+        .p1 { border-left-color: var(--part-1); }
+        .p2 { border-left-color: var(--part-2); }
+        .p3 { border-left-color: var(--part-3); }
+        .p4 { border-left-color: var(--part-4); }
+
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div>
+            <h1>Partitioning Playground</h1>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Interactive Deep Dive</p>
+        </div>
+
+        <div class="control-group">
+            <label>Strategy</label>
+            <select id="strategySelect" onchange="resetPlayground()">
+                <option value="range">Range Partitioning (by Date)</option>
+                <option value="list">List Partitioning (by Region)</option>
+                <option value="hash">Hash Partitioning (by ID)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Insert Data</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="dataInput" placeholder="Value..." />
+                <button onclick="insertData()">Insert</button>
+            </div>
+            <p id="inputHint" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">Format: YYYY-MM-DD</p>
+        </div>
+
+        <div class="control-group">
+            <label>Simulation</label>
+            <button class="secondary" onclick="simulateBulkLoad()">Bulk Load (10 rows)</button>
+            <button class="secondary" onclick="runQuery()">Simulate Query (Pruning)</button>
+        </div>
+
+        <div class="control-group" style="margin-top: auto;">
+            <label>Check Understanding</label>
+            <button onclick="startQuiz()" style="background: var(--success);">Start Quiz Challenge</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        
+        <div id="techExplanation" class="explainer">
+            <h3><span id="currentStrategyTitle">Range</span> Partitioning</h3>
+            <p id="currentStrategyDesc">Maps data to partitions based on ranges of values. Good for time-series data.</p>
+            <div id="technicalNote" style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; font-size: 0.85rem; color: var(--text-muted);">
+                <strong>Internals:</strong> Range partitioning allows for effective "Partition Pruning". If your WHERE clause has a date range, the DB engine skips scanning partitions that don't match.
+            </div>
+        </div>
+
+        <div class="viz-container" id="partitionsContainer">
+            </div>
+
+    </div>
+
+    <div id="quizOverlay" class="quiz-overlay">
+        <div class="quiz-card">
+            <h2 id="quizQuestion">Where will this row go?</h2>
+            <p id="quizContext" style="font-size: 1.2rem; color: var(--accent); margin: 20px 0;">ID: 543</p>
+            <div class="quiz-options" id="quizOptions">
+                </div>
+            <button onclick="endQuiz()" style="margin-top: 20px; background: transparent; border: 1px solid var(--text-muted);">Exit Quiz</button>
+        </div>
+    </div>
+
+    <script>
+        // STATE
+        let currentStrategy = 'range';
+        let partitions = [];
+        let rowCount = 0;
+
+        // CONFIGURATIONS
+        const configs = {
+            range: {
+                title: "Range Partitioning",
+                desc: "Data is split by ranges of a key (e.g., Dates). Most common for managing historical data retention.",
+                tech: "<strong>Key Concept:</strong> Pruning. Queries like <span class='code-snippet'>WHERE date > '2023-01-01'</span> allow the DB to physically ignore older partitions. <br><strong>Risk:</strong> 'Hotspots'. If everyone writes to 'today', only one partition handles all the load.",
+                hint: "Format: YYYY-MM-DD",
+                partitions: [
+                    { name: 'p_2022', rule: (v) => v < '2023-01-01', label: '< 2023' },
+                    { name: 'p_2023', rule: (v) => v >= '2023-01-01' && v < '2024-01-01', label: '2023' },
+                    { name: 'p_2024', rule: (v) => v >= '2024-01-01', label: '2024+' }
+                ],
+                generator: () => {
+                    const year = 2022 + Math.floor(Math.random() * 3);
+                    const month = String(Math.floor(Math.random() * 12) + 1).padStart(2, '0');
+                    return `${year}-${month}-01`;
+                }
+            },
+            list: {
+                title: "List Partitioning",
+                desc: "Data is assigned to partitions based on a discrete list of values (e.g., Region, Category, Status).",
+                tech: "<strong>Key Concept:</strong> Data Sovereignty. You can ensure all 'EU' data stays on a physical disk located in Europe. <br><strong>Risk:</strong> Skew. If 'US' has 1 million users and 'EU' has 10, one partition becomes huge and slow.",
+                hint: "Values: US, EU, ASIA, OTHER",
+                partitions: [
+                    { name: 'p_americas', rule: (v) => ['US', 'CA', 'MX'].includes(v.toUpperCase()), label: 'US, CA, MX' },
+                    { name: 'p_emea', rule: (v) => ['UK', 'DE', 'FR', 'EU'].includes(v.toUpperCase()), label: 'UK, DE, EU' },
+                    { name: 'p_asia', rule: (v) => ['JP', 'IN', 'CN', 'ASIA'].includes(v.toUpperCase()), label: 'JP, IN, ASIA' }
+                ],
+                generator: () => {
+                    const regions = ['US', 'UK', 'IN', 'JP', 'CA', 'EU'];
+                    return regions[Math.floor(Math.random() * regions.length)];
+                }
+            },
+            hash: {
+                title: "Hash Partitioning",
+                desc: "A hash function (or simple Modulo) determines the partition. Good for distributing load evenly.",
+                tech: "<strong>Key Concept:</strong> Load Balancing. Unlike Range/List, Hash ensures data is spread randomly but deterministically. <br><strong>Risk:</strong> No Range Pruning. Queries like <span class='code-snippet'>WHERE ID > 100</span> must scan ALL partitions.",
+                hint: "Enter a Numeric ID",
+                partitions: [
+                    { name: 'p_0', rule: (v) => parseInt(v) % 3 === 0, label: 'ID % 3 == 0' },
+                    { name: 'p_1', rule: (v) => parseInt(v) % 3 === 1, label: 'ID % 3 == 1' },
+                    { name: 'p_2', rule: (v) => parseInt(v) % 3 === 2, label: 'ID % 3 == 2' }
+                ],
+                generator: () => Math.floor(Math.random() * 1000)
+            }
+        };
+
+        // INITIALIZATION
+        function init() {
+            resetPlayground();
+        }
+
+        function resetPlayground() {
+            const container = document.getElementById('partitionsContainer');
+            container.innerHTML = '';
+            
+            currentStrategy = document.getElementById('strategySelect').value;
+            const config = configs[currentStrategy];
+
+            // Update Text
+            document.getElementById('currentStrategyTitle').innerText = config.title.split(' ')[0];
+            document.getElementById('currentStrategyDesc').innerText = config.desc;
+            document.getElementById('technicalNote').innerHTML = config.tech;
+            document.getElementById('inputHint').innerText = config.hint;
+
+            // Render Partitions
+            config.partitions.forEach((p, index) => {
+                const pDiv = document.createElement('div');
+                pDiv.className = `partition`;
+                pDiv.id = p.name;
+                pDiv.innerHTML = `<div class="partition-header">${p.name}<br><small>${p.label}</small></div><div class="rows-container"></div>`;
+                container.appendChild(pDiv);
+            });
+        }
+
+        // LOGIC
+        function insertData(manualValue = null) {
+            const input = document.getElementById('dataInput');
+            const val = manualValue || input.value;
+            
+            if (!val) return;
+
+            const config = configs[currentStrategy];
+            let targetPartition = null;
+
+            // Find target
+            for (let p of config.partitions) {
+                if (p.rule(val)) {
+                    targetPartition = p.name;
+                    break;
+                }
+            }
+
+            // Fallback (usually "default" partition in real DBs)
+            if (!targetPartition) {
+                alert("Value doesn't fit any partition rule!");
+                return;
+            }
+
+            // Animate Insertion
+            const pEl = document.getElementById(targetPartition);
+            const row = document.createElement('div');
+            row.className = `row-item p${(config.partitions.findIndex(x => x.name === targetPartition) % 4) + 1}`;
+            row.innerHTML = `<span>Val: <strong>${val}</strong></span>`;
+            
+            pEl.querySelector('.rows-container').prepend(row);
+            
+            // Visual feedback
+            pEl.classList.add('highlight');
+            setTimeout(() => pEl.classList.remove('highlight'), 300);
+
+            if (!manualValue) input.value = '';
+        }
+
+        function simulateBulkLoad() {
+            const config = configs[currentStrategy];
+            let count = 0;
+            const interval = setInterval(() => {
+                insertData(config.generator());
+                count++;
+                if (count >= 10) clearInterval(interval);
+            }, 200);
+        }
+
+        function runQuery() {
+            // Visualize Pruning
+            const parts = document.querySelectorAll('.partition');
+            
+            // Reset opacity
+            parts.forEach(p => p.style.opacity = '1');
+
+            if (currentStrategy === 'hash') {
+                alert("Notice: In Hash Partitioning, range queries (e.g., > 500) must scan ALL partitions because the data is scattered randomly.");
+                parts.forEach(p => {
+                    p.style.backgroundColor = '#334155';
+                    setTimeout(() => p.style.backgroundColor = '', 1000);
+                });
+            } else {
+                // Simulate a query that only hits the middle partition
+                const middlePart = parts[1];
+                parts.forEach(p => {
+                    if(p !== middlePart) p.style.opacity = '0.3';
+                });
+                
+                setTimeout(() => {
+                    alert("Partition Pruning! The database engine realized it only needed to scan the middle partition. The others were ignored (faded out).");
+                    parts.forEach(p => p.style.opacity = '1');
+                }, 500);
+            }
+        }
+
+        // QUIZ LOGIC
+        function startQuiz() {
+            document.getElementById('quizOverlay').classList.add('active');
+            nextQuizQuestion();
+        }
+
+        function endQuiz() {
+            document.getElementById('quizOverlay').classList.remove('active');
+        }
+
+        function nextQuizQuestion() {
+            const config = configs[currentStrategy];
+            const val = config.generator();
+            
+            document.getElementById('quizContext').innerText = `Value: ${val}`;
+            const optsContainer = document.getElementById('quizOptions');
+            optsContainer.innerHTML = '';
+
+            config.partitions.forEach(p => {
+                const btn = document.createElement('button');
+                btn.className = 'secondary';
+                btn.innerText = p.name;
+                btn.onclick = () => checkAnswer(val, p.name);
+                optsContainer.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(val, selectedPartitionName) {
+            const config = configs[currentStrategy];
+            let correctPartition = null;
+            for (let p of config.partitions) {
+                if (p.rule(val)) {
+                    correctPartition = p.name;
+                    break;
+                }
+            }
+
+            if (selectedPartitionName === correctPartition) {
+                alert("Correct! Intuition building...");
+                nextQuizQuestion();
+            } else {
+                alert(`Incorrect. Value ${val} actually belongs in ${correctPartition}`);
+            }
+        }
+
+        // Boot
+        init();
+
+    </script>
+</body>
+</html>
