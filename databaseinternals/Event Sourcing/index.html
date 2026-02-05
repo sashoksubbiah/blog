@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Sourcing Deep Dive</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .event-card { transition: all 0.3s ease; }
+        .event-card:hover { transform: translateX(5px); }
+        .highlight-change { animation: flash 1s; }
+        @keyframes flash { 0% { background-color: #fef08a; } 100% { background-color: transparent; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans p-6">
+    <div id="app" class="max-w-6xl mx-auto">
+        
+        <header class="mb-8 border-b pb-4">
+            <h1 class="text-3xl font-bold text-slate-900">Event Sourcing Lab <span class="text-sm font-normal text-slate-500">v1.0</span></h1>
+            <p class="text-slate-600 mt-2">Don't store the current state. Store the facts that led to it.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <div class="lg:col-span-3 space-y-6">
+                <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                    <h2 class="font-bold text-lg mb-4 text-indigo-600">1. Dispatch Command</h2>
+                    <p class="text-xs text-slate-500 mb-4">Commands are requests. They can be rejected (validation). If accepted, they become Events.</p>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium">Action</label>
+                            <select v-model="commandType" class="w-full mt-1 p-2 border rounded">
+                                <option value="ACCOUNT_OPENED">Open Account</option>
+                                <option value="MONEY_DEPOSITED">Deposit Money</option>
+                                <option value="MONEY_WITHDRAWN">Withdraw Money</option>
+                                <option value="ACCOUNT_FROZEN">Freeze Account</option>
+                            </select>
+                        </div>
+
+                        <div v-if="['MONEY_DEPOSITED', 'MONEY_WITHDRAWN', 'ACCOUNT_OPENED'].includes(commandType)">
+                            <label class="block text-sm font-medium">Amount ($)</label>
+                            <input type="number" v-model.number="amount" class="w-full mt-1 p-2 border rounded">
+                        </div>
+
+                        <div v-if="commandType === 'ACCOUNT_OPENED'">
+                            <label class="block text-sm font-medium">Owner Name</label>
+                            <input type="text" v-model="ownerName" class="w-full mt-1 p-2 border rounded">
+                        </div>
+
+                        <button @click="handleCommand" :disabled="isTimeTraveling" 
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                            Apply Command
+                        </button>
+                        <p v-if="error" class="text-red-500 text-sm mt-2">{{ error }}</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 text-slate-200 p-4 rounded-lg text-sm font-mono">
+                    <p class="opacity-50 mb-2">// The Core Formula</p>
+                    <p>CurrentState = <br>  Events.reduce(<br>    ProjectionFn, <br>    InitialState<br>  )</p>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-bold text-lg text-emerald-600">2. Event Store (Append Only)</h2>
+                    <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded">Version: {{ events.length }}</span>
+                </div>
+                
+                <div class="space-y-3 h-[600px] overflow-y-auto pr-2 border-l-2 border-emerald-100 pl-4 relative">
+                    <div v-if="events.length === 0" class="text-slate-400 italic text-sm">No events yet. The ledger is empty.</div>
+                    
+                    <div v-for="(event, index) in events" :key="event.id" 
+                         class="event-card bg-white p-3 rounded border border-slate-200 shadow-sm relative text-sm"
+                         :class="{'opacity-50': isTimeTraveling && index >= replayIndex}">
+                        
+                        <div class="absolute -left-[25px] top-4 w-4 h-4 rounded-full border-4 border-white" 
+                             :class="index < replayIndex ? 'bg-emerald-500' : 'bg-slate-300'"></div>
+
+                        <div class="flex justify-between text-xs text-slate-400 mb-1">
+                            <span>#{{ index + 1 }} &bull; {{ new Date(event.timestamp).toLocaleTimeString() }}</span>
+                            <span class="font-mono">{{ event.type }}</span>
+                        </div>
+                        
+                        <div class="font-mono text-xs text-slate-600 bg-slate-50 p-2 rounded">
+                            {{ JSON.stringify(event.payload) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 space-y-6">
+                
+                <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                    <h3 class="font-bold text-amber-800 text-sm mb-2">3. Time Travel / Replay</h3>
+                    <input type="range" min="0" :max="events.length" v-model.number="replayIndex" 
+                           class="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-xs text-amber-700 mt-1">
+                        <span>Start</span>
+                        <span>State at Event #{{ replayIndex }}</span>
+                        <span>Now</span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                    <h2 class="font-bold text-lg mb-4 text-blue-600">4. Calculated State</h2>
+                    
+                    <div v-if="!currentState.exists" class="text-center py-8 text-slate-400">
+                        Account does not exist
+                    </div>
+
+                    <div v-else class="space-y-4">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <span class="text-slate-500">Owner</span>
+                            <span class="font-medium">{{ currentState.owner }}</span>
+                        </div>
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <span class="text-slate-500">Balance</span>
+                            <span class="text-2xl font-bold" :class="currentState.balance >= 0 ? 'text-green-600' : 'text-red-600'">
+                                ${{ currentState.balance.toFixed(2) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <span class="text-slate-500">Status</span>
+                            <span class="px-2 py-1 rounded text-xs font-bold"
+                                :class="currentState.isFrozen ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
+                                {{ currentState.isFrozen ? 'FROZEN' : 'ACTIVE' }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-500 text-xs">Derived from</span>
+                            <span class="text-xs bg-slate-100 px-2 py-1 rounded">{{ replayIndex }} events applied</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
+                    <h3 class="font-bold text-slate-700 mb-2">Audit Log Projection</h3>
+                    <p class="text-slate-500 mb-2">This is a secondary view derived from the exact same event stream, but formatted for auditors.</p>
+                    <ul class="list-disc pl-4 space-y-1 text-slate-600">
+                        <li v-for="log in auditLogs" :key="log">{{ log }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, watch } = Vue;
+
+        createApp({
+            setup() {
+                // --- 1. THE EVENT LOG (Source of Truth) ---
+                const events = ref([]);
+                
+                // --- 2. COMMAND HANDLING (Validation & Event Creation) ---
+                const commandType = ref('ACCOUNT_OPENED');
+                const amount = ref(100);
+                const ownerName = ref('Ashok');
+                const error = ref(null);
+
+                const handleCommand = () => {
+                    error.value = null;
+                    
+                    // We must rebuild state to valid commands against CURRENT state
+                    const state = buildState(events.value);
+
+                    const newEvent = {
+                        id: crypto.randomUUID(),
+                        timestamp: Date.now(),
+                        type: commandType.value,
+                        payload: {}
+                    };
+
+                    // Domain Logic (Validation)
+                    try {
+                        switch (commandType.value) {
+                            case 'ACCOUNT_OPENED':
+                                if (state.exists) throw new Error("Account already exists!");
+                                if (!ownerName.value) throw new Error("Owner name required");
+                                newEvent.payload = { owner: ownerName.value, initialDeposit: amount.value };
+                                break;
+                            
+                            case 'MONEY_DEPOSITED':
+                                if (!state.exists) throw new Error("No account to deposit into.");
+                                if (state.isFrozen) throw new Error("Account is frozen.");
+                                if (amount.value <= 0) throw new Error("Amount must be positive");
+                                newEvent.payload = { amount: amount.value };
+                                break;
+
+                            case 'MONEY_WITHDRAWN':
+                                if (!state.exists) throw new Error("No account.");
+                                if (state.isFrozen) throw new Error("Account is frozen.");
+                                if (state.balance < amount.value) throw new Error("Insufficient funds!");
+                                newEvent.payload = { amount: amount.value };
+                                break;
+
+                            case 'ACCOUNT_FROZEN':
+                                if (!state.exists) throw new Error("No account.");
+                                if (state.isFrozen) throw new Error("Already frozen.");
+                                newEvent.payload = { reason: "Admin Action" };
+                                break;
+                        }
+
+                        // If valid, commit to event store
+                        events.value.push(newEvent);
+                        replayIndex.value = events.value.length; // Auto-move timeline to end
+
+                    } catch (e) {
+                        error.value = e.message;
+                    }
+                };
+
+                // --- 3. THE AGGREGATOR (State = f(Events)) ---
+                // This function takes a list of events and "folds" them into a state object
+                const buildState = (eventStream) => {
+                    // Initial State
+                    let state = {
+                        exists: false,
+                        balance: 0,
+                        owner: null,
+                        isFrozen: false
+                    };
+
+                    for (const event of eventStream) {
+                        switch (event.type) {
+                            case 'ACCOUNT_OPENED':
+                                state.exists = true;
+                                state.owner = event.payload.owner;
+                                state.balance = event.payload.initialDeposit;
+                                break;
+                            case 'MONEY_DEPOSITED':
+                                state.balance += event.payload.amount;
+                                break;
+                            case 'MONEY_WITHDRAWN':
+                                state.balance -= event.payload.amount;
+                                break;
+                            case 'ACCOUNT_FROZEN':
+                                state.isFrozen = true;
+                                break;
+                        }
+                    }
+                    return state;
+                };
+
+                // --- 4. TIME TRAVEL & PROJECTIONS ---
+                const replayIndex = ref(0);
+
+                // Computed: The State at the specific point in time selected by the slider
+                const currentState = computed(() => {
+                    // We slice the events array up to the slider position
+                    const eventsToApply = events.value.slice(0, replayIndex.value);
+                    return buildState(eventsToApply);
+                });
+
+                const isTimeTraveling = computed(() => replayIndex.value < events.value.length);
+
+                // A Secondary Projection: Audit Logs (Just string formatting)
+                const auditLogs = computed(() => {
+                    return events.value.slice(0, replayIndex.value).map(e => {
+                        if (e.type === 'MONEY_WITHDRAWN' && e.payload.amount > 500) {
+                            return `⚠️ Large withdrawal of $${e.payload.amount}`;
+                        }
+                        return `${e.type} occurred.`;
+                    }).filter(l => l).slice(-5); // Show last 5
+                });
+
+                return {
+                    events,
+                    commandType,
+                    amount,
+                    ownerName,
+                    handleCommand,
+                    currentState,
+                    error,
+                    replayIndex,
+                    isTimeTraveling,
+                    auditLogs
+                };
+            }
+        });
+    </script>
+</body>
+</html>
