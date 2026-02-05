@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: Leader-Follower Replication</title>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --accent: #38bdf8; --success: #22c55e; --danger: #ef4444; --warn: #f59e0b; }
+        body { font-family: 'Segoe UI', monospace; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        h1 { margin-bottom: 10px; font-weight: 300; }
+        .controls { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5); width: 90%; max-width: 1000px; justify-content: center; align-items: center; }
+        button { background: var(--accent); border: none; padding: 10px 20px; color: #000; font-weight: bold; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button.danger { background: var(--danger); color: white; }
+        select, input { padding: 10px; border-radius: 4px; border: 1px solid #475569; background: #0f172a; color: white; }
+        
+        .system-diagram { display: flex; gap: 40px; position: relative; padding: 40px; width: 90%; max-width: 1000px; justify-content: space-between; }
+        
+        .node { width: 220px; background: var(--card); border: 2px solid #475569; border-radius: 12px; padding: 15px; position: relative; transition: all 0.3s; display: flex; flex-direction: column; }
+        .node.leader { border-color: var(--accent); box-shadow: 0 0 15px rgba(56, 189, 248, 0.2); }
+        .node.dead { opacity: 0.5; filter: grayscale(1); border-color: var(--danger); }
+        
+        .node-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
+        .badge { font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; background: #334155; }
+        .leader .badge { background: var(--accent); color: black; }
+        
+        .storage { background: #0f172a; padding: 10px; border-radius: 6px; height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; border: 1px solid #334155; }
+        .log-entry { padding: 2px 0; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; }
+        .log-entry.committed { color: var(--success); }
+        .log-entry.pending { color: var(--warn); }
+        
+        /* Network Packets Animation */
+        .packet { position: absolute; width: 12px; height: 12px; background: var(--success); border-radius: 50%; z-index: 100; transition: top 0.1s linear, left 0.1s linear; box-shadow: 0 0 5px var(--success); pointer-events: none; }
+        .packet.ack { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+        
+        .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 90%; max-width: 1000px; margin-top: 20px; }
+        .metric-card { background: var(--card); padding: 15px; border-radius: 8px; text-align: center; }
+        .metric-val { font-size: 1.5rem; font-weight: bold; color: var(--accent); }
+        
+        .challenge-box { margin-top: 30px; background: #2a303c; padding: 20px; border-radius: 8px; border-left: 4px solid var(--warn); max-width: 800px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>Leader-Follower Replication Lab</h1>
+
+    <div class="controls">
+        <div>
+            <label>Replication Mode:</label>
+            <select id="modeSelect">
+                <option value="async">Asynchronous (Fast/Risky)</option>
+                <option value="sync">Synchronous (Slow/Safe)</option>
+            </select>
+        </div>
+        <div>
+            <label>Network Latency (ms):</label>
+            <input type="number" id="latencyInput" value="1000" min="100" step="100">
+        </div>
+        <button onclick="sendWriteRequest()">📝 Write Data</button>
+        <button class="danger" onclick="killLeader()">💀 Kill Leader</button>
+        <button onclick="resetSystem()">🔄 Reset</button>
+    </div>
+
+    <div class="system-diagram" id="diagram">
+        </div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div>Consistency Status</div>
+            <div id="statusMetric" class="metric-val" style="color: var(--success)">Consistent</div>
+        </div>
+        <div class="metric-card">
+            <div>Last Committed Index</div>
+            <div id="commitMetric" class="metric-val">0</div>
+        </div>
+        <div class="metric-card">
+            <div>Pending Requests</div>
+            <div id="pendingMetric" class="metric-val">0</div>
+        </div>
+    </div>
+
+    <div class="challenge-box">
+        <h3>🧠 Check Your Understanding</h3>
+        <p id="challengeText"><strong>Scenario 1:</strong> Switch to 'Asynchronous' mode. Set Latency to 2000ms. Click 'Write Data' and immediately click 'Kill Leader' before the green dot reaches the followers. What happens to the data?</p>
+        <div style="margin-top: 10px;">
+            <button onclick="nextChallenge()" style="font-size: 0.8rem; padding: 5px 10px;">Next Challenge</button>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration & State ---
+    const CONFIG = {
+        nodes: [
+            { id: 'N1', role: 'Leader', x: 0, y: 0, dead: false },
+            { id: 'N2', role: 'Follower', x: 0, y: 0, dead: false },
+            { id: 'N3', role: 'Follower', x: 0, y: 0, dead: false }
+        ],
+        replicationMode: 'async', // 'sync' or 'async'
+        baseLatency: 1000,
+        log: [] // Global truth for simulation checking
+    };
+
+    let requestCounter = 0;
+    let pendingWrites = new Map(); // Tracks writes waiting for sync ACKs
+
+    // --- DOM Elements ---
+    const diagramEl = document.getElementById('diagram');
+    const modeSelect = document.getElementById('modeSelect');
+    const latencyInput = document.getElementById('latencyInput');
+
+    // --- Initialization ---
+    function init() {
+        renderNodes();
+        setupEventListeners();
+        gameLoop();
+    }
+
+    function setupEventListeners() {
+        modeSelect.addEventListener('change', (e) => CONFIG.replicationMode = e.target.value);
+        latencyInput.addEventListener('change', (e) => CONFIG.baseLatency = parseInt(e.target.value));
+    }
+
+    // --- Core Logic: The Node Class ---
+    class Node {
+        constructor(config) {
+            this.id = config.id;
+            this.role = config.role;
+            this.dead = config.dead;
+            this.store = []; // The actual data
+            this.el = null;
+        }
+
+        receiveWrite(id, value) {
+            if (this.dead) return;
+
+            // Commit locally
+            this.store.push({ id, value, status: 'committed' });
+            this.updateUI();
+
+            if (this.role === 'Leader') {
+                logEvent(`Leader ${this.id} received write: ${value}`);
+                
+                // Replicate to followers
+                CONFIG.nodes.filter(n => n.id !== this.id).forEach(follower => {
+                    sendPacket(this, follower, { type: 'REPLICATE', id, value });
+                });
+
+                // Handling Sync vs Async response to Client
+                if (CONFIG.replicationMode === 'async') {
+                    notifyClient("Success (Async)");
+                } else {
+                    // For Sync, we wait. We store the request to track ACKs.
+                    if (!pendingWrites.has(id)) {
+                        pendingWrites.set(id, { acksNeeded: 2, acksReceived: 0 }); 
+                        // Note: simplistic quorum. In real life usually (N/2)+1. Here we wait for all alive.
+                    }
+                }
+            } else {
+                // Follower Logic
+                // Send ACK back to leader
+                const leader = nodeInstances.find(n => n.role === 'Leader');
+                if (leader && !leader.dead) {
+                    sendPacket(this, leader, { type: 'ACK', id });
+                }
+            }
+            
+            updateMetrics();
+        }
+
+        receiveAck(reqId, fromId) {
+            if (this.dead || this.role !== 'Leader') return;
+
+            if (CONFIG.replicationMode === 'sync') {
+                const req = pendingWrites.get(reqId);
+                if (req) {
+                    req.acksReceived++;
+                    logEvent(`Leader got ACK from ${fromId} for Req ${reqId}`);
+                    
+                    // Check if we have enough ACKs (Simulating waiting for ALL followers for strict sync)
+                    const aliveFollowers = CONFIG.nodes.filter(n => n.role === 'Follower' && !n.dead).length;
+                    
+                    if (req.acksReceived >= aliveFollowers) {
+                        notifyClient("Success (Sync - All Acknowledged)");
+                        pendingWrites.delete(reqId);
+                    }
+                }
+            }
+        }
+
+        render() {
+            const div = document.createElement('div');
+            div.className = `node ${this.role.toLowerCase()} ${this.dead ? 'dead' : ''}`;
+            div.id = `node-${this.id}`;
+            div.innerHTML = `
+                <div class="node-header">
+                    <strong>${this.id}</strong>
+                    <span class="badge">${this.role}</span>
+                </div>
+                <div class="storage" id="store-${this.id}">
+                    ${this.store.map(s => `
+                        <div class="log-entry ${s.status}">
+                            <span>#${s.id} ${s.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            return div;
+        }
+
+        updateUI() {
+            const storeEl = document.getElementById(`store-${this.id}`);
+            if (storeEl) {
+                storeEl.innerHTML = this.store.map(s => `
+                    <div class="log-entry ${s.status}">
+                        <span>#${s.id} ${s.value}</span>
+                        <span>✔</span>
+                    </div>
+                `).join('');
+                storeEl.scrollTop = storeEl.scrollHeight;
+            }
+        }
+    }
+
+    let nodeInstances = [];
+
+    function renderNodes() {
+        diagramEl.innerHTML = '';
+        nodeInstances = CONFIG.nodes.map(nConf => {
+            const n = new Node(nConf);
+            diagramEl.appendChild(n.render());
+            n.el = document.getElementById(`node-${n.id}`);
+            return n;
+        });
+    }
+
+    // --- Network Simulation (The "Gut Intuition" Visualizer) ---
+    
+    function sendPacket(fromNode, toNode, payload) {
+        if (fromNode.dead || toNode.dead) return;
+
+        // Visual Packet
+        const packet = document.createElement('div');
+        packet.className = `packet ${payload.type === 'ACK' ? 'ack' : ''}`;
+        document.body.appendChild(packet);
+
+        // Calculate positions
+        const fromRect = fromNode.el.getBoundingClientRect();
+        const toRect = toNode.el.getBoundingClientRect();
+        
+        const startX = fromRect.left + fromRect.width / 2;
+        const startY = fromRect.top + fromRect.height / 2;
+        const endX = toRect.left + toRect.width / 2;
+        const endY = toRect.top + toRect.height / 2;
+
+        packet.style.left = `${startX}px`;
+        packet.style.top = `${startY}px`;
+
+        // Animation
+        const duration = CONFIG.baseLatency;
+        
+        // Use requestAnimationFrame for smooth movement
+        const startTime = performance.now();
+        
+        function animate(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            const currentX = startX + (endX - startX) * progress;
+            const currentY = startY + (endY - startY) * progress;
+
+            packet.style.left = `${currentX}px`;
+            packet.style.top = `${currentY}px`;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                packet.remove();
+                // Delivery logic
+                const targetNode = nodeInstances.find(n => n.id === toNode.id);
+                if (payload.type === 'REPLICATE') {
+                    targetNode.receiveWrite(payload.id, payload.value);
+                } else if (payload.type === 'ACK') {
+                    targetNode.receiveAck(payload.id, fromNode.id);
+                }
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    // --- User Actions ---
+
+    function sendWriteRequest() {
+        requestCounter++;
+        const leader = nodeInstances.find(n => n.role === 'Leader');
+        if (leader.dead) {
+            alert("Leader is dead! Cannot write. (System Unavailable)");
+            return;
+        }
+        
+        // Visual indicator from "Client" (top of screen)
+        leader.receiveWrite(requestCounter, `Data_${requestCounter}`);
+        updateMetrics();
+    }
+
+    function killLeader() {
+        const leader = nodeInstances.find(n => n.role === 'Leader');
+        leader.dead = true;
+        
+        // Update config
+        const confNode = CONFIG.nodes.find(n => n.id === leader.id);
+        confNode.dead = true;
+        
+        // Re-render to show dead state
+        const div = document.getElementById(`node-${leader.id}`);
+        div.classList.add('dead');
+        
+        checkConsistency();
+    }
+
+    function resetSystem() {
+        CONFIG.nodes.forEach(n => { n.dead = false; });
+        nodeInstances = [];
+        requestCounter = 0;
+        pendingWrites.clear();
+        renderNodes();
+        updateMetrics();
+    }
+
+    // --- Metrics & Challenges ---
+
+    function updateMetrics() {
+        document.getElementById('pendingMetric').innerText = pendingWrites.size;
+        
+        // Calculate max commited index
+        let maxIndex = 0;
+        nodeInstances.forEach(n => {
+            if (n.store.length > maxIndex) maxIndex = n.store.length;
+        });
+        document.getElementById('commitMetric').innerText = maxIndex;
+        
+        checkConsistency();
+    }
+
+    function checkConsistency() {
+        // Simple consistency check: Do all alive nodes have the same data?
+        const aliveNodes = nodeInstances.filter(n => !n.dead);
+        if (aliveNodes.length < 2) return;
+
+        const reference = JSON.stringify(aliveNodes[0].store);
+        const isConsistent = aliveNodes.every(n => JSON.stringify(n.store) === reference);
+        
+        const el = document.getElementById('statusMetric');
+        if (isConsistent) {
+            el.innerText = "Consistent";
+            el.style.color = "var(--success)";
+        } else {
+            el.innerText = "Divergent";
+            el.style.color = "var(--warn)";
+        }
+    }
+
+    function notifyClient(msg) {
+        console.log(`Client received: ${msg}`);
+        // In a real app we'd flash a toast message
+    }
+
+    function logEvent(msg) {
+        console.log(`[System]: ${msg}`);
+    }
+
+    // --- Challenge Logic ---
+    const challenges = [
+        "Scenario 1: Switch to 'Asynchronous' mode. Set Latency to 2000ms. Click 'Write Data' and IMMEDIATELY click 'Kill Leader' before the green packet reaches the followers. Result: The Leader died with data that never reached followers. This is 'Data Loss'.",
+        "Scenario 2: Reset. Switch to 'Synchronous' mode. Set Latency to 2000ms. Click 'Write Data'. Notice the Leader does NOT confirm success until the packets return. Now, Kill one Follower. Try to write again. Result: In Strict Sync, the system hangs or fails because it cannot get all ACKs. (Availability vs Consistency trade-off).",
+        "Scenario 3: (Advanced) Look at the 'Divergent' status. If a Leader dies in Async mode, and a Follower is promoted (mentally promote one), the new Leader is missing data the old Leader had. This is a Split Brain scenario waiting to happen if the old Leader comes back."
+    ];
+    let currentChallenge = 0;
+
+    function nextChallenge() {
+        currentChallenge = (currentChallenge + 1) % challenges.length;
+        document.getElementById('challengeText').innerText = challenges[currentChallenge];
+    }
+
+    function gameLoop() {
+        // Used for continuous background updates if needed
+        requestAnimationFrame(gameLoop);
+    }
+
+    init();
+
+</script>
+</body>
+</html>
