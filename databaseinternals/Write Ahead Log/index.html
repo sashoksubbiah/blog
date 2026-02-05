@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAL Simulator: Anatomy of a Crash</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --text-color: #e6e6e6;
+            --accent-color: #4cc9f0;
+            --danger-color: #f72585;
+            --success-color: #4361ee;
+            --disk-color: #7209b7;
+            --ram-color: #3a0ca3;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1, h2, h3 { margin-bottom: 0.5rem; }
+        .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+
+        /* Layout Grid */
+        .system-diagram {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 30px;
+        }
+
+        /* Components */
+        .component {
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            position: relative;
+        }
+
+        .ram-component { border-color: var(--ram-color); }
+        .disk-component { border-color: var(--disk-color); }
+
+        .label {
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--bg-color);
+            padding: 0 10px;
+            font-weight: bold;
+            color: #aaa;
+        }
+
+        /* Data Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #444; }
+        th { color: var(--accent-color); }
+        
+        .wal-entry { font-family: var(--font-mono); font-size: 0.8rem; }
+        .dirty { color: var(--danger-color); font-weight: bold; } /* Dirty Page indicator */
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.95); }
+
+        .btn-tx { background: var(--success-color); color: white; }
+        .btn-flush { background: var(--accent-color); color: black; }
+        .btn-crash { background: var(--danger-color); color: white; }
+        .btn-recover { background: #fff; color: black; display: none; }
+
+        /* Animation Classes */
+        .flash { animation: flash-anim 1s; }
+        @keyframes flash-anim {
+            0% { background-color: rgba(255, 255, 255, 0.2); }
+            100% { background-color: transparent; }
+        }
+
+        .log-console {
+            width: 100%;
+            max-width: 1000px;
+            background: #000;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+        .log-msg { margin: 5px 0; color: #888; }
+        .log-highlight { color: var(--accent-color); }
+        .log-error { color: var(--danger-color); }
+
+    </style>
+</head>
+<body>
+
+    <h1>WAL Simulator</h1>
+    <p class="subtitle">Understanding Crash Recovery & Durability. <strong>Observe the "Dirty" flag.</strong></p>
+
+    <div class="controls">
+        <button class="btn-tx" onclick="performTransaction()">+ New Transaction (Update Value)</button>
+        <button class="btn-flush" onclick="checkpoint()">CheckPoint (Flush RAM to Disk)</button>
+        <button class="btn-crash" onclick="simulateCrash()">⚡ KILL POWER (CRASH)</button>
+        <button class="btn-recover" id="recoverBtn" onclick="performRecovery()">↺ Restart & Recover</button>
+    </div>
+
+    <div class="system-diagram">
+        
+        <div class="component ram-component" id="ramContainer">
+            <span class="label" style="color: var(--ram-color)">VOLATILE MEMORY (RAM)</span>
+            <h3>Buffer Pool</h3>
+            <p style="font-size: 0.8rem; color: #888;">Updates happen here first. Changes not yet on disk are "Dirty".</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Page ID</th>
+                        <th>Data (Value)</th>
+                        <th>Status</th>
+                        <th>Last LSN</th>
+                    </tr>
+                </thead>
+                <tbody id="ramTable">
+                    </tbody>
+            </table>
+        </div>
+
+        <div class="component disk-component">
+            <span class="label" style="color: var(--disk-color)">PERSISTENT DISK (HDD/SSD)</span>
+            
+            <div style="margin-bottom: 20px;">
+                <h3>Write-Ahead Log (WAL)</h3>
+                <p style="font-size: 0.8rem; color: #888;">Append-only. Sequential writes. Fast.</p>
+                <div style="max-height: 150px; overflow-y: auto; border: 1px solid #444; padding: 5px;">
+                    <table style="margin:0;">
+                        <thead>
+                            <tr>
+                                <th>LSN</th>
+                                <th>Op</th>
+                                <th>Page</th>
+                                <th>Val</th>
+                            </tr>
+                        </thead>
+                        <tbody id="walTable">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <h3>Table Data Files (The "Real" DB)</h3>
+                <p style="font-size: 0.8rem; color: #888;">Random Access. Slow writes. Lags behind RAM.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Page ID</th>
+                            <th>Persisted Value</th>
+                            <th>Page LSN</th>
+                        </tr>
+                    </thead>
+                    <tbody id="diskTable">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="log-console" id="consoleLog">
+        <div class="log-msg">> System initialized. Ready for transactions.</div>
+    </div>
+
+    <script>
+        // --- STATE ---
+        // LSN = Log Sequence Number (Global counter for operations)
+        let globalLSN = 0;
+        let isCrashed = false;
+
+        // The "Database" state
+        // We track a single "Page 1" for simplicity
+        const INITIAL_VALUE = 100;
+        
+        // RAM State
+        let ram = {
+            pageId: 1,
+            value: INITIAL_VALUE,
+            isDirty: false, // Key concept: Data in RAM differs from Disk
+            pageLSN: 0      // The LSN of the last update applied to this page
+        };
+
+        // Disk State (Table File)
+        let diskTable = {
+            pageId: 1,
+            value: INITIAL_VALUE,
+            pageLSN: 0
+        };
+
+        // Disk State (WAL File)
+        let walLog = [];
+
+        // --- RENDER FUNCTIONS ---
+        function render() {
+            // Render RAM
+            const ramBody = document.getElementById('ramTable');
+            if (isCrashed) {
+                ramBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: #555;">[NO SIGNAL - MEMORY LOST]</td></tr>`;
+                document.getElementById('ramContainer').style.opacity = '0.3';
+            } else {
+                document.getElementById('ramContainer').style.opacity = '1';
+                ramBody.innerHTML = `
+                    <tr class="${ram.isDirty ? 'flash' : ''}">
+                        <td>Page ${ram.pageId}</td>
+                        <td>${ram.value}</td>
+                        <td class="${ram.isDirty ? 'dirty' : ''}">${ram.isDirty ? 'DIRTY' : 'CLEAN'}</td>
+                        <td>${ram.pageLSN}</td>
+                    </tr>
+                `;
+            }
+
+            // Render WAL
+            const walBody = document.getElementById('walTable');
+            walBody.innerHTML = walLog.map(entry => `
+                <tr class="wal-entry">
+                    <td>${entry.lsn}</td>
+                    <td>${entry.type}</td>
+                    <td>${entry.pageId}</td>
+                    <td>${entry.val}</td>
+                </tr>
+            `).reverse().join(''); // Show newest first
+
+            // Render Disk Table
+            const diskBody = document.getElementById('diskTable');
+            diskBody.innerHTML = `
+                <tr>
+                    <td>Page ${diskTable.pageId}</td>
+                    <td>${diskTable.value}</td>
+                    <td>${diskTable.pageLSN}</td>
+                </tr>
+            `;
+        }
+
+        function log(msg, type = 'normal') {
+            const consoleEl = document.getElementById('consoleLog');
+            const div = document.createElement('div');
+            div.className = 'log-msg';
+            if (type === 'highlight') div.classList.add('log-highlight');
+            if (type === 'error') div.classList.add('log-error');
+            div.innerText = `> ${msg}`;
+            consoleEl.prepend(div);
+        }
+
+        // --- ACTIONS ---
+
+        function performTransaction() {
+            if (isCrashed) return;
+
+            // 1. Generate LSN
+            globalLSN++;
+            const newValue = ram.value + 10; // Increment by 10 for simplicity
+
+            // 2. WRITE AHEAD LOGGING (The Critical Step)
+            // We MUST write to the WAL on disk *before* we acknowledge success
+            const logEntry = {
+                lsn: globalLSN,
+                type: 'UPDATE',
+                pageId: 1,
+                val: newValue
+            };
+            walLog.push(logEntry);
+            log(`LSN ${globalLSN}: Written to WAL (Update Page 1 to ${newValue})`, 'highlight');
+
+            // 3. Update RAM (Buffer Pool)
+            ram.value = newValue;
+            ram.isDirty = true; // Mark as needing flush
+            ram.pageLSN = globalLSN; // Tag page with the LSN that modified it
+
+            render();
+        }
+
+        function checkpoint() {
+            if (isCrashed) return;
+            if (!ram.isDirty) {
+                log("Checkpoint skipped: No dirty pages.");
+                return;
+            }
+
+            log(`Checkpoint: Flushing Dirty Page 1 to Disk...`);
+            
+            // Copy RAM to Disk
+            diskTable.value = ram.value;
+            diskTable.pageLSN = ram.pageLSN;
+            
+            // Mark RAM as clean
+            ram.isDirty = false;
+            
+            render();
+            log(`Checkpoint Complete. Disk is now consistent with RAM.`);
+        }
+
+        function simulateCrash() {
+            isCrashed = true;
+            log("🛑 SYSTEM CRASH! Power Failure!", "error");
+            log("🛑 Volatile RAM contents vanished instantly.", "error");
+            
+            // Reset RAM to "Lost" state (undefined or default)
+            ram = { pageId: 1, value: 0, isDirty: false, pageLSN: 0 }; 
+            
+            document.getElementById('recoverBtn').style.display = 'block';
+            render();
+        }
+
+        function performRecovery() {
+            log("⚙️ Booting up... Starting Recovery Process...", "highlight");
+            
+            // 1. Load persisted data from disk into RAM
+            ram.value = diskTable.value;
+            ram.pageLSN = diskTable.pageLSN;
+            ram.pageId = diskTable.pageId;
+            log(`Loaded Page 1 from Disk (Value: ${ram.value}, LSN: ${ram.pageLSN})`);
+
+            // 2. Replay WAL (Redo Phase)
+            let updatesApplied = 0;
+            
+            log("Scanning WAL for missing updates...");
+            
+            walLog.forEach(entry => {
+                // ARIES Recovery Rule:
+                // If the Log LSN > Page LSN, the page on disk is stale. We must REDO.
+                if (entry.lsn > ram.pageLSN) {
+                    log(`REDO: Found LSN ${entry.lsn} in WAL. Applying value ${entry.val}...`, 'highlight');
+                    ram.value = entry.val;
+                    ram.pageLSN = entry.lsn;
+                    
+                    // We also update disk immediately during recovery usually, 
+                    // or mark as dirty. For simplicity, let's sync them.
+                    diskTable.value = ram.value;
+                    diskTable.pageLSN = ram.pageLSN;
+                    updatesApplied++;
+                } else {
+                    log(`SKIP: LSN ${entry.lsn} is already present in Page (Page LSN: ${ram.pageLSN})`);
+                }
+            });
+
+            isCrashed = false;
+            document.getElementById('recoverBtn').style.display = 'none';
+            
+            if (updatesApplied > 0) {
+                log(`✅ Recovery Complete. Replayed ${updatesApplied} transactions. System Consistent.`, 'highlight');
+            } else {
+                log(`✅ Recovery Complete. No data was lost. System Consistent.`);
+            }
+
+            render();
+        }
+
+        // Initial Render
+        render();
+
+    </script>
+</body>
+</html>
