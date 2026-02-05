@@ -3,418 +3,246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Multi-Head Attention</title>
+    <title>The Spotlight: Basic Attention</title>
     <style>
         :root {
-            --bg: #0f172a;
-            --text: #e2e8f0;
-            --h1-color: #ec4899; /* Pink */
-            --h2-color: #3b82f6; /* Blue */
-            --panel: #1e293b;
-            --border: #334155;
+            --bg: #111827;
+            --card: #1f2937;
+            --text: #f3f4f6;
+            --accent: #60a5fa; /* Blue */
+            --highlight: #facc15; /* Yellow */
+            --muted: #9ca3af;
         }
-        body { 
-            font-family: 'Segoe UI', sans-serif; 
-            background: var(--bg); 
-            color: var(--text); 
-            margin: 0; 
-            padding: 0; 
-            overflow-x: hidden; /* Prevent horizontal scroll only */
-            min-height: 100vh;
-        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
         
-        .container { 
-            max-width: 1000px; 
-            margin: 0 auto; 
-            padding-bottom: 50px;
-            position: relative;
-        }
-        
-        /* Sticky Controls */
-        .controls { 
-            background: rgba(30, 41, 59, 0.95); 
-            padding: 20px; 
-            position: sticky; 
-            top: 0; 
-            z-index: 50; 
-            border-bottom: 1px solid var(--border);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
+        h2 { margin-bottom: 5px; color: var(--accent); }
+        p { color: var(--muted); margin-bottom: 30px; text-align: center; max-width: 600px; }
 
-        .input-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
-        
-        input { 
-            background: #0f172a; 
-            border: 1px solid var(--border); 
-            color: white; 
-            padding: 10px; 
-            flex-grow: 1; 
-            min-width: 200px; 
-            border-radius: 6px; 
-            font-size: 1rem;
-        }
-        
-        button { 
-            padding: 10px 20px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            border: none; 
-            font-weight: bold; 
-            transition: all 0.2s;
-        }
-        
-        /* Button Styles */
-        .btn-random { background: #475569; color: white; }
-        .btn-random:hover { background: #64748b; }
-        
-        .btn-h1 { background: transparent; color: var(--h1-color); border: 1px solid var(--h1-color); }
-        .btn-h2 { background: transparent; color: var(--h2-color); border: 1px solid var(--h2-color); }
-        
-        .btn-h1.active { background: var(--h1-color); color: white; }
-        .btn-h2.active { background: var(--h2-color); color: white; }
+        /* Input Area */
+        .input-area { background: var(--card); padding: 15px; border-radius: 12px; display: flex; gap: 10px; margin-bottom: 40px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        input { background: #374151; border: 1px solid #4b5563; color: white; padding: 10px; border-radius: 6px; width: 300px; font-size: 1rem; }
+        button { background: var(--accent); color: #000; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-        /* Visualization Area */
-        .viz-wrapper { 
-            position: relative; 
-            margin-top: 40px; 
-            padding: 0 20px;
-        }
+        /* The Sentence Stage */
+        .stage-container { position: relative; width: 100%; max-width: 900px; height: 300px; display: flex; justify-content: center; align-items: center; }
         
-        .columns-container {
-            display: flex; 
-            justify-content: space-between; 
-            position: relative; 
-            z-index: 2;
-        }
-        
-        .column { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 30px; 
-            width: 150px;
-        }
-        
-        .column-label { 
-            text-align: center; 
-            font-size: 0.9rem; 
-            text-transform: uppercase; 
-            letter-spacing: 2px; 
-            color: #94a3b8; 
-            margin-bottom: 20px; 
-            font-weight: bold;
-        }
+        /* SVG Layer (Behind words) */
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        path { fill: none; stroke-linecap: round; transition: all 0.4s ease; }
+
+        /* Words */
+        .words-row { display: flex; gap: 40px; z-index: 2; position: relative; }
         
         .token {
-            padding: 12px; 
-            background: var(--panel); 
-            border: 1px solid var(--border);
-            border-radius: 8px; 
-            cursor: pointer; 
-            text-align: center;
-            user-select: none;
-            position: relative;
-            transition: transform 0.2s, background 0.2s;
+            background: var(--card); padding: 12px 20px; border-radius: 8px; border: 2px solid #374151;
+            cursor: pointer; transition: all 0.3s; font-size: 1.1rem; user-select: none; position: relative;
+        }
+        .token:hover { transform: translateY(-3px); border-color: var(--muted); }
+        
+        /* State: Active Query (The Source) */
+        .token.query {
+            background: var(--accent); color: #000; border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.5); transform: scale(1.1);
         }
         
-        .token:hover { background: #334155; transform: scale(1.05); }
-        .token.selected { background: #f8fafc; color: #0f172a; font-weight: bold; border-color: white; transform: scale(1.1); box-shadow: 0 0 20px rgba(255,255,255,0.2); }
-
-        /* SVG Canvas */
-        #connections-svg { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            z-index: 1; 
-            pointer-events: none; 
-            /* Ensure it sits behind tokens */
-        }
+        /* State: Target Key (The Destination) */
+        .token.key { border-color: var(--highlight); color: white; }
         
-        path { fill: none; mix-blend-mode: screen; transition: stroke-opacity 0.2s; }
-
-        /* Tooltip */
-        #tooltip {
-            position: fixed; /* Fixed relative to viewport */
-            background: rgba(15, 23, 42, 0.95); 
-            padding: 12px; 
-            border-radius: 6px;
-            font-size: 0.85rem; 
-            pointer-events: none; 
-            display: none; 
-            border: 1px solid #475569;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-            z-index: 100;
-            width: 200px;
+        /* Score Badge on Keys */
+        .score-badge {
+            position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+            background: var(--highlight); color: #000; font-size: 0.8rem; font-weight: bold;
+            padding: 2px 6px; border-radius: 4px; opacity: 0; transition: opacity 0.3s;
+            white-space: nowrap; pointer-events: none;
         }
-        .bar-bg { width: 100%; background: #334155; height: 6px; border-radius: 3px; margin-top: 6px; overflow: hidden;}
-        .bar-fill { height: 100%; transition: width 0.2s; }
+        .token.key .score-badge { opacity: 1; }
 
+        /* Explanation Box */
+        .explainer {
+            margin-top: 20px; background: var(--card); padding: 20px; border-radius: 12px; width: 100%; max-width: 600px;
+            border-left: 5px solid var(--accent); min-height: 100px; transition: opacity 0.2s;
+        }
+        .explainer strong { color: var(--accent); }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="controls">
-        <h2 style="margin: 0 0 15px 0;">Multi-Head Attention Visualizer</h2>
-        
-        <div class="input-row">
-            <input type="text" id="inputText" value="The animal did not cross the street because it was too tired" onkeyup="debounceInit()">
-            <button class="btn-random" onclick="init(true)">🎲 Randomize Weights</button>
-        </div>
-        
-        <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
-            <span style="font-size:0.9em; color:#94a3b8;">Active Heads:</span>
-            <button id="btnH1" class="btn-h1 active" onclick="toggleHead(1)">Head 1 (Pink)</button>
-            <button id="btnH2" class="btn-h2 active" onclick="toggleHead(2)">Head 2 (Blue)</button>
-        </div>
-        
-        <div style="margin-top:10px; font-size: 0.85em; color: #94a3b8;">
-            <strong>Instructions:</strong> Hover over a word on the <strong>LEFT</strong> (Query) to see who it attends to on the <strong>RIGHT</strong> (Key).
-        </div>
+    <h2>Interactive Attention Spotlight</h2>
+    <p>Click on any word to act as the <strong>Query</strong> (the searcher). <br>See which other words light up as <strong>Keys</strong> (the matches).</p>
+
+    <div class="input-area">
+        <input type="text" id="inputText" value="The animal did not cross it">
+        <button onclick="init()">Load Sentence</button>
     </div>
 
-    <div class="viz-wrapper">
-        <svg id="connections-svg"></svg>
-        
-        <div class="columns-container">
-            <div class="column" id="col-query">
-                <div class="column-label">Query (Source)</div>
-                </div>
-
-            <div class="column" id="col-key">
-                <div class="column-label">Key (Target)</div>
-                </div>
-        </div>
+    <div class="stage-container">
+        <svg id="connections"></svg>
+        <div class="words-row" id="wordsContainer">
+            </div>
     </div>
-</div>
 
-<div id="tooltip"></div>
+    <div class="explainer" id="explainer">
+        <div style="opacity: 0.5; text-align: center;">Click a word above to see how it attends to others.</div>
+    </div>
 
 <script>
-    // --- State ---
+    // --- Configuration ---
     let words = [];
-    let attentionScores = { h1: [], h2: [] };
     let activeIndex = null;
-    let showH1 = true;
-    let showH2 = true;
 
-    // --- Logic ---
-    function generateRandomScores(N) {
-        // Create interesting attention patterns
-        const scores = [];
-        for (let i = 0; i < N; i++) {
-            // Raw logits
-            let row = Array(N).fill(0).map(() => Math.random() * 2); 
-            
-            // Add Structure (so it's not pure noise)
-            row[i] += 3.0; // Bias to self
-            if (i > 0) row[i-1] += 2.0; // Bias to previous
-            
-            // Softmax
-            const exps = row.map(Math.exp);
-            const sum = exps.reduce((a, b) => a + b, 0);
-            scores.push(exps.map(e => e / sum));
-        }
-        return scores;
+    // --- Logic: "Fake" Attention for Educational Purposes ---
+    // In a real model, these are dot products. Here, we use heuristics to show *what a model usually learns*.
+    function getAttentionScore(queryIdx, targetIdx, queryWord, targetWord) {
+        // 1. Self-Attention: Words always attend to themselves heavily (Identity)
+        if (queryIdx === targetIdx) return 0.8;
+
+        const q = queryWord.toLowerCase();
+        const t = targetWord.toLowerCase();
+
+        // 2. Grammar: "The" looks for nouns
+        if (q === 'the' && (t === 'animal' || t === 'street')) return 0.7;
+
+        // 3. Pronoun Resolution: "It" looks for the subject ("animal")
+        if (q === 'it' && t === 'animal') return 0.95; // The "Aha!" moment
+        if (q === 'it' && t === 'street') return 0.1;  // Low score
+
+        // 4. Negation: "not" looks at the verb "cross"
+        if (q === 'not' && t === 'cross') return 0.8;
+
+        // 5. Verbs looking for objects: "cross" looks for "street"
+        if (q === 'cross' && t === 'street') return 0.6;
+
+        // Default: Low background noise
+        return 0.05; 
     }
 
-    function init(forceRandom = false) {
+    // --- setup ---
+    function init() {
         const text = document.getElementById('inputText').value;
-        // Split by space, preserve non-empty
-        words = text.trim().split(/\s+/).filter(w => w.length > 0);
+        words = text.trim().split(/\s+/);
+        const container = document.getElementById('wordsContainer');
+        container.innerHTML = '';
         
-        // Setup DOM
-        const qCol = document.getElementById('col-query');
-        const kCol = document.getElementById('col-key');
-        
-        // Clear previous
-        qCol.querySelectorAll('.token').forEach(e => e.remove());
-        kCol.querySelectorAll('.token').forEach(e => e.remove());
+        // Reset
+        document.getElementById('connections').innerHTML = '';
+        document.getElementById('explainer').innerHTML = '<div style="opacity: 0.5; text-align: center;">Click a word above to start.</div>';
+        activeIndex = null;
 
         words.forEach((w, i) => {
-            qCol.appendChild(createToken(w, i, true));
-            kCol.appendChild(createToken(w, i, false));
+            const btn = document.createElement('div');
+            btn.className = 'token';
+            btn.innerText = w;
+            
+            // Score Badge (Hidden by default)
+            const badge = document.createElement('div');
+            badge.className = 'score-badge';
+            badge.innerText = '0%';
+            btn.appendChild(badge);
+
+            btn.onclick = () => activateWord(i);
+            container.appendChild(btn);
         });
-
-        // Generate Scores
-        if (forceRandom || attentionScores.h1.length !== words.length) {
-            attentionScores.h1 = generateRandomScores(words.length);
-            // Make H2 different (reverse bias for fun)
-            const h2 = generateRandomScores(words.length);
-            // Shuffle h2 rows slightly to make it distinct from h1
-            attentionScores.h2 = h2.map(row => {
-                const newRow = [...row];
-                const last = newRow.pop();
-                newRow.unshift(last);
-                return newRow;
-            });
-        }
-
-        // Resize SVG to match content
-        requestAnimationFrame(updateSvgSize);
     }
 
-    function createToken(word, index, isQuery) {
-        const div = document.createElement('div');
-        div.className = 'token';
-        div.innerText = word;
-        div.dataset.index = index;
-        
-        if (isQuery) {
-            div.onmouseenter = () => {
-                activeIndex = index;
-                renderLines();
-                div.classList.add('selected');
-            };
-            div.onmouseleave = () => {
-                div.classList.remove('selected');
-            };
-        }
-        return div;
-    }
-
-    function updateSvgSize() {
-        const wrapper = document.querySelector('.columns-container');
-        const svg = document.getElementById('connections-svg');
-        svg.style.height = wrapper.scrollHeight + 'px';
-    }
-
-    function renderLines() {
-        const svg = document.getElementById('connections-svg');
+    // --- Core Interaction ---
+    function activateWord(index) {
+        activeIndex = index;
+        const tokens = document.querySelectorAll('.token');
+        const svg = document.getElementById('connections');
         svg.innerHTML = ''; // Clear lines
-        
-        if (activeIndex === null) return;
 
-        const qTokens = document.querySelectorAll('#col-query .token');
-        const kTokens = document.querySelectorAll('#col-key .token');
-        
-        if (!qTokens[activeIndex]) return;
+        let maxScore = 0;
+        let maxWord = '';
 
-        const startRect = getRelativeRect(qTokens[activeIndex]);
-        const startX = startRect.right; 
-        const startY = startRect.centerY;
-
-        kTokens.forEach((kTok, targetIdx) => {
-            const endRect = getRelativeRect(kTok);
-            const endX = endRect.left;
-            const endY = endRect.centerY;
-
-            // Draw Head 1 (Pink)
-            if (showH1) {
-                const score = attentionScores.h1[activeIndex][targetIdx];
-                if (score > 0.02) { // Threshold
-                   drawBezier(svg, startX, startY, endX, endY, score, '#ec4899', 'Head 1', targetIdx);
-                }
-            }
-
-            // Draw Head 2 (Blue)
-            if (showH2) {
-                const score = attentionScores.h2[activeIndex][targetIdx];
-                if (score > 0.02) {
-                    // Slight vertical offset for Head 2 so lines don't perfectly overlap
-                   drawBezier(svg, startX, startY + 4, endX, endY + 4, score, '#3b82f6', 'Head 2', targetIdx);
+        // 1. Update Word Styles
+        tokens.forEach((t, i) => {
+            t.className = 'token'; // Reset
+            
+            if (i === index) {
+                t.classList.add('query'); // Highlight Source
+            } else {
+                // Calculate Score
+                const score = getAttentionScore(index, i, words[index], words[i]);
+                const percentage = Math.round(score * 100);
+                
+                // Update Badge
+                t.querySelector('.score-badge').innerText = percentage + '%';
+                
+                // If relevant, style as Key
+                if (score > 0.1) {
+                    t.classList.add('key');
+                    drawCurve(index, i, score);
+                    
+                    if (score > maxScore) {
+                        maxScore = score;
+                        maxWord = words[i];
+                    }
                 }
             }
         });
+
+        // 2. Explain it
+        explain(words[index], maxWord, maxScore);
     }
 
-    function getRelativeRect(element) {
-        const wrapper = document.querySelector('.viz-wrapper');
-        const rect = element.getBoundingClientRect();
-        const wrapperRect = wrapper.getBoundingClientRect();
-        
-        return {
-            left: rect.left - wrapperRect.left,
-            right: (rect.left - wrapperRect.left) + rect.width,
-            top: rect.top - wrapperRect.top,
-            centerY: (rect.top - wrapperRect.top) + (rect.height / 2)
-        };
-    }
+    // --- Visualization: Draw Smooth Curves ---
+    function drawCurve(fromIdx, toIdx, strength) {
+        const tokens = document.querySelectorAll('.token');
+        const svg = document.getElementById('connections');
+        const stage = document.querySelector('.stage-container').getBoundingClientRect();
 
-    function drawBezier(svg, x1, y1, x2, y2, score, color, headName, targetIdx) {
+        const fromRect = tokens[fromIdx].getBoundingClientRect();
+        const toRect = tokens[toIdx].getBoundingClientRect();
+
+        // Coordinates relative to SVG container
+        const x1 = fromRect.left + fromRect.width / 2 - stage.left;
+        const y1 = fromRect.top - stage.top; // Start from top of word
+        const x2 = toRect.left + toRect.width / 2 - stage.left;
+        const y2 = toRect.top - stage.top;
+
+        // Arc height depends on distance
+        const dist = Math.abs(fromIdx - toIdx);
+        const arcHeight = 40 + (dist * 20); 
+
+        // SVG Path (Quadratic Bezier)
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        
-        // Control points for smooth S-curve
-        const c1x = x1 + (x2 - x1) / 2;
-        const c1y = y1;
-        const c2x = x2 - (x2 - x1) / 2;
-        const c2y = y2;
-        
-        const d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+        const d = `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${y1 - arcHeight} ${x2} ${y2}`;
         
         path.setAttribute("d", d);
-        path.setAttribute("stroke", color);
-        // Thickness based on score (min 1px, max 8px)
-        path.setAttribute("stroke-width", Math.max(1, score * 10)); 
-        // Opacity based on score
-        path.setAttribute("stroke-opacity", Math.max(0.1, score));
-
-        // Tooltip Interaction
-        path.onmousemove = (e) => showTooltip(e, headName, score, words[targetIdx], color);
-        path.onmouseleave = hideTooltip;
-
+        path.setAttribute("stroke", "#facc15"); // Yellow
+        path.setAttribute("stroke-width", strength * 8); // Thickness = Attention
+        path.setAttribute("stroke-opacity", strength);
+        
         svg.appendChild(path);
     }
 
-    // --- Tooltip & UI Helpers ---
-    const tooltip = document.getElementById('tooltip');
-
-    function showTooltip(e, head, score, word, color) {
-        tooltip.style.display = 'block';
-        tooltip.style.left = (e.clientX + 15) + 'px';
-        tooltip.style.top = (e.clientY + 15) + 'px';
+    // --- Narrative Box ---
+    function explain(query, topMatch, score) {
+        const box = document.getElementById('explainer');
         
-        tooltip.innerHTML = `
-            <div style="color:${color}; font-weight:bold">${head}</div>
-            <div>Attends to: <strong>"${word}"</strong></div>
-            <div style="font-size:0.8em; margin-top:4px">Attention Score: ${(score*100).toFixed(1)}%</div>
-            <div class="bar-bg"><div class="bar-fill" style="width:${score*100}%; background:${color}"></div></div>
+        if (score < 0.2) {
+            // Looking at itself mostly
+            box.innerHTML = `
+                <div><strong>Query:</strong> "${query}"</div>
+                <div style="margin-top:5px">It is mostly paying attention to <strong>itself</strong>. This is normal when a word's own meaning is enough context.</div>
+            `;
+            return;
+        }
+
+        box.innerHTML = `
+            <div><strong>Query (The Searcher):</strong> "${query}"</div>
+            <div style="margin-top:10px; font-size: 1.1em;">
+                I found context in: <strong style="color: #facc15">"${topMatch}"</strong> (${(score*100).toFixed(0)}% match)
+            </div>
+            <div style="margin-top:5px; color: #9ca3af; font-size: 0.9em;">
+                <i>Meaning Update:</i> The math will now mix the meaning of "${topMatch}" into "${query}" so the model understands them together.
+            </div>
         `;
     }
 
-    function hideTooltip() {
-        tooltip.style.display = 'none';
-    }
-
-    function toggleHead(h) {
-        if (h === 1) {
-            showH1 = !showH1;
-            document.getElementById('btnH1').classList.toggle('active');
-        } else {
-            showH2 = !showH2;
-            document.getElementById('btnH2').classList.toggle('active');
-        }
-        renderLines();
-    }
-
-    let timeout;
-    function debounceInit() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => init(true), 500);
-    }
-
-    // Run on load
-    window.onload = () => {
-        init(true);
-        // Highlight middle word to show initial state
-        setTimeout(() => {
-            const tokens = document.querySelectorAll('#col-query .token');
-            if(tokens.length > 2) {
-                activeIndex = Math.floor(tokens.length / 2);
-                tokens[activeIndex].classList.add('selected');
-                renderLines();
-            }
-        }, 200);
-    };
-
-    // Handle window resize
-    window.onresize = () => {
-        updateSvgSize();
-        renderLines();
-    };
-
+    // Start
+    window.onload = init;
 </script>
+
 </body>
 </html>
