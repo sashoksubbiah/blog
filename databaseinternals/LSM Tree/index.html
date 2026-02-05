@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSM Tree & Bloom Filter Deep Dive</title>
+    <style>
+        :root {
+            --memtable-bg: #e3f2fd;
+            --sstable-bg: #fff3e0;
+            --wal-bg: #e8f5e9;
+            --border: #444;
+            --accent: #2196f3;
+            --bloom-on: #4caf50;
+            --bloom-off: #eee;
+        }
+        body { font-family: 'Segoe UI', monospace, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background: #fafafa; color: #333; }
+        
+        /* Layout Grid */
+        .grid-container { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+        @media (max-width: 800px) { .grid-container { grid-template-columns: 1fr; } }
+
+        /* Generic Box Styles */
+        .box { border: 2px solid var(--border); padding: 15px; border-radius: 6px; background: white; margin-bottom: 20px; box-shadow: 4px 4px 0px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; font-size: 1.1em; border-bottom: 1px solid #ccc; padding-bottom: 5px; display: flex; justify-content: space-between; }
+        
+        /* Controls */
+        .controls { background: #333; color: white; padding: 15px; border-radius: 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
+        input { padding: 8px; border-radius: 4px; border: none; width: 100px; }
+        button { padding: 8px 15px; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; background: var(--accent); color: white; transition: transform 0.1s; }
+        button:active { transform: scale(0.95); }
+        button.danger { background: #f44336; }
+        button.flush { background: #ff9800; }
+        button.read { background: #4caf50; }
+
+        /* WAL Specific */
+        #wal-area { background: var(--wal-bg); font-family: monospace; font-size: 0.8em; height: 100px; overflow-y: auto; white-space: pre-wrap; }
+
+        /* Memtable Specific */
+        #memtable-area { background: var(--memtable-bg); }
+        .rb-node { display: inline-block; padding: 4px 8px; margin: 2px; border: 1px solid #999; border-radius: 12px; background: white; font-size: 0.9em; }
+        .rb-node.tombstone { background: #ffebee; color: red; text-decoration: line-through; border-color: red; }
+
+        /* SSTable & Bloom Filter Specific */
+        .sstable-row { border: 1px solid #999; padding: 10px; margin-bottom: 10px; background: white; border-radius: 4px; display: flex; flex-direction: column; gap: 5px; }
+        .disk-data { font-size: 0.85em; color: #555; overflow-x: auto; white-space: nowrap; }
+        
+        /* Bloom Visuals */
+        .bloom-container { display: flex; gap: 2px; margin-top: 5px; }
+        .bit { width: 12px; height: 12px; border: 1px solid #ccc; font-size: 0; }
+        .bit.on { background: var(--bloom-on); border-color: #2e7d32; }
+        .bit.off { background: var(--bloom-off); }
+
+        /* Log Console */
+        #console { background: #111; color: #0f0; font-family: monospace; padding: 15px; height: 200px; overflow-y: auto; border-radius: 6px; font-size: 0.9em; }
+        .log-entry { border-bottom: 1px solid #333; padding: 2px 0; }
+        .log-read { color: #81d4fa; }
+        .log-skip { color: #e0e0e0; opacity: 0.7; font-style: italic; }
+
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <span style="font-weight:bold; margin-right:10px;">LSM Engine</span>
+        <input type="text" id="key" placeholder="Key (e.g. user:1)">
+        <input type="text" id="val" placeholder="Value">
+        <button onclick="writePath()">Put (Write)</button>
+        <button class="danger" onclick="deletePath()">Delete</button>
+        <div style="flex-grow:1"></div>
+        <button class="flush" onclick="flushToDisk()">Flush (Mem -> SST)</button>
+        <button onclick="compact()">Compact (Merge)</button>
+        <div style="width:100%; height:1px; background:#555; margin: 10px 0;"></div>
+        <input type="text" id="searchKey" placeholder="Search Key">
+        <button class="read" onclick="readPath()">Get (Read)</button>
+    </div>
+
+    <div class="grid-container">
+        
+        <div class="left-col">
+            <div class="box" style="background: var(--wal-bg);">
+                <h2>1. Write Ahead Log (WAL) <span>Append Only</span></h2>
+                <div id="wal-area"></div>
+            </div>
+
+            <div class="box" style="background: var(--memtable-bg);">
+                <h2>2. MemTable (RAM) <span id="mem-size">0/5</span></h2>
+                <div style="font-size: 0.8em; color: #666; margin-bottom: 5px;">Sorted Red-Black Tree</div>
+                <div id="memtable-content"></div>
+            </div>
+        </div>
+
+        <div class="right-col">
+            <div class="box" style="background: var(--sstable-bg);">
+                <h2>3. SSTables (Disk - Level 0)</h2>
+                <div style="font-size: 0.8em; color: #666; margin-bottom: 10px;">
+                    Immutable Files + Bloom Filters. Newest files at top.
+                </div>
+                <div id="sst-container"></div>
+            </div>
+
+            <div class="box" style="background: #111; border:none;">
+                <h2 style="color:white; border-bottom:1px solid #333;">System Logs / Query Trace</h2>
+                <div id="console"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* --- CONFIGURATION --- */
+        const MEMTABLE_MAX = 5;
+        const BLOOM_SIZE = 20; // Bits per filter
+        
+        /* --- STATE --- */
+        let memtable = [];
+        let sstables = []; // Array of { id, data: [], bloom: [] }
+        let walLog = [];
+        let tableCounter = 0;
+
+        /* --- HASH FUNCTIONS (Simulated for Bloom Filter) --- */
+        // Simple hash function to generate bit positions
+        function getHashPositions(key) {
+            let h1 = 0, h2 = 0;
+            for(let i=0; i<key.length; i++) {
+                h1 = (h1 * 31 + key.charCodeAt(i)) % BLOOM_SIZE;
+                h2 = (h2 * 17 + key.charCodeAt(i)) % BLOOM_SIZE;
+            }
+            // Return 2 bit positions (k=2)
+            return [Math.abs(h1), Math.abs(h2)];
+        }
+
+        /* --- WRITE PATH --- */
+        function writePath() {
+            const k = document.getElementById('key').value.trim();
+            const v = document.getElementById('val').value.trim();
+            if(!k || !v) return log("Error: Key and Value needed");
+            
+            commit(k, v, false);
+            clearInputs();
+        }
+
+        function deletePath() {
+            const k = document.getElementById('key').value.trim();
+            if(!k) return log("Error: Key needed for delete");
+            
+            commit(k, "TOMBSTONE", true);
+            clearInputs();
+        }
+
+        function commit(key, val, isTomb) {
+            // 1. Append to WAL
+            const entry = `${key}:${isTomb ? 'DEL' : val}`;
+            walLog.push(entry);
+            renderWAL();
+
+            // 2. Update MemTable (Upsert)
+            const idx = memtable.findIndex(i => i.key === key);
+            if(idx >= 0) {
+                memtable[idx] = { key, val, isTomb };
+            } else {
+                memtable.push({ key, val, isTomb });
+            }
+            
+            // Keep Memtable Sorted
+            memtable.sort((a,b) => a.key.localeCompare(b.key));
+            
+            log(`Write: ${key} -> ${isTomb ? 'DELETED' : val} (RAM)`);
+            renderMemtable();
+
+            if(memtable.length >= MEMTABLE_MAX) {
+                log("MemTable full! Click 'Flush' to persist.");
+            }
+        }
+
+        /* --- FLUSH PATH --- */
+        function flushToDisk() {
+            if(memtable.length === 0) return log("MemTable empty.");
+
+            // 1. Generate Bloom Filter
+            let bloomBits = new Array(BLOOM_SIZE).fill(0);
+            memtable.forEach(item => {
+                const hashes = getHashPositions(item.key);
+                hashes.forEach(pos => bloomBits[pos] = 1);
+            });
+
+            // 2. Create SSTable Object
+            const newSST = {
+                id: ++tableCounter,
+                data: JSON.parse(JSON.stringify(memtable)), // Deep copy (Immutable)
+                bloom: bloomBits
+            };
+
+            // 3. Push to front (Newest files first)
+            sstables.unshift(newSST);
+
+            // 4. Clear RAM
+            memtable = [];
+            walLog = []; // WAL is truncated after flush
+            
+            log(`FLUSH: Created SSTable #${newSST.id} with Bloom Filter.`);
+            renderAll();
+        }
+
+        /* --- READ PATH (The "Tech Depth" part) --- */
+        function readPath() {
+            const searchKey = document.getElementById('searchKey').value.trim();
+            if(!searchKey) return;
+            
+            log(`--- READ QUERY: ${searchKey} ---`, 'log-read');
+
+            // 1. Check MemTable
+            const memHit = memtable.find(i => i.key === searchKey);
+            if(memHit) {
+                return resultLog(memHit, "MemTable (RAM)");
+            }
+            log("Not in MemTable. Checking Disk...", 'log-skip');
+
+            // 2. Check SSTables (Newest -> Oldest)
+            for(let sst of sstables) {
+                // A. Check Bloom Filter FIRST
+                const hashes = getHashPositions(searchKey);
+                const mightContain = hashes.every(pos => sst.bloom[pos] === 1);
+
+                if(!mightContain) {
+                    log(`[SSTable #${sst.id}] Bloom Filter: 0 (Definitely Not Here). Skipped I/O.`, 'log-skip');
+                    continue; // Skip scanning data!
+                }
+
+                log(`[SSTable #${sst.id}] Bloom Filter: 1 (Maybe Here). Scanning file...`);
+
+                // B. Scan actual data
+                const sstHit = sst.data.find(i => i.key === searchKey);
+                if(sstHit) {
+                    return resultLog(sstHit, `SSTable #${sst.id}`);
+                } else {
+                    log(`[SSTable #${sst.id}] False Positive in Bloom Filter. Scanned but not found.`, 'log-skip');
+                }
+            }
+            
+            log("Key not found in database.");
+        }
+
+        function resultLog(item, source) {
+            if(item.isTombstone) {
+                log(`FOUND: ${item.key} is DELETED (Tombstone found in ${source})`, 'log-read');
+            } else {
+                log(`FOUND: ${item.key} => ${item.val} (Found in ${source})`, 'log-read');
+            }
+        }
+
+        /* --- COMPACTION --- */
+        function compact() {
+            if(sstables.length < 2) return log("Need 2+ SSTables to compact.");
+
+            log("--- COMPACTION STARTED ---");
+            
+            // Merge all tables (Last/Oldest to First/Newest precedence)
+            let mergedMap = new Map();
+            
+            // Iterate backwards (Oldest tables first)
+            for(let i = sstables.length - 1; i >= 0; i--) {
+                sstables[i].data.forEach(item => {
+                    mergedMap.set(item.key, item); // Overwrite older keys
+                });
+            }
+
+            // Convert back to array
+            let finalData = [];
+            mergedMap.forEach(item => {
+                if(!item.isTombstone) finalData.push(item); // GC Tombstones
+            });
+            finalData.sort((a,b) => a.key.localeCompare(b.key));
+
+            // Create new Bloom Filter for compacted data
+            let bloomBits = new Array(BLOOM_SIZE).fill(0);
+            finalData.forEach(item => {
+                const hashes = getHashPositions(item.key);
+                hashes.forEach(pos => bloomBits[pos] = 1);
+            });
+
+            // Replace all SSTables with one merged table
+            sstables = [{
+                id: ++tableCounter + " (Merged)",
+                data: finalData,
+                bloom: bloomBits
+            }];
+
+            log(`Compaction done. Reduced to 1 segment. Garbage collected deleted keys.`);
+            renderAll();
+        }
+
+        /* --- RENDER HELPERS --- */
+        function renderAll() { renderMemtable(); renderWAL(); renderSSTables(); }
+
+        function renderMemtable() {
+            const div = document.getElementById('memtable-content');
+            div.innerHTML = memtable.map(i => 
+                `<span class="rb-node ${i.isTombstone?'tombstone':''}">${i.key}:${i.isTombstone?'DEL':i.val}</span>`
+            ).join('');
+            document.getElementById('mem-size').innerText = `${memtable.length}/${MEMTABLE_MAX}`;
+        }
+
+        function renderWAL() {
+            document.getElementById('wal-area').innerText = walLog.join('\n');
+            const walDiv = document.getElementById('wal-area');
+            walDiv.scrollTop = walDiv.scrollHeight;
+        }
+
+        function renderSSTables() {
+            const container = document.getElementById('sst-container');
+            container.innerHTML = '';
+            
+            sstables.forEach(sst => {
+                // Build Bloom Visual
+                let bloomHTML = '<div class="bloom-container" title="Bloom Filter Bits">';
+                sst.bloom.forEach(bit => {
+                    bloomHTML += `<div class="bit ${bit?'on':'off'}"></div>`;
+                });
+                bloomHTML += '</div>';
+
+                // Build Data Visual (Truncated)
+                const dataPreview = sst.data.map(i => `${i.key}:${i.isTombstone?'DEL':i.val}`).join(' | ');
+
+                const row = document.createElement('div');
+                row.className = 'sstable-row';
+                row.innerHTML = `
+                    <div style="font-weight:bold; display:flex; justify-content:space-between">
+                        <span>SSTable #${sst.id}</span>
+                        <span style="font-size:0.8em; color:#888;">Size: ${sst.data.length}</span>
+                    </div>
+                    ${bloomHTML}
+                    <div class="disk-data">${dataPreview}</div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function log(msg, cls) {
+            const c = document.getElementById('console');
+            const d = document.createElement('div');
+            d.className = `log-entry ${cls||''}`;
+            d.innerText = `> ${msg}`;
+            c.appendChild(d);
+            c.scrollTop = c.scrollHeight;
+        }
+
+        function clearInputs() {
+            document.getElementById('key').value = '';
+            document.getElementById('val').value = '';
+        }
+
+        renderAll();
+    </script>
+</body>
+</html>
