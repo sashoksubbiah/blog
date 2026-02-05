@@ -3,607 +3,670 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paxos Made Simple - Interactive Visualizer</title>
+    <title>Paxos: The Wedding Registry Edition</title>
     <style>
         :root {
-            --bg-color: #f0f2f5;
+            --bg-color: #f8f9fa;
             --card-bg: #ffffff;
-            --text-primary: #1a1a1a;
-            --text-secondary: #666;
-            --p1-color: #2196F3; /* Blue */
-            --p2-color: #E91E63; /* Pink/Red */
-            --acc-color: #4CAF50; /* Green */
-            --learn-color: #FF9800; /* Orange */
-            --crash-color: #9e9e9e;
+            --primary: #2c3e50;
+            --accent-blue: #3498db;
+            --accent-red: #e74c3c;
+            --accent-green: #27ae60;
+            --text-main: #2c3e50;
+            --text-light: #7f8c8d;
+            --shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             background-color: var(--bg-color);
+            color: var(--text-main);
             margin: 0;
             padding: 20px;
-            color: var(--text-primary);
             display: flex;
             flex-direction: column;
             align-items: center;
-            height: 100vh;
-            box-sizing: border-box;
+            min-height: 100vh;
         }
 
-        h1 { margin-bottom: 10px; }
-        
-        .controls-top {
+        h1 { margin: 0 0 10px 0; font-size: 1.8rem; }
+        .subtitle { color: var(--text-light); margin-bottom: 20px; font-style: italic; }
+
+        /* --- Controls Area --- */
+        .controls {
             background: var(--card-bg);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
             display: flex;
-            gap: 15px;
-            align-items: center;
             flex-wrap: wrap;
+            gap: 15px;
             justify-content: center;
+            align-items: center;
+            z-index: 10;
         }
 
-        button {
+        .btn {
             padding: 8px 16px;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.2s;
+            transition: transform 0.1s, opacity 0.2s;
+            font-size: 0.9rem;
         }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        .scenario-btn { background-color: #673AB7; color: white; }
-        .reset-btn { background-color: #607d8b; color: white; }
+        .btn-scenario { background-color: #8e44ad; color: white; }
+        .btn-reset { background-color: #95a5a6; color: white; }
+        .btn-blue { background-color: var(--accent-blue); color: white; }
+        .btn-red { background-color: var(--accent-red); color: white; }
 
-        /* --- Game Board --- */
-        .board {
-            display: grid;
-            grid-template-columns: 1fr 2fr 1fr;
-            gap: 40px;
-            width: 100%;
-            max-width: 1200px;
-            flex-grow: 1;
+        /* --- The Board --- */
+        .board-container {
             position: relative;
+            width: 100%;
+            max-width: 1100px;
+            min-height: 500px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr;
+            gap: 30px;
         }
 
         .column {
             display: flex;
             flex-direction: column;
+            align-items: center;
             justify-content: center;
             gap: 20px;
-            align-items: center;
+        }
+
+        .col-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            color: var(--text-light);
+            margin-bottom: 10px;
         }
 
         /* --- Nodes --- */
         .node {
-            width: 160px;
             background: var(--card-bg);
-            border-radius: 12px;
+            width: 200px;
             padding: 15px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            text-align: center;
+            border-radius: 10px;
+            box-shadow: var(--shadow);
             position: relative;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s ease;
             border: 3px solid transparent;
             z-index: 2;
         }
 
-        .node:hover { transform: translateY(-2px); }
+        .node-header { font-weight: 700; display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .node-role { font-size: 0.75rem; text-transform: uppercase; color: var(--text-light); }
+        .node-body { font-size: 0.9rem; line-height: 1.4; }
         
-        .node-header { font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .node-status { font-size: 0.8em; color: var(--text-secondary); text-align: left; line-height: 1.4; }
-        .crashed-overlay {
-            position: absolute; top:0; left:0; right:0; bottom:0;
-            background: rgba(158, 158, 158, 0.85);
-            border-radius: 10px;
-            display: flex; justify-content: center; align-items: center;
-            font-weight: bold; color: white; text-transform: uppercase;
-            cursor: pointer;
-            opacity: 0; pointer-events: none;
-            transition: opacity 0.3s;
-        }
-        .node.crashed .crashed-overlay { opacity: 1; pointer-events: auto; }
-        .node.crashed { border-color: var(--crash-color) !important; filter: grayscale(1); }
-
-        /* Specific Node Styles */
-        .proposer { border-top: 5px solid var(--p1-color); }
-        .proposer.p2 { border-top-color: var(--p2-color); }
+        /* Proposers */
+        .p1 { border-top-color: var(--accent-blue); }
+        .p2 { border-top-color: var(--accent-red); }
         
-        .acceptor { border-top: 5px solid var(--acc-color); cursor: pointer; }
-        .acceptor:hover .crashed-overlay { opacity: 0.2; pointer-events: auto; }
-
-        .learner { border-top: 5px solid var(--learn-color); width: 200px; min-height: 100px; display: flex; flex-direction: column; justify-content: center;}
-
-        /* --- Proposer Controls --- */
-        .prop-actions {
-            margin-top: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .btn-p1 { background-color: var(--p1-color); color: white; }
-        .btn-p2 { background-color: var(--p2-color); color: white; }
-
-        /* --- Messages (Animations) --- */
-        .message {
-            position: absolute;
-            background: white;
-            border: 2px solid #333;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
+        .val-display { 
+            background: #f1f2f6; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            margin-top: 5px; 
+            font-family: monospace;
             font-weight: bold;
-            pointer-events: none;
-            z-index: 100;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            transition: all 1s ease-in-out;
-            opacity: 0;
+            transition: background-color 0.5s;
         }
+        
+        .highlight-change {
+            animation: highlightPulse 1.5s ease-out;
+        }
+
+        @keyframes highlightPulse {
+            0% { background-color: #f1c40f; transform: scale(1.05); }
+            100% { background-color: #f1f2f6; transform: scale(1); }
+        }
+
+        /* Acceptors */
+        .acceptor { 
+            border-top-color: var(--accent-green); 
+            cursor: pointer;
+        }
+        .acceptor:hover { transform: translateY(-3px); }
+        
+        /* Crash Overlay */
+        .crashed-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(149, 165, 166, 0.9);
+            border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+            color: white; font-weight: bold; letter-spacing: 1px;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .node.crashed .crashed-overlay { opacity: 1; pointer-events: auto; cursor: pointer; }
+        .node.crashed { filter: grayscale(1); }
+
+        /* Learner */
+        .learner { border-top-color: #f39c12; text-align: center; }
+        .consensus-text { font-size: 1.2rem; font-weight: bold; color: var(--accent-green); display: none; margin-top: 10px;}
+
+        /* --- Connections (SVG) --- */
+        svg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;
+        }
+        line { stroke: #e0e0e0; stroke-width: 2; }
 
         /* --- Logger --- */
-        .log-panel {
+        .log-container {
             width: 100%;
-            max-width: 1200px;
-            height: 150px;
-            background: #263238;
-            color: #eceff1;
+            max-width: 1100px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
             border-radius: 8px;
-            padding: 10px;
-            margin-top: 20px;
+            height: 150px;
             overflow-y: auto;
-            font-family: monospace;
+            font-family: 'Consolas', monospace;
             font-size: 0.9rem;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
-        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #37474f; padding-bottom: 2px; }
-        .log-time { color: #90a4ae; margin-right: 10px; }
-        .log-highlight { color: #ffeb3b; font-weight: bold; }
-        .log-error { color: #ff5252; }
+        .log-entry { margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid #34495e; }
+        .log-time { color: #7f8c8d; margin-right: 10px; font-size: 0.8em; }
+        .log-info { color: #bdc3c7; }
+        .log-success { color: #2ecc71; font-weight: bold; }
+        .log-warn { color: #f1c40f; }
+        .log-error { color: #e74c3c; }
 
-        /* --- Connection Lines (SVG) --- */
-        #connections {
+        /* --- Message Animations --- */
+        .msg-bubble {
             position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            z-index: 0;
+            background: white;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 100;
+            border: 2px solid #333;
+            opacity: 0;
             pointer-events: none;
+            transition: all 1s ease-in-out;
+            white-space: nowrap;
         }
-        line { stroke: #cfd8dc; stroke-width: 2; }
+
+        .action-btns { display: flex; gap: 5px; margin-top: 10px; }
+        .action-btns button { flex: 1; font-size: 0.75rem; padding: 5px; }
 
     </style>
 </head>
 <body>
 
-    <h1>Paxos Consensus Visualizer</h1>
-    
-    <div class="controls-top">
-        <label><strong>Quick Scenarios:</strong></label>
-        <button class="scenario-btn" onclick="runScenario('normal')">1. Normal Success</button>
-        <button class="scenario-btn" onclick="runScenario('conflict')">2. Split Brain (The Conflict)</button>
-        <button class="scenario-btn" onclick="runScenario('failure')">3. Acceptor Failure</button>
-        <button class="reset-btn" onclick="resetSim()">Reset System</button>
-        <div style="margin-left: 20px; font-size: 0.9em; color: #555;">
-            Tip: Click an Acceptor node to toggle CRASH state.
-        </div>
+    <h1>Paxos Consensus: The Wedding Registry</h1>
+    <div class="subtitle">Visualizing the "Ticket" and "Copycat" rules.</div>
+
+    <div class="controls">
+        <span style="font-weight:bold; color:var(--text-light); margin-right:10px;">SCENARIOS:</span>
+        <button class="btn btn-scenario" onclick="runScenario('happy')">1. Happy Path</button>
+        <button class="btn btn-scenario" onclick="runScenario('interruption')">2. Rude Interruption</button>
+        <button class="btn btn-scenario" onclick="runScenario('splitbrain')">3. Split Brain (The Conflict)</button>
+        <div style="width: 1px; height: 20px; background: #ddd; margin: 0 10px;"></div>
+        <button class="btn btn-reset" onclick="resetSim()">Reset Board</button>
     </div>
 
-    <div class="board" id="board">
+    <div class="board-container" id="board">
         <svg id="connections"></svg>
 
-        <!-- Column 1: Proposers -->
+        <!-- Proposers -->
         <div class="column">
-            <div class="node proposer" id="p1">
-                <div class="node-header">Proposer 1 <span style="font-size:0.8em">#100</span></div>
-                <div class="node-status" id="status-p1">
-                    Val: "Blue"<br>State: Idle
+            <div class="col-title">Friends (Proposers)</div>
+            
+            <!-- Proposer 1 -->
+            <div class="node p1" id="p1">
+                <div class="node-header">Friend 1 (Blue)</div>
+                <div class="node-role">Ticket #100</div>
+                <div class="node-body">
+                    Idea: <span id="val-p1" class="val-display">Toaster</span>
                 </div>
-                <div class="prop-actions">
-                    <button class="btn-p1" onclick="triggerPrepare('p1')">1. Prepare</button>
-                    <button class="btn-p1" id="btn-accept-p1" disabled onclick="triggerAccept('p1')">2. Propose</button>
+                <div class="action-btns">
+                    <button class="btn-blue" onclick="startPhase1('p1')">1. Get Ticket</button>
+                    <button class="btn-blue" id="btn-p2-p1" onclick="startPhase2('p1')" disabled>2. Write Gift</button>
                 </div>
                 <div class="crashed-overlay" onclick="toggleCrash('p1')">OFFLINE</div>
             </div>
 
-            <div class="node proposer p2" id="p2">
-                <div class="node-header">Proposer 2 <span style="font-size:0.8em">#200</span></div>
-                <div class="node-status" id="status-p2">
-                    Val: "Red"<br>State: Idle
+            <!-- Proposer 2 -->
+            <div class="node p2" id="p2">
+                <div class="node-header">Friend 2 (Red)</div>
+                <div class="node-role">Ticket #200</div>
+                <div class="node-body">
+                    Idea: <span id="val-p2" class="val-display">Blender</span>
                 </div>
-                <div class="prop-actions">
-                    <button class="btn-p2" onclick="triggerPrepare('p2')">1. Prepare</button>
-                    <button class="btn-p2" id="btn-accept-p2" disabled onclick="triggerAccept('p2')">2. Propose</button>
+                <div class="action-btns">
+                    <button class="btn-red" onclick="startPhase1('p2')">1. Get Ticket</button>
+                    <button class="btn-red" id="btn-p2-p2" onclick="startPhase2('p2')" disabled>2. Write Gift</button>
                 </div>
                 <div class="crashed-overlay" onclick="toggleCrash('p2')">OFFLINE</div>
             </div>
         </div>
 
-        <!-- Column 2: Acceptors -->
+        <!-- Acceptors -->
         <div class="column">
+            <div class="col-title">Uncles (Acceptors)</div>
+            
             <div class="node acceptor" id="a1" onclick="toggleCrash('a1')">
-                <div class="node-header">Acceptor A</div>
-                <div class="node-status" id="status-a1">
-                    MinProp: 0<br>
-                    AcceptedID: -<br>
-                    AcceptedVal: -
+                <div class="node-header">Uncle A</div>
+                <div class="node-body" id="status-a1">
+                    Promised Ticket: -<br>
+                    Written Gift: -
                 </div>
-                <div class="crashed-overlay">CRASHED</div>
+                <div class="crashed-overlay">ASLEEP (Crash)</div>
             </div>
+
             <div class="node acceptor" id="a2" onclick="toggleCrash('a2')">
-                <div class="node-header">Acceptor B</div>
-                <div class="node-status" id="status-a2">
-                    MinProp: 0<br>
-                    AcceptedID: -<br>
-                    AcceptedVal: -
+                <div class="node-header">Uncle B</div>
+                <div class="node-body" id="status-a2">
+                    Promised Ticket: -<br>
+                    Written Gift: -
                 </div>
-                <div class="crashed-overlay">CRASHED</div>
+                <div class="crashed-overlay">ASLEEP (Crash)</div>
             </div>
+
             <div class="node acceptor" id="a3" onclick="toggleCrash('a3')">
-                <div class="node-header">Acceptor C</div>
-                <div class="node-status" id="status-a3">
-                    MinProp: 0<br>
-                    AcceptedID: -<br>
-                    AcceptedVal: -
+                <div class="node-header">Uncle C</div>
+                <div class="node-body" id="status-a3">
+                    Promised Ticket: -<br>
+                    Written Gift: -
                 </div>
-                <div class="crashed-overlay">CRASHED</div>
+                <div class="crashed-overlay">ASLEEP (Crash)</div>
             </div>
         </div>
 
-        <!-- Column 3: Learners -->
+        <!-- Learner -->
         <div class="column">
+            <div class="col-title">The Registry (Learner)</div>
             <div class="node learner" id="l1">
-                <div class="node-header">Learner / Client</div>
-                <div class="node-status" id="status-l1" style="font-size: 1.1em; text-align: center;">
-                    Waiting for Consensus...
+                <div class="node-header" style="justify-content:center">Final Decision</div>
+                <div class="node-body">
+                    Waiting for majority...
                 </div>
+                <div id="consensus-display" class="consensus-text">Toaster</div>
             </div>
         </div>
     </div>
 
-    <div class="log-panel" id="logger">
-        <div class="log-entry">System Ready. Select a scenario or manually control Proposers.</div>
+    <div class="log-container" id="logger">
+        <div class="log-entry"><span class="log-time">System</span> Welcome. Select a scenario or manually control the Friends.</div>
     </div>
 
 <script>
-/**
- * Simple Paxos Visualizer Logic
- * Focusing on the core "Gut Intuition" data flow.
- */
+    // --- State Management ---
+    const STATE = {
+        p1: { id: 'p1', ticket: 100, val: 'Toaster', originalVal: 'Toaster', state: 'idle', promises: 0, maxSeenTicket: 0, maxSeenVal: null },
+        p2: { id: 'p2', ticket: 200, val: 'Blender', originalVal: 'Blender', state: 'idle', promises: 0, maxSeenTicket: 0, maxSeenVal: null },
+        acceptors: {
+            a1: { promised: 0, acceptedId: 0, acceptedVal: null, crashed: false },
+            a2: { promised: 0, acceptedId: 0, acceptedVal: null, crashed: false },
+            a3: { promised: 0, acceptedId: 0, acceptedVal: null, crashed: false }
+        },
+        learner: { counts: {}, consensus: null }
+    };
 
-// --- Configuration ---
-const DELAY_MS = 1000; // Speed of messages
-const PROPOSERS = {
-    'p1': { id: 'p1', val: 'Blue', propNum: 100, state: 'idle', promises: [], maxSeen: {id:0, val:null} },
-    'p2': { id: 'p2', val: 'Red', propNum: 200, state: 'idle', promises: [], maxSeen: {id:0, val:null} }
-};
+    const COLORS = {
+        p1: '#3498db',
+        p2: '#e74c3c',
+        accept: '#27ae60',
+        reject: '#e74c3c'
+    };
 
-const ACCEPTORS = {
-    'a1': { id: 'a1', minProp: 0, accId: 0, accVal: null, crashed: false },
-    'a2': { id: 'a2', minProp: 0, accId: 0, accVal: null, crashed: false },
-    'a3': { id: 'a3', minProp: 0, accId: 0, accVal: null, crashed: false }
-};
+    const DELAY = 1000;
 
-const LEARNER = { consensus: null, counts: {} };
-
-// --- UI Helpers ---
-function log(msg, type = 'info') {
-    const box = document.getElementById('logger');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    const time = new Date().toLocaleTimeString().split(' ')[0];
-    
-    let content = `<span class="log-time">[${time}]</span> ${msg}`;
-    if (type === 'error') content = `<span class="log-time">[${time}]</span> <span class="log-error">${msg}</span>`;
-    if (type === 'success') content = `<span class="log-time">[${time}]</span> <span class="log-highlight">${msg}</span>`;
-    
-    entry.innerHTML = content;
-    box.appendChild(entry);
-    box.scrollTop = box.scrollHeight;
-}
-
-function updateUI() {
-    // Update Acceptors
-    ['a1', 'a2', 'a3'].forEach(id => {
-        const a = ACCEPTORS[id];
-        const el = document.getElementById(`status-${id}`);
-        el.innerHTML = `MinProp: ${a.minProp}<br>AcceptedID: ${a.accId || '-'}<br>AcceptedVal: ${a.accVal || '-'}`;
+    // --- UI Functions ---
+    function log(msg, type='info') {
+        const box = document.getElementById('logger');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        const time = new Date().toLocaleTimeString().split(' ')[0];
         
-        const node = document.getElementById(id);
-        if (a.crashed) node.classList.add('crashed');
-        else node.classList.remove('crashed');
-        
-        // Visual indicator of value
-        if (a.accVal === 'Blue') node.style.borderTopColor = 'var(--p1-color)';
-        else if (a.accVal === 'Red') node.style.borderTopColor = 'var(--p2-color)';
-        else node.style.borderTopColor = 'var(--acc-color)';
-    });
+        let cssClass = 'log-info';
+        if(type === 'success') cssClass = 'log-success';
+        if(type === 'warn') cssClass = 'log-warn';
+        if(type === 'error') cssClass = 'log-error';
 
-    // Update Proposers
-    ['p1', 'p2'].forEach(id => {
-        const p = PROPOSERS[id];
-        const el = document.getElementById(`status-${id}`);
-        let stateText = 'Idle';
-        if (p.state === 'preparing') stateText = `Phase 1: Waiting... (${p.promises.length}/3)`;
-        if (p.state === 'ready') stateText = `<strong>Ready to Propose!</strong><br>Val to use: "${p.val}"`;
-        if (p.state === 'finished') stateText = 'Proposal Sent.';
-        
-        el.innerHTML = `Intended: "${id === 'p1' ? 'Blue' : 'Red'}"<br>${stateText}`;
-        
-        // Enable/Disable buttons
-        document.getElementById(`btn-accept-${id}`).disabled = (p.state !== 'ready');
-    });
-}
-
-function drawLines() {
-    const svg = document.getElementById('connections');
-    svg.innerHTML = '';
-    
-    const pNodes = ['p1', 'p2'].map(id => document.getElementById(id));
-    const aNodes = ['a1', 'a2', 'a3'].map(id => document.getElementById(id));
-    const lNode = document.getElementById('l1');
-
-    function connect(el1, el2) {
-        const rect1 = el1.getBoundingClientRect();
-        const rect2 = el2.getBoundingClientRect();
-        const boardRect = document.getElementById('board').getBoundingClientRect();
-        
-        const x1 = rect1.right - boardRect.left;
-        const y1 = rect1.top + rect1.height/2 - boardRect.top;
-        const x2 = rect2.left - boardRect.left;
-        const y2 = rect2.top + rect2.height/2 - boardRect.top;
-
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1);
-        line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2);
-        line.setAttribute('y2', y2);
-        svg.appendChild(line);
+        entry.innerHTML = `<span class="log-time">${time}</span> <span class="${cssClass}">${msg}</span>`;
+        box.appendChild(entry);
+        box.scrollTop = box.scrollHeight;
     }
 
-    pNodes.forEach(p => aNodes.forEach(a => connect(p, a)));
-    aNodes.forEach(a => connect(a, lNode));
-}
+    function updateBoard() {
+        // Update Acceptors
+        ['a1', 'a2', 'a3'].forEach(aid => {
+            const acc = STATE.acceptors[aid];
+            const el = document.getElementById(`status-${aid}`);
+            const node = document.getElementById(aid);
+            
+            let html = `Promised Ticket: ${acc.promised || '-'}<br>`;
+            html += `Written Gift: ${acc.acceptedVal ? `<strong>${acc.acceptedVal}</strong>` : '-'}`;
+            if(acc.acceptedVal) {
+                // visual hint
+                node.style.borderTopColor = acc.acceptedVal === 'Toaster' ? COLORS.p1 : COLORS.p2;
+            } else {
+                node.style.borderTopColor = '#27ae60';
+            }
 
-function animateMessage(fromId, toId, text, color, onComplete) {
-    const fromEl = document.getElementById(fromId);
-    const toEl = document.getElementById(toId);
-    if (!fromEl || !toEl) return;
+            if(acc.crashed) node.classList.add('crashed');
+            else node.classList.remove('crashed');
 
-    const board = document.getElementById('board');
-    const msgEl = document.createElement('div');
-    msgEl.className = 'message';
-    msgEl.innerText = text;
-    msgEl.style.borderColor = color;
-    
-    // Start Position
-    const r1 = fromEl.getBoundingClientRect();
-    const br = board.getBoundingClientRect();
-    const startX = r1.left + r1.width/2 - br.left;
-    const startY = r1.top + r1.height/2 - br.top;
-
-    msgEl.style.left = startX + 'px';
-    msgEl.style.top = startY + 'px';
-    
-    board.appendChild(msgEl);
-
-    // Force reflow
-    void msgEl.offsetWidth;
-    msgEl.style.opacity = 1;
-
-    // End Position
-    const r2 = toEl.getBoundingClientRect();
-    const endX = r2.left + r2.width/2 - br.left;
-    const endY = r2.top + r2.height/2 - br.top;
-
-    msgEl.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
-
-    setTimeout(() => {
-        msgEl.remove();
-        if (onComplete) onComplete();
-    }, DELAY_MS);
-}
-
-// --- Logic Implementation ---
-
-function toggleCrash(id) {
-    if (id.startsWith('a')) {
-        ACCEPTORS[id].crashed = !ACCEPTORS[id].crashed;
-        log(`${id.toUpperCase()} is now ${ACCEPTORS[id].crashed ? 'CRASHED' : 'ONLINE'}`, 'error');
-        updateUI();
-    }
-}
-
-// Phase 1: Prepare
-function triggerPrepare(pid) {
-    const p = PROPOSERS[pid];
-    p.state = 'preparing';
-    p.promises = [];
-    p.maxSeen = {id:0, val:null};
-    
-    // Reset value to intended if restarting
-    p.val = (pid === 'p1') ? 'Blue' : 'Red';
-    
-    log(`${pid.toUpperCase()} starts Phase 1. Broadcasting Prepare(#${p.propNum})...`);
-    updateUI();
-
-    ['a1', 'a2', 'a3'].forEach(aid => {
-        const color = (pid === 'p1') ? 'var(--p1-color)' : 'var(--p2-color)';
-        
-        // Simulating Network Send
-        animateMessage(pid, aid, `Prep(${p.propNum})`, color, () => {
-            receivePrepare(pid, aid, p.propNum);
+            el.innerHTML = html;
         });
-    });
-}
 
-function receivePrepare(pid, aid, n) {
-    const acc = ACCEPTORS[aid];
-    if (acc.crashed) return; // Drop message
+        // Update Proposers
+        ['p1', 'p2'].forEach(pid => {
+            const p = STATE[pid];
+            const valEl = document.getElementById(`val-${pid}`);
+            const btn = document.getElementById(`btn-p2-${pid}`);
+            const node = document.getElementById(pid);
 
-    if (n > acc.minProp) {
-        acc.minProp = n;
-        updateUI();
-        
-        const promiseText = acc.accVal ? `Prom(#${n}, ${acc.accVal})` : `Prom(#${n})`;
-        log(`${aid.toUpperCase()} promises #${n} to ${pid.toUpperCase()}.`);
-        
-        // Send Promise Back
-        animateMessage(aid, pid, promiseText, '#4CAF50', () => {
-            handlePromise(pid, aid, n, acc.accId, acc.accVal);
+            // Did value change? (Copycat rule)
+            if (valEl.innerText !== p.val) {
+                valEl.innerText = p.val;
+                valEl.classList.remove('highlight-change');
+                void valEl.offsetWidth; // trigger reflow
+                valEl.classList.add('highlight-change');
+                log(`NOTE: ${pid === 'p1' ? 'Friend 1' : 'Friend 2'} changed gift idea to "${p.val}" because of Copycat Rule!`, 'warn');
+            }
+
+            btn.disabled = p.state !== 'ready';
+            
+            if(node.classList.contains('crashed')) {
+               // nothing specific in visual besides overlay
+            }
         });
-    } else {
-        log(`${aid.toUpperCase()} rejects Prepare(#${n}) from ${pid.toUpperCase()} (MinProp is ${acc.minProp})`, 'error');
-        animateMessage(aid, pid, 'Reject', '#f44336');
-    }
-}
-
-function handlePromise(pid, aid, n, prevId, prevVal) {
-    const p = PROPOSERS[pid];
-    if (p.state !== 'preparing') return; // Outdated
-
-    p.promises.push(aid);
-    
-    // Value Adoption Logic (Critical for Paxos)
-    if (prevVal && prevId > p.maxSeen.id) {
-        p.maxSeen = { id: prevId, val: prevVal };
-        p.val = prevVal; // ADOPT THE VALUE
-        log(`${pid.toUpperCase()} sees accepted value "${prevVal}" from ${aid}. Switching to it!`, 'success');
     }
 
-    if (p.promises.length === 2) { // Majority Reached
-        p.state = 'ready';
-        log(`${pid.toUpperCase()} received Majority Promises. Ready for Phase 2 with value "${p.val}".`, 'success');
-        updateUI();
+    function drawLines() {
+        const svg = document.getElementById('connections');
+        svg.innerHTML = '';
+        
+        const pNodes = ['p1', 'p2'].map(id => document.getElementById(id));
+        const aNodes = ['a1', 'a2', 'a3'].map(id => document.getElementById(id));
+        const lNode = document.getElementById('l1');
+
+        function connect(el1, el2) {
+            const r1 = el1.getBoundingClientRect();
+            const r2 = el2.getBoundingClientRect();
+            const board = document.getElementById('board').getBoundingClientRect();
+            
+            const x1 = r1.right - board.left;
+            const y1 = r1.top + r1.height/2 - board.top;
+            const x2 = r2.left - board.left;
+            const y2 = r2.top + r2.height/2 - board.top;
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            svg.appendChild(line);
+        }
+
+        pNodes.forEach(p => aNodes.forEach(a => connect(p, a)));
+        aNodes.forEach(a => connect(a, lNode));
     }
-}
 
-// Phase 2: Accept
-function triggerAccept(pid, specificTargets = ['a1', 'a2', 'a3']) {
-    const p = PROPOSERS[pid];
-    if (p.state !== 'ready') return;
-    
-    // p.state = 'finished'; // Keep it ready allows re-sending if failed
-    log(`${pid.toUpperCase()} starts Phase 2. Broadcasting Accept(#${p.propNum}, "${p.val}")...`);
-    updateUI();
+    function animateMsg(fromId, toId, text, color, cb) {
+        const fromEl = document.getElementById(fromId);
+        const toEl = document.getElementById(toId);
+        if(!fromEl || !toEl) return;
 
-    const color = (pid === 'p1') ? 'var(--p1-color)' : 'var(--p2-color)';
-    
-    specificTargets.forEach(aid => {
-        animateMessage(pid, aid, `Acc(#${p.propNum}, ${p.val})`, color, () => {
-            receiveAcceptRequest(pid, aid, p.propNum, p.val);
+        const board = document.getElementById('board');
+        const msg = document.createElement('div');
+        msg.className = 'msg-bubble';
+        msg.innerText = text;
+        msg.style.borderColor = color;
+        msg.style.color = color;
+
+        const r1 = fromEl.getBoundingClientRect();
+        const br = board.getBoundingClientRect();
+        
+        // Start center of From
+        const startX = r1.left + r1.width/2 - br.left;
+        const startY = r1.top + r1.height/2 - br.top;
+
+        msg.style.left = startX + 'px';
+        msg.style.top = startY + 'px';
+        board.appendChild(msg);
+
+        // End center of To
+        const r2 = toEl.getBoundingClientRect();
+        const endX = r2.left + r2.width/2 - br.left;
+        const endY = r2.top + r2.height/2 - br.top;
+
+        // Force reflow
+        void msg.offsetWidth;
+        msg.style.opacity = 1;
+        msg.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
+
+        setTimeout(() => {
+            msg.remove();
+            if(cb) cb();
+        }, DELAY);
+    }
+
+    // --- Core Logic ---
+
+    function toggleCrash(id) {
+        if(id.startsWith('a')) {
+            STATE.acceptors[id].crashed = !STATE.acceptors[id].crashed;
+            updateBoard();
+            log(`${id.toUpperCase()} is now ${STATE.acceptors[id].crashed ? 'ASLEEP' : 'AWAKE'}`, 'error');
+        } else {
+            // proposers are purely visual crash for this sim (blocks buttons)
+            const el = document.getElementById(id);
+            if(el.classList.contains('crashed')) {
+                el.classList.remove('crashed');
+            } else {
+                el.classList.add('crashed');
+            }
+        }
+    }
+
+    function startPhase1(pid) {
+        if(document.getElementById(pid).classList.contains('crashed')) return;
+
+        const p = STATE[pid];
+        p.state = 'preparing';
+        p.promises = 0;
+        p.maxSeenTicket = 0;
+        p.maxSeenVal = null;
+        // reset value to original if starting fresh
+        if(p.val !== p.originalVal && p.maxSeenVal === null) {
+            // Only reset if we haven't already adopted something. 
+            // In a strict loop we might reset, but let's keep it simple.
+            p.val = p.originalVal; 
+        }
+
+        log(`${pid === 'p1' ? 'Friend 1' : 'Friend 2'} asks: "Can I use Ticket #${p.ticket}?"`);
+        
+        ['a1', 'a2', 'a3'].forEach(aid => {
+            animateMsg(pid, aid, `Ticket? #${p.ticket}`, COLORS[pid], () => {
+                handlePrepare(pid, aid, p.ticket);
+            });
         });
-    });
-}
+    }
 
-function receiveAcceptRequest(pid, aid, n, val) {
-    const acc = ACCEPTORS[aid];
-    if (acc.crashed) return;
+    function handlePrepare(pid, aid, ticket) {
+        const acc = STATE.acceptors[aid];
+        if(acc.crashed) return;
 
-    if (n >= acc.minProp) {
-        acc.minProp = n;
-        acc.accId = n;
-        acc.accVal = val;
-        updateUI();
+        if(ticket > acc.promised) {
+            acc.promised = ticket;
+            updateBoard();
+            
+            const reply = acc.acceptedVal ? `Yes (Saw #${acc.acceptedId}:${acc.acceptedVal})` : `Yes`;
+            log(`${aid.toUpperCase()} promises Ticket #${ticket}.`);
+            
+            animateMsg(aid, pid, reply, COLORS.accept, () => {
+                receivePromise(pid, aid, ticket, acc.acceptedId, acc.acceptedVal);
+            });
+        } else {
+            log(`${aid.toUpperCase()} ignores Ticket #${ticket} (Has promised higher).`, 'error');
+            animateMsg(aid, pid, 'No', COLORS.reject);
+        }
+    }
+
+    function receivePromise(pid, aid, ticket, prevId, prevVal) {
+        const p = STATE[pid];
+        if(p.state !== 'preparing') return;
+
+        p.promises++;
         
-        log(`${aid.toUpperCase()} ACCEPTS value "${val}" (ID: #${n})`, 'success');
+        // COPYCAT RULE
+        if(prevVal && prevId > p.maxSeenTicket) {
+            p.maxSeenTicket = prevId;
+            p.maxSeenVal = prevVal;
+            p.val = prevVal; // Force update
+        }
+
+        if(p.promises === 2) {
+            p.state = 'ready';
+            log(`${pid === 'p1' ? 'Friend 1' : 'Friend 2'} got majority promises! Ready to write "${p.val}".`, 'success');
+            updateBoard();
+        }
+    }
+
+    function startPhase2(pid) {
+        if(document.getElementById(pid).classList.contains('crashed')) return;
+        const p = STATE[pid];
         
-        // Notify Learner
-        animateMessage(aid, 'l1', `Accepted(${val})`, '#FF9800', () => {
-            checkConsensus(val);
+        log(`${pid === 'p1' ? 'Friend 1' : 'Friend 2'} says: "Write down ${p.val} for Ticket #${p.ticket}!"`);
+        
+        // Allow targeting specific acceptors for scenarios
+        const targets = window.customTargets || ['a1', 'a2', 'a3'];
+        
+        targets.forEach(aid => {
+            animateMsg(pid, aid, `Write: ${p.val}`, COLORS[pid], () => {
+                handleAccept(pid, aid, p.ticket, p.val);
+            });
         });
-    } else {
-        log(`${aid.toUpperCase()} rejects Accept(#${n}) from ${pid.toUpperCase()} (Promised > #${n})`, 'error');
-        animateMessage(aid, pid, 'Reject', '#f44336');
+        window.customTargets = null; // reset
     }
-}
 
-function checkConsensus(val) {
-    if (!LEARNER.counts[val]) LEARNER.counts[val] = 0;
-    LEARNER.counts[val]++;
-    
-    if (LEARNER.counts[val] >= 2 && LEARNER.consensus !== val) {
-        LEARNER.consensus = val;
-        const el = document.getElementById('status-l1');
-        el.innerHTML = `<strong>CONSENSUS REACHED</strong><br><span style="color:green; font-size:1.5em">${val}</span>`;
-        el.style.backgroundColor = '#e8f5e9';
-        log(`🎉 LEARNER: CONSENSUS REACHED ON "${val}"! 🎉`, 'success');
+    function handleAccept(pid, aid, ticket, val) {
+        const acc = STATE.acceptors[aid];
+        if(acc.crashed) return;
+
+        if(ticket >= acc.promised) {
+            acc.promised = ticket;
+            acc.acceptedId = ticket;
+            acc.acceptedVal = val;
+            updateBoard();
+
+            log(`${aid.toUpperCase()} wrote down "${val}" for Ticket #${ticket}.`, 'success');
+
+            animateMsg(aid, 'l1', `Wrote: ${val}`, '#f39c12', () => {
+                checkConsensus(val);
+            });
+        } else {
+            log(`${aid.toUpperCase()} rejects write (Promised higher ticket).`, 'error');
+            animateMsg(aid, pid, 'No', COLORS.reject);
+        }
     }
-}
 
-// --- Scenarios ---
+    function checkConsensus(val) {
+        if(!STATE.learner.counts[val]) STATE.learner.counts[val] = 0;
+        STATE.learner.counts[val]++;
 
-function resetSim() {
-    PROPOSERS.p1.state = 'idle'; PROPOSERS.p1.promises = []; PROPOSERS.p1.val = 'Blue'; PROPOSERS.p1.maxSeen = {id:0,val:null};
-    PROPOSERS.p2.state = 'idle'; PROPOSERS.p2.promises = []; PROPOSERS.p2.val = 'Red'; PROPOSERS.p2.maxSeen = {id:0,val:null};
-    
-    ['a1','a2','a3'].forEach(id => {
-        ACCEPTORS[id].minProp = 0; ACCEPTORS[id].accId = 0; ACCEPTORS[id].accVal = null; ACCEPTORS[id].crashed = false;
-    });
-    
-    LEARNER.consensus = null; LEARNER.counts = {};
-    document.getElementById('status-l1').innerHTML = 'Waiting for Consensus...';
-    document.getElementById('status-l1').style.backgroundColor = 'transparent';
-    document.getElementById('logger').innerHTML = '<div class="log-entry">System Reset.</div>';
-    
-    updateUI();
-}
-
-function runScenario(type) {
-    resetSim();
-    
-    if (type === 'normal') {
-        log('--- SCENARIO: Normal Success ---');
-        setTimeout(() => triggerPrepare('p1'), 500);
-        setTimeout(() => triggerAccept('p1'), 2500);
-    } 
-    else if (type === 'conflict') {
-        log('--- SCENARIO: Split Brain (The Conflict) ---');
-        log('1. P1 will Prepare and get Promises.');
-        
-        setTimeout(() => triggerPrepare('p1'), 500);
-        
-        // After P1 is ready, send Accept ONLY to A1, then stop.
-        setTimeout(() => {
-            log('2. P1 sends Accept ONLY to A1 (Network Partition/Crash).', 'error');
-            triggerAccept('p1', ['a1']); // Only A1 gets it
-        }, 3000);
-        
-        // P2 wakes up
-        setTimeout(() => {
-            log('3. P2 wakes up and tries to propose "Red".', 'error');
-            triggerPrepare('p2');
-        }, 5000);
-        
-        // P2 should see A1's value and switch
-        setTimeout(() => {
-            log('4. P2 should have adopted "Blue". Check P2 Status.', 'success');
-            triggerAccept('p2');
-        }, 8000);
+        if(STATE.learner.counts[val] >= 2 && STATE.learner.consensus !== val) {
+            STATE.learner.consensus = val;
+            const disp = document.getElementById('consensus-display');
+            disp.innerText = `Gift Decided: ${val}`;
+            disp.style.display = 'block';
+            disp.style.color = val === 'Toaster' ? COLORS.p1 : COLORS.p2;
+            log(`REGISTRY FINALIZED: The couple gets a ${val}!`, 'success');
+        }
     }
-    else if (type === 'failure') {
-        log('--- SCENARIO: Acceptor Failure ---');
-        setTimeout(() => triggerPrepare('p1'), 500);
-        
-        setTimeout(() => {
-            log('!! A2 CRASHES !!', 'error');
-            toggleCrash('a2');
-            toggleCrash('a3'); // Crash 2 nodes = no majority
-            log('!! A3 CRASHES !!', 'error');
-        }, 2000);
-        
-        setTimeout(() => {
-            log('P1 tries to Accept... should fail to reach majority.', 'error');
-            triggerAccept('p1');
-        }, 3500);
-    }
-}
 
-// Init
-window.addEventListener('resize', drawLines);
-setTimeout(drawLines, 100); // Initial draw
-updateUI();
+    // --- Scenarios ---
+
+    function resetSim() {
+        STATE.p1 = { ...STATE.p1, state:'idle', promises:0, maxSeenTicket:0, maxSeenVal:null, val:'Toaster' };
+        STATE.p2 = { ...STATE.p2, state:'idle', promises:0, maxSeenTicket:0, maxSeenVal:null, val:'Blender' };
+        
+        ['a1','a2','a3'].forEach(k => {
+            STATE.acceptors[k] = { promised:0, acceptedId:0, acceptedVal:null, crashed:false };
+        });
+        
+        STATE.learner = { counts:{}, consensus:null };
+        
+        // reset UI
+        document.getElementById('consensus-display').style.display = 'none';
+        document.getElementById('logger').innerHTML = '<div class="log-entry"><span class="log-time">System</span> Board Reset.</div>';
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('crashed'));
+        
+        updateBoard();
+    }
+
+    function runScenario(type) {
+        resetSim();
+        
+        if(type === 'happy') {
+            log('--- SCENARIO: Happy Path ---');
+            setTimeout(() => startPhase1('p1'), 500);
+            setTimeout(() => startPhase2('p1'), 2500);
+        }
+        else if(type === 'interruption') {
+            log('--- SCENARIO: Rude Interruption ---');
+            setTimeout(() => startPhase1('p1'), 500);
+            setTimeout(() => {
+                log('Friend 2 interrupts with a higher ticket number!', 'warn');
+                startPhase1('p2');
+            }, 2500);
+            setTimeout(() => {
+                log('Friend 1 tries to write... but will fail.', 'error');
+                startPhase2('p1');
+            }, 4500);
+        }
+        else if(type === 'splitbrain') {
+            log('--- SCENARIO: The Split Brain (Copycat) ---');
+            log('1. Friend 1 prepares...');
+            startPhase1('p1');
+
+            setTimeout(() => {
+                log('2. Network Partition! Friend 1 can only reach Uncle A.', 'error');
+                window.customTargets = ['a1']; // Hack to only send to A1
+                startPhase2('p1');
+            }, 2500);
+
+            setTimeout(() => {
+                log('3. Friend 1 crashes / goes offline.', 'error');
+                toggleCrash('p1'); // visual crash
+            }, 4000);
+
+            setTimeout(() => {
+                log('4. Friend 2 wakes up and asks for tickets.', 'info');
+                startPhase1('p2');
+            }, 5500);
+            
+            setTimeout(() => {
+                log('WATCH: Friend 2 should adopt "Toaster" instead of "Blender"!', 'warn');
+            }, 7500);
+
+            setTimeout(() => {
+                startPhase2('p2');
+            }, 9000);
+        }
+    }
+
+    // Init
+    window.addEventListener('resize', drawLines);
+    setTimeout(drawLines, 100);
+    updateBoard();
 
 </script>
 </body>
