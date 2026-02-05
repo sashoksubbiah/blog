@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDC Internals: The Log & The Stream</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #e2e8f0;
+            --accent: #38bdf8;
+            --green: #4ade80;
+            --red: #f87171;
+            --yellow: #facc15;
+            --mono: 'Fira Code', 'Courier New', monospace;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1, h2, h3 { margin: 0 0 10px 0; font-weight: 600; }
+        .tag { font-size: 0.8em; background: #334155; padding: 2px 6px; border-radius: 4px; }
+
+        /* Layout Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr; /* DB - CDC/Log - Target */
+            gap: 20px;
+            height: 80vh;
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .scrollable { flex-grow: 1; overflow-y: auto; padding-right: 5px; }
+
+        /* Database Table */
+        table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.9em; }
+        th, td { border: 1px solid #334155; padding: 8px; text-align: left; }
+        th { background: #0f172a; color: var(--accent); }
+
+        /* The WAL Log */
+        .log-entry {
+            font-family: var(--mono);
+            font-size: 0.85em;
+            background: #0f172a;
+            margin-bottom: 8px;
+            padding: 8px;
+            border-left: 3px solid var(--accent);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .log-entry:hover { background: #1e293b; border-left-color: var(--green); }
+        .log-entry.processed { opacity: 0.5; border-left-color: #64748b; }
+        .lsn { color: #64748b; font-size: 0.8em; display: block; margin-bottom: 4px; }
+        .op-insert { color: var(--green); }
+        .op-update { color: var(--yellow); }
+        .op-delete { color: var(--red); }
+
+        /* JSON Viewer */
+        .json-block {
+            font-family: var(--mono);
+            font-size: 0.8em;
+            white-space: pre-wrap;
+            color: #94a3b8;
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            background: #334155;
+            padding: 10px;
+            border-radius: 8px;
+            align-items: center;
+        }
+        button {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { background: #64748b; cursor: not-allowed; }
+        input {
+            background: #0f172a;
+            border: 1px solid #64748b;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: var(--mono);
+            flex-grow: 1;
+        }
+
+        /* Connector Status */
+        .connector-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--red);
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-running .status-indicator { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    </style>
+</head>
+<body>
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <h1>CDC Internals: Log-Based Simulator</h1>
+            <p style="color: #94a3b8; font-size: 0.9em;">Simulating Postgres WAL to Debezium JSON Event Flow</p>
+        </div>
+        <div>
+            <button onclick="toggleCDC()" id="toggleBtn">Start CDC Connector</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <span style="font-family: var(--mono); color: var(--accent);">SQL></span>
+        <input type="text" id="sqlInput" placeholder="INSERT INTO users (id, name, role) VALUES (1, 'Ashok', 'Eng Mgr')" onkeydown="if(event.key==='Enter') executeSQL()">
+        <button onclick="executeSQL()">Execute</button>
+        <button onclick="runScenario()" style="background: #334155; color: white; border: 1px solid #64748b;">Load Scenario</button>
+    </div>
+
+    <div class="grid">
+        <div class="panel">
+            <h3>Source Database (Postgres)</h3>
+            <p class="tag">State on Disk</p>
+            <div class="scrollable">
+                <table id="dbTable">
+                    <thead>
+                        <tr><th>ID</th><th>Name</th><th>Role</th></tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="connector-status" id="connectorStatus">
+                <span><span class="status-indicator"></span>CDC Connector: <span id="statusText">STOPPED</span></span>
+                <span class="tag">Offset LSN: <span id="offsetDisplay">0</span></span>
+            </div>
+            <h3>Write-Ahead Log (WAL)</h3>
+            <p class="tag">The Source of Truth</p>
+            <div class="scrollable" id="walContainer">
+                </div>
+        </div>
+
+        <div class="panel">
+            <h3>Target Stream (Kafka)</h3>
+            <p class="tag">Change Events (JSON)</p>
+            <div class="scrollable" id="streamContainer">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State ---
+        let db = []; // Array of objects {id, name, role}
+        let wal = []; // Array of logs {lsn, op, table, before, after, ts}
+        let currentLsn = 1000;
+        let cdcOffset = 1000;
+        let cdcRunning = false;
+        let cdcInterval = null;
+
+        // --- Core Logic: Database Engine ---
+
+        function addToLog(op, before, after) {
+            currentLsn += 10;
+            const entry = {
+                lsn: currentLsn,
+                op: op,
+                table: 'users',
+                ts: Date.now(),
+                before: before ? {...before} : null,
+                after: after ? {...after} : null
+            };
+            wal.push(entry);
+            renderWal();
+            return currentLsn;
+        }
+
+        function executeSQL() {
+            const input = document.getElementById('sqlInput');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+
+            // Very simple parser for educational purposes
+            try {
+                if (cmd.toUpperCase().startsWith("INSERT")) {
+                    // Syntax: INSERT INTO users (id, name, role) VALUES (1, 'Name', 'Role')
+                    // Regex to extract values inside VALUES (...)
+                    const match = cmd.match(/VALUES\s*\(\s*(\d+)\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*\)/i);
+                    if (match) {
+                        const row = { id: parseInt(match[1]), name: match[2], role: match[3] };
+                        // Check PK
+                        if (db.find(d => d.id === row.id)) throw new Error("Duplicate Key Violation: ID " + row.id);
+                        
+                        db.push(row);
+                        addToLog('INSERT', null, row);
+                    } else {
+                        throw new Error("Invalid INSERT syntax. Try: INSERT INTO users ... VALUES (1, 'Ashok', 'Admin')");
+                    }
+                } 
+                else if (cmd.toUpperCase().startsWith("UPDATE")) {
+                    // Syntax: UPDATE users SET role = 'NewRole' WHERE id = 1
+                    const match = cmd.match(/SET\s+role\s*=\s*'([^']+)'\s+WHERE\s+id\s*=\s*(\d+)/i);
+                    if (match) {
+                        const newRole = match[1];
+                        const id = parseInt(match[2]);
+                        const idx = db.findIndex(d => d.id === id);
+                        if (idx !== -1) {
+                            const before = {...db[idx]};
+                            db[idx].role = newRole;
+                            addToLog('UPDATE', before, db[idx]);
+                        } else {
+                            // Update 0 rows (still might generate metadata log in real DB, but we skip)
+                            alert("No rows matched ID " + id);
+                        }
+                    } else {
+                        throw new Error("Syntax: UPDATE users SET role = 'X' WHERE id = Y");
+                    }
+                } 
+                else if (cmd.toUpperCase().startsWith("DELETE")) {
+                    // Syntax: DELETE FROM users WHERE id = 1
+                    const match = cmd.match(/WHERE\s+id\s*=\s*(\d+)/i);
+                    if (match) {
+                        const id = parseInt(match[1]);
+                        const idx = db.findIndex(d => d.id === id);
+                        if (idx !== -1) {
+                            const before = {...db[idx]};
+                            db.splice(idx, 1);
+                            addToLog('DELETE', before, null);
+                        }
+                    }
+                }
+                else {
+                    throw new Error("Only INSERT, UPDATE, DELETE supported.");
+                }
+
+                renderTable();
+                input.value = "";
+                // Auto-scroll log
+                const walDiv = document.getElementById('walContainer');
+                walDiv.scrollTop = walDiv.scrollHeight;
+
+            } catch (e) {
+                alert("SQL Error: " + e.message);
+            }
+        }
+
+        function runScenario() {
+            const input = document.getElementById('sqlInput');
+            
+            setTimeout(() => { input.value = "INSERT INTO users (id, name, role) VALUES (101, 'Siddharth', 'Student')"; executeSQL(); }, 500);
+            setTimeout(() => { input.value = "INSERT INTO users (id, name, role) VALUES (102, 'Priya', 'Engineer')"; executeSQL(); }, 1500);
+            setTimeout(() => { input.value = "UPDATE users SET role = 'Lead' WHERE id = 102"; executeSQL(); }, 2500);
+            setTimeout(() => { input.value = "DELETE FROM users WHERE id = 101"; executeSQL(); }, 3500);
+        }
+
+        // --- Core Logic: CDC Engine ---
+
+        function toggleCDC() {
+            cdcRunning = !cdcRunning;
+            const statusDiv = document.getElementById('connectorStatus');
+            const statusText = document.getElementById('statusText');
+            const btn = document.getElementById('toggleBtn');
+
+            if (cdcRunning) {
+                statusDiv.classList.add('status-running');
+                statusText.innerText = "RUNNING";
+                btn.innerText = "Stop CDC Connector";
+                // Start polling the log
+                cdcInterval = setInterval(processLog, 1500); // 1.5s delay to visualize "Lag"
+            } else {
+                statusDiv.classList.remove('status-running');
+                statusText.innerText = "PAUSED";
+                btn.innerText = "Resume CDC Connector";
+                clearInterval(cdcInterval);
+            }
+        }
+
+        function processLog() {
+            // Find next unprocessed log
+            const nextLog = wal.find(l => l.lsn > cdcOffset);
+            
+            if (nextLog) {
+                // Update Offset
+                cdcOffset = nextLog.lsn;
+                document.getElementById('offsetDisplay').innerText = cdcOffset;
+                
+                // Transform to CDC Event (Debezium Style)
+                const event = {
+                    schema: { type: "struct", name: "users.envelope" },
+                    payload: {
+                        before: nextLog.before,
+                        after: nextLog.after,
+                        source: {
+                            version: "1.9.0",
+                            connector: "postgresql",
+                            name: "dbserver1",
+                            lsn: nextLog.lsn,
+                            ts_ms: nextLog.ts
+                        },
+                        op: mapOpCode(nextLog.op),
+                        ts_ms: Date.now() // Processing time
+                    }
+                };
+
+                // Push to Target
+                renderStream(event);
+                renderWal(); // Re-render to show grayed out "processed" state
+            }
+        }
+
+        function mapOpCode(op) {
+            // Debezium op codes: c (create), u (update), d (delete), r (read)
+            if (op === 'INSERT') return 'c';
+            if (op === 'UPDATE') return 'u';
+            if (op === 'DELETE') return 'd';
+            return '?';
+        }
+
+        // --- Rendering ---
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = db.map(row => `
+                <tr>
+                    <td>${row.id}</td>
+                    <td>${row.name}</td>
+                    <td>${row.role}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderWal() {
+            const container = document.getElementById('walContainer');
+            container.innerHTML = wal.map(entry => {
+                const isProcessed = entry.lsn <= cdcOffset;
+                const opClass = entry.op === 'INSERT' ? 'op-insert' : (entry.op === 'UPDATE' ? 'op-update' : 'op-delete');
+                return `
+                    <div class="log-entry ${isProcessed ? 'processed' : ''}">
+                        <span class="lsn">LSN: ${entry.lsn} | ${new Date(entry.ts).toLocaleTimeString()}</span>
+                        <span class="${opClass}">[${entry.op}]</span> 
+                        ${formatLogData(entry)}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatLogData(entry) {
+            if (entry.op === 'INSERT') return `New: {id:${entry.after.id}, name:${entry.after.name}}`;
+            if (entry.op === 'DELETE') return `Old: {id:${entry.before.id}}`;
+            if (entry.op === 'UPDATE') return `Diff: role '${entry.before.role}' -> '${entry.after.role}'`;
+            return '';
+        }
+
+        function renderStream(event) {
+            const container = document.getElementById('streamContainer');
+            const div = document.createElement('div');
+            div.className = 'json-block';
+            div.innerHTML = syntaxHighlight(event);
+            container.prepend(div); // Newest on top
+        }
+
+        function syntaxHighlight(json) {
+            let str = JSON.stringify(json, null, 2);
+            // Simple coloring logic could go here, keeping it plain for now
+            return str;
+        }
+
+        // Initial render
+        renderTable();
+    </script>
+</body>
+</html>
