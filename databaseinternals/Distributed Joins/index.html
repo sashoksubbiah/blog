@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Join Visualizer</title>
+    <style>
+        :root { 
+            --bg: #0f172a; 
+            --card: #1e293b; 
+            --accent: #3b82f6; 
+            --text: #f8fafc; 
+            --success: #22c55e; 
+            --danger: #ef4444; 
+            --bloom: #8b5cf6;
+            --warning: #f59e0b;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; line-height: 1.5; }
+        
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1, h2, h3 { color: var(--text); }
+        
+        /* Controls */
+        .controls { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 30px; align-items: start; flex-wrap: wrap; border: 1px solid #334155; }
+        .control-group { display: flex; flex-direction: column; gap: 10px; }
+        .control-group h3 { margin: 0 0 5px 0; font-size: 0.9rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        
+        button { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; white-space: nowrap; font-size: 0.9rem; }
+        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        button.secondary { background: #475569; }
+        button.bloom { background: var(--bloom); }
+        button.skew { background: var(--warning); color: #fff; }
+        
+        .explanation { font-size: 0.85rem; color: #94a3b8; margin-top: 5px; max-width: 400px; padding-left: 15px; border-left: 2px solid #334155; }
+
+        /* Cluster Layout */
+        .cluster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
+        .node { background: var(--card); border: 2px solid #334155; border-radius: 12px; padding: 15px; min-height: 500px; display: flex; flex-direction: column; transition: border-color 0.3s; }
+        
+        /* Node Overload State */
+        .node.overload { border-color: var(--danger); box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); }
+        .node.overload .node-header { color: var(--danger); }
+
+        .node-header { display: flex; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold; color: #94a3b8; }
+        
+        .storage-area { display: flex; gap: 10px; flex: 1; }
+        .table-col { flex: 1; background: #0f172a; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .table-title { font-size: 0.75rem; text-align: center; margin-bottom: 5px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        
+        /* Data Rows */
+        .row { 
+            padding: 5px 8px; border-radius: 4px; font-size: 0.75rem; 
+            display: flex; justify-content: space-between; align-items: center;
+            transition: all 0.4s ease-in-out; 
+            border: 1px solid transparent;
+        }
+        .row span { white-space: nowrap; }
+        
+        /* Row Styles */
+        .row-orders { background: #3b82f622; border-color: #3b82f644; color: #93c5fd; }
+        .row-users { background: #eab30822; border-color: #eab30844; color: #fde047; }
+        
+        /* States */
+        .row-joined { background: #22c55e33 !important; border-color: #22c55e !important; color: #86efac !important; box-shadow: 0 0 10px #22c55e22; }
+        .row-junk { background: #334155 !important; border-color: #475569 !important; color: #64748b !important; border-style: dashed !important; }
+        .row-filtered { opacity: 0.2; text-decoration: line-through; filter: grayscale(1); border: none; }
+
+        /* Stats Panel */
+        .stats-panel { position: fixed; bottom: 20px; right: 20px; background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid #334155; width: 280px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); z-index: 100; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .stat-val { font-family: monospace; font-weight: bold; font-size: 1.1rem; }
+        .stat-label { color: #94a3b8; }
+        .stat-highlight { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Distributed Join Visualizer</h1>
+    
+    <div class="controls">
+        <div class="control-group">
+            <h3>1. Generate Data</h3>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="initData(false)" class="secondary">Normal Data</button>
+                <button onclick="initData(true)" class="skew">Generate Skewed Data</button>
+            </div>
+            <div class="explanation">
+                <strong>Skew Mode:</strong> Creates a "Hot Key" scenario where 90% of orders belong to User 1. Watch Node 1 choke!
+            </div>
+        </div>
+        <div class="control-group">
+            <h3>2. Execution Strategy</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="runBroadcastJoin()">Broadcast Join</button>
+                <button onclick="runShuffleJoin()">Shuffle Join</button>
+                <button onclick="runBloomJoin()" class="bloom">Bloom Filter Join</button>
+            </div>
+            <div class="explanation">
+                <strong>Bloom Filter:</strong> Watch it filter out "Junk" (grey rows) locally before network transfer.
+            </div>
+        </div>
+    </div>
+
+    <div class="cluster" id="cluster">
+        </div>
+</div>
+
+<div class="stats-panel">
+    <h3 style="margin-top:0; border-bottom: 1px solid #334155; padding-bottom: 10px;">Query Metrics</h3>
+    <div class="stat-row"><span class="stat-label">Network Packets:</span> <span id="stat-network" class="stat-val stat-highlight">0</span></div>
+    <div class="stat-row"><span class="stat-label">Shuffles:</span> <span id="stat-shuffle" class="stat-val">0</span></div>
+    <div class="stat-row"><span class="stat-label">Matches Found:</span> <span id="stat-matches" class="stat-val">0</span></div>
+    <div id="skew-warning" style="display:none; color: #ef4444; font-size: 0.8rem; margin-top: 10px; font-weight: bold; border-top: 1px solid #334155; padding-top: 10px;">
+        ⚠️ SKEW DETECTED:<br>Node 1 is processing <span id="skew-pct">0</span>% of all traffic!
+    </div>
+</div>
+
+<script>
+    // Configuration
+    const NODE_COUNT = 3;
+    const ORDERS_COUNT = 20;
+    const USERS_COUNT = 6; 
+    
+    // State
+    let nodes = [];
+    let stats = { network: 0, shuffles: 0, matches: 0 };
+    let isSkewedMode = false;
+    
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+    function initData(skewed = false) {
+        isSkewedMode = skewed;
+        const cluster = document.getElementById('cluster');
+        cluster.innerHTML = '';
+        nodes = [];
+        resetStats();
+        
+        // Create Nodes
+        for (let i = 0; i < NODE_COUNT; i++) {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = 'node';
+            nodeDiv.id = `node-${i}`;
+            nodeDiv.innerHTML = `
+                <div class="node-header">
+                    <span>Node ${i}</span>
+                    <span style="font-size: 0.8em">IP: 10.0.0.${i+1}</span>
+                </div>
+                <div class="storage-area">
+                    <div class="table-col" id="t1-${i}"><div class="table-title">Orders (Large)</div></div>
+                    <div class="table-col" id="t2-${i}"><div class="table-title">Users (Small)</div></div>
+                </div>
+            `;
+            cluster.appendChild(nodeDiv);
+            
+            nodes.push({ id: i, element: nodeDiv, orders: [], users: [] });
+        }
+
+        // Generate Data
+        for (let i = 0; i < ORDERS_COUNT; i++) {
+            let userId;
+            let isJunk = false;
+
+            if (skewed) {
+                // SKEWED LOGIC: 90% chance to be User 1 (The "Hot Key")
+                // 10% chance to be User 2 or 3
+                // No junk in skew mode to keep the lesson clear
+                const r = Math.random();
+                if (r < 0.85) userId = 1; 
+                else if (r < 0.95) userId = 2;
+                else userId = 3;
+            } else {
+                // NORMAL LOGIC: Random spread + Junk
+                isJunk = Math.random() > 0.7; // 30% Junk
+                userId = isJunk ? 99 : Math.floor(Math.random() * USERS_COUNT) + 1;
+            }
+            
+            const rowData = { 
+                id: 1000 + i, 
+                userId: userId, 
+                isJunk: isJunk
+            };
+
+            const randomNode = Math.floor(Math.random() * NODE_COUNT);
+            const el = addDatatoNode(randomNode, 'orders', rowData);
+            
+            if (isJunk) {
+                el.classList.add('row-junk');
+                el.innerHTML = `<span>Ord #${rowData.id}</span> <span>User: ??</span>`;
+            } else if (skewed && userId === 1) {
+                // Highlight the hot key visually
+                el.style.border = "1px solid #f59e0b"; 
+            }
+        }
+
+        // Generate Users
+        const userNames = ['Alice', 'Bob', 'Charlie', 'Dave', 'Eve', 'Frank'];
+        for (let i = 0; i < USERS_COUNT; i++) {
+            const rowData = { id: i + 1, name: userNames[i] };
+            const randomNode = Math.floor(Math.random() * NODE_COUNT);
+            addDatatoNode(randomNode, 'users', rowData);
+        }
+    }
+
+    function addDatatoNode(nodeIdx, table, data, isAnimation = false) {
+        const container = document.getElementById(table === 'orders' ? `t1-${nodeIdx}` : `t2-${nodeIdx}`);
+        const el = document.createElement('div');
+        el.className = `row row-${table}`;
+        el.dataset.joinKey = table === 'orders' ? data.userId : data.id;
+        el.dataset.uniqueId = `${table}-${data.id}`; 
+        
+        if (table === 'orders') {
+            el.innerHTML = `<span>Ord #${data.id}</span> <span>User:${data.userId}</span>`;
+        } else {
+            el.innerHTML = `<span>User ${data.id}</span> <span>${data.name}</span>`;
+            el.style.fontWeight = 'bold';
+        }
+
+        container.appendChild(el);
+        
+        if (isAnimation) {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0)';
+            }, 50);
+        } else {
+             nodes[nodeIdx][table].push(data);
+        }
+        return el;
+    }
+
+    // ==========================================
+    // JOIN ALGORITHMS
+    // ==========================================
+
+    async function runBroadcastJoin() {
+        if(!confirm("Start Broadcast Join?\nStrategy: Copy the entire USER table to every node.")) return;
+        resetVisuals();
+        let allUsers = [];
+        nodes.forEach(n => n.users.forEach(u => allUsers.push(u)));
+        
+        for (let i = 0; i < NODE_COUNT; i++) {
+            // Simple logic: If node doesn't have user, send it. 
+            // For viz simplicity, we just broadcast all users to all nodes (except self)
+             for (let user of allUsers) {
+                await simulateNetworkTransfer('users', user, i);
+            }
+        }
+        performLocalJoins();
+    }
+
+    async function runShuffleJoin() {
+        const msg = isSkewedMode 
+            ? "⚠️ WARNING: SKEW MODE ACTIVE\n\nIn Shuffle Join, all keys for 'User 1' will go to the same node.\nWatch for overload!" 
+            : "Start Shuffle Join?\nStrategy: Hash(ID) % 3.";
+            
+        if(!confirm(msg)) return;
+        resetVisuals();
+
+        // 1. Shuffle Orders
+        let ordersToMove = [];
+        nodes.forEach((node, sourceNodeIdx) => {
+            node.orders.forEach(order => {
+                const targetNode = order.userId % NODE_COUNT;
+                if (targetNode !== sourceNodeIdx) {
+                    ordersToMove.push({ data: order, target: targetNode, type: 'orders' });
+                }
+            });
+        });
+
+        // 2. Shuffle Users
+        let usersToMove = [];
+        nodes.forEach((node, sourceNodeIdx) => {
+            node.users.forEach(user => {
+                const targetNode = user.id % NODE_COUNT;
+                if (targetNode !== sourceNodeIdx) {
+                    usersToMove.push({ data: user, target: targetNode, type: 'users' });
+                }
+            });
+        });
+
+        // Execute Moves
+        for (let item of ordersToMove) { await simulateNetworkTransfer(item.type, item.data, item.target); }
+        for (let item of usersToMove) { await simulateNetworkTransfer(item.type, item.data, item.target); }
+
+        performLocalJoins();
+        checkForSkewOverload();
+    }
+
+    async function runBloomJoin() {
+        if(!confirm("Start Bloom Filter Join?")) return;
+        resetVisuals();
+
+        // 1. Create Filter
+        let validUserIds = new Set();
+        nodes.forEach(n => n.users.forEach(u => validUserIds.add(u.id)));
+        stats.network += NODE_COUNT; updateStats();
+
+        // 2. Filter & Shuffle Orders
+        let ordersToMove = [];
+        for(let sourceNodeIdx = 0; sourceNodeIdx < nodes.length; sourceNodeIdx++) {
+            const node = nodes[sourceNodeIdx];
+            for(let order of node.orders) {
+                if (validUserIds.has(order.userId)) {
+                    const targetNode = order.userId % NODE_COUNT;
+                    if (targetNode !== sourceNodeIdx) {
+                        ordersToMove.push({ data: order, target: targetNode, type: 'orders' });
+                    }
+                } else {
+                    const container = document.getElementById(`t1-${sourceNodeIdx}`);
+                    const el = container.querySelector(`[data-unique-id="orders-${order.id}"]`);
+                    if(el) el.classList.add('row-filtered');
+                }
+            }
+        }
+
+        let usersToMove = [];
+        nodes.forEach((node, sourceNodeIdx) => {
+            node.users.forEach(user => {
+                const targetNode = user.id % NODE_COUNT;
+                if (targetNode !== sourceNodeIdx) {
+                    usersToMove.push({ data: user, target: targetNode, type: 'users' });
+                }
+            });
+        });
+
+        for (let item of ordersToMove) { await simulateNetworkTransfer(item.type, item.data, item.target); }
+        for (let item of usersToMove) { await simulateNetworkTransfer(item.type, item.data, item.target); }
+
+        performLocalJoins();
+        checkForSkewOverload();
+    }
+
+    // ==========================================
+    // HELPERS & VISUALIZATION
+    // ==========================================
+
+    function simulateNetworkTransfer(type, data, targetNodeIdx) {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                const el = addDatatoNode(targetNodeIdx, type, data, true);
+                if(data.isJunk) {
+                    el.classList.add('row-junk');
+                    el.innerHTML = `<span>Ord #${data.id}</span> <span>User: ??</span>`;
+                }
+                stats.network++;
+                stats.shuffles++;
+                updateStats();
+                resolve();
+            }, 60); // Fast animation
+        });
+    }
+
+    function performLocalJoins() {
+        nodes.forEach((node, idx) => {
+            const nodeEl = document.getElementById(`node-${idx}`);
+            const userRows = nodeEl.querySelectorAll('.row-users');
+            const orderRows = nodeEl.querySelectorAll('.row-orders');
+
+            userRows.forEach(uRow => {
+                const uId = parseInt(uRow.dataset.joinKey);
+                orderRows.forEach(oRow => {
+                    const oId = parseInt(oRow.dataset.joinKey);
+                    if (oId === uId && !oRow.classList.contains('row-joined')) {
+                        oRow.classList.add('row-joined');
+                        uRow.classList.add('row-joined');
+                        oRow.innerHTML += ' ✅';
+                        stats.matches++;
+                    }
+                });
+            });
+        });
+        updateStats();
+    }
+
+    function checkForSkewOverload() {
+        // Count items in each node to see if one is overloaded
+        let counts = nodes.map((_, i) => document.getElementById(`t1-${i}`).children.length - 1); // -1 for title
+        let total = counts.reduce((a,b) => a+b, 0);
+        let max = Math.max(...counts);
+        let maxIdx = counts.indexOf(max);
+        
+        // If one node has > 70% of data, mark it as overloaded
+        if (total > 0 && (max / total) > 0.7) {
+            document.getElementById(`node-${maxIdx}`).classList.add('overload');
+            document.getElementById('skew-warning').style.display = 'block';
+            document.getElementById('skew-pct').innerText = Math.round((max/total)*100);
+        }
+    }
+
+    function resetVisuals() {
+        document.querySelectorAll('.row').forEach(el => el.style.opacity = '0.4');
+        document.querySelectorAll('.node').forEach(el => el.classList.remove('overload'));
+        document.getElementById('skew-warning').style.display = 'none';
+    }
+
+    function resetStats() {
+        stats = { network: 0, shuffles: 0, matches: 0 };
+        updateStats();
+        resetVisuals();
+        document.querySelectorAll('.row').forEach(el => el.style.opacity = '1');
+    }
+
+    function updateStats() {
+        document.getElementById('stat-network').innerText = stats.network;
+        document.getElementById('stat-shuffle').innerText = stats.shuffles;
+        document.getElementById('stat-matches').innerText = stats.matches;
+    }
+
+    // Start with normal data
+    initData(false);
+
+</script>
+</body>
+</html>
