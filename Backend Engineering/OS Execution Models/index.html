@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OS Fundamentals: Process vs Thread vs Coroutine</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Animations */
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        @keyframes flash-white {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; background-color: #ffffff; }
+        }
+        .animate-segfault { animation: pulse-red 0.5s ease-in-out; }
+        .animate-switch { animation: flash-white 0.2s ease-in-out; }
+        
+        .cpu-grid {
+            background-image: radial-gradient(#334155 1px, transparent 1px);
+            background-size: 10px 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+
+const { useState, useEffect, useRef } = React;
+
+// --- Icons ---
+const CpuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>;
+const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+const LockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const RefreshIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
+const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+const BookOpenIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
+
+// --- Components ---
+
+const Tooltip = ({ text, children }) => (
+    <div className="group relative flex justify-center w-full">
+        {children}
+        <span className="pointer-events-none absolute bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-slate-900/95 text-white text-xs rounded-lg shadow-xl border border-slate-600 z-50 text-center backdrop-blur-sm">
+            {text}
+            <svg className="absolute text-slate-900/95 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255" xmlSpace="preserve"><polygon className="fill-current" points="0,0 127.5,127.5 255,0"/></svg>
+        </span>
+    </div>
+);
+
+const ConceptCard = ({ title, metaphor, role, missing, color }) => (
+    <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-500 transition-colors">
+        <h3 className={`text-xl font-bold mb-2 flex items-center gap-2 ${color}`}>
+            {title}
+        </h3>
+        <div className="space-y-4 text-sm text-slate-300">
+            <div>
+                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider">The Metaphor</span>
+                <p className="mt-1 font-medium text-white">{metaphor}</p>
+            </div>
+            <div>
+                <span className="text-slate-500 uppercase text-xs font-bold tracking-wider">Why we need it</span>
+                <p className="mt-1">{role}</p>
+            </div>
+            <div className="bg-red-900/10 p-3 rounded border border-red-900/30">
+                <span className="text-red-400 uppercase text-xs font-bold tracking-wider">What if it's missing?</span>
+                <p className="mt-1 text-red-200/80">{missing}</p>
+            </div>
+        </div>
+    </div>
+);
+
+const App = () => {
+    // --- State ---
+    const [processes, setProcesses] = useState([
+        { id: 1, name: "Process A", color: "blue", threads: [1], memory: { var1: 0 }, activeThread: null }
+    ]);
+    const [nextPid, setNextPid] = useState(2);
+    const [nextTid, setNextTid] = useState(2);
+    const [activeTab, setActiveTab] = useState('process'); // process, thread, switch
+    
+    // CPU State
+    const [cpuState, setCpuState] = useState({
+        activeProcessId: null,
+        activeThreadId: null,
+        cache: [], // Visual simulation of L1 cache lines
+        status: "IDLE", // IDLE, BUSY, SWITCHING
+        registers: { PC: "0x0000", SP: "0x0000" }
+    });
+
+    const [logs, setLogs] = useState([]);
+    const [isCoroutineMode, setIsCoroutineMode] = useState(false);
+    const [switchingCost, setSwitchingCost] = useState(0);
+
+    // --- Helpers ---
+    const addLog = (msg, type = "info") => {
+        setLogs(prev => [{ id: Date.now(), msg, type }, ...prev].slice(0, 10));
+    };
+
+    const colors = {
+        blue: "bg-blue-900 border-blue-500 text-blue-100",
+        green: "bg-green-900 border-green-500 text-green-100",
+        purple: "bg-purple-900 border-purple-500 text-purple-100",
+        orange: "bg-orange-900 border-orange-500 text-orange-100",
+    };
+    
+    const colorKeys = Object.keys(colors);
+
+    // --- Actions ---
+
+    const spawnProcess = () => {
+        if (processes.length >= 4) {
+            addLog("Max processes reached for this demo.", "error");
+            return;
+        }
+        const color = colorKeys[processes.length % colorKeys.length];
+        const newProcess = {
+            id: nextPid,
+            name: `Process ${String.fromCharCode(64 + nextPid)}`,
+            color: color.split(" ")[0].replace("bg-", ""), // extract base color name
+            threads: [nextTid],
+            memory: { var1: 0 },
+            activeThread: null
+        };
+        setProcesses([...processes, newProcess]);
+        setNextPid(prev => prev + 1);
+        setNextTid(prev => prev + 1);
+        addLog(`Spawned ${newProcess.name} (PID: ${newProcess.id}) with 1 Main Thread.`, "success");
+    };
+
+    const spawnThread = (pid) => {
+        setProcesses(prev => prev.map(p => {
+            if (p.id === pid) {
+                if(p.threads.length >= 4) {
+                    addLog(`Max threads reached for Process ${p.name}.`, "error");
+                    return p;
+                }
+                const newTid = nextTid;
+                setNextTid(t => t + 1);
+                addLog(`Spawned Thread ${newTid} in ${p.name}. Shared memory access granted.`);
+                return { ...p, threads: [...p.threads, newTid] };
+            }
+            return p;
+        }));
+    };
+
+    const killProcess = (pid) => {
+        if (cpuState.activeProcessId === pid) {
+             setCpuState({ activeProcessId: null, activeThreadId: null, cache: [], status: "IDLE", registers: {PC: "0x0000", SP:"0x0000"} });
+        }
+        setProcesses(prev => prev.filter(p => p.id !== pid));
+        addLog(`Killed Process ${pid}. Memory reclaimed.`, "warning");
+    };
+
+    const contextSwitch = (pid, tid) => {
+        if (cpuState.status === "SWITCHING") return;
+
+        const isSameProcess = cpuState.activeProcessId === pid;
+        const switchTime = isCoroutineMode ? 10 : (isSameProcess ? 300 : 1500); // ms
+        
+        setSwitchingCost(switchTime);
+        setCpuState(prev => ({ ...prev, status: "SWITCHING" }));
+
+        // Log the "Cost"
+        if (isCoroutineMode) {
+             addLog(`Yielding to Thread ${tid}. Cost: negligible (User-space switch).`, "success");
+        } else if (isSameProcess) {
+            addLog(`Thread Switch (T${cpuState.activeThreadId} -> T${tid}). Cost: Low. Cache preserved.`, "info");
+        } else {
+            addLog(`Process Switch (P${cpuState.activeProcessId} -> P${pid}). Cost: HIGH. TLB Flush & Cache Cold.`, "warning");
+        }
+
+        setTimeout(() => {
+            setCpuState({
+                activeProcessId: pid,
+                activeThreadId: tid,
+                // If switching process, clear cache (Cold Cache). If same process, keep some (Warm Cache).
+                cache: isSameProcess ? ["0x4A", "0xB2", "0x9C", "0x11"] : [], 
+                status: "BUSY",
+                registers: {
+                    PC: `0x${(Math.random()*0xFFFF).toString(16).split('.')[0].toUpperCase()}`,
+                    SP: `0x${(Math.random()*0xFFFF).toString(16).split('.')[0].toUpperCase()}`
+                }
+            });
+            
+            // Populate cache after a delay if it was cleared (simulating fetch)
+            if (!isSameProcess) {
+                setTimeout(() => {
+                    setCpuState(prev => ({...prev, cache: ["0x33", "0x??", "0x??", "0x??"]}));
+                }, 400);
+            }
+
+        }, switchTime);
+    };
+
+    const modifyMemory = (pid, varName) => {
+        // Check isolation rules
+        if (cpuState.activeProcessId === null) {
+            addLog("CPU is Idle. Schedule a thread first!", "error");
+            return;
+        }
+
+        if (cpuState.activeProcessId !== pid) {
+            // SEGFAULT SIMULATION
+            const targetProcess = processes.find(p => p.id === pid);
+            addLog(`SEGFAULT! Thread ${cpuState.activeThreadId} (P${cpuState.activeProcessId}) tried to access memory of P${pid}. Access Denied.`, "segfault");
+            return;
+        }
+
+        // Valid Access
+        setProcesses(prev => prev.map(p => {
+            if (p.id === pid) {
+                return { ...p, memory: { ...p.memory, [varName]: p.memory[varName] + 1 } };
+            }
+            return p;
+        }));
+        
+        // Update cache to show activity
+        setCpuState(prev => ({
+            ...prev,
+            cache: prev.cache.map(() => `0x${Math.floor(Math.random()*255).toString(16).toUpperCase()}`)
+        }));
+        addLog(`Thread ${cpuState.activeThreadId} wrote to ${varName} in Shared Process Memory.`);
+    };
+
+    // --- Render Helpers ---
+    
+    const getProcessColorStyle = (pColor) => {
+        const map = {
+            "blue": "bg-blue-900/40 border-blue-500",
+            "green": "bg-green-900/40 border-green-500",
+            "purple": "bg-purple-900/40 border-purple-500",
+            "orange": "bg-orange-900/40 border-orange-500",
+        };
+        return map[pColor] || map["blue"];
+    };
+
+    return (
+        <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
+            
+            {/* Header */}
+            <header className="flex flex-col md:flex-row justify-between items-center border-b border-slate-700 pb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+                        <CpuIcon className="text-blue-400" /> 
+                        OS Execution Models
+                    </h1>
+                    <p className="text-slate-400 mt-2 max-w-2xl">
+                        Interactive playground: Spawn processes (Factories), create threads (Workers), and observe the cost of context switching.
+                    </p>
+                </div>
+                <div className="flex items-center gap-4 mt-4 md:mt-0 bg-slate-800 p-2 rounded-lg border border-slate-700">
+                     <span className="text-sm font-semibold text-slate-300">Run Mode:</span>
+                     <button 
+                        onClick={() => setIsCoroutineMode(!isCoroutineMode)}
+                        className={`px-3 py-1 rounded text-sm font-bold transition-all ${isCoroutineMode ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                     >
+                        {isCoroutineMode ? "Coroutine (User-Level)" : "Kernel Thread (OS-Level)"}
+                     </button>
+                     <Tooltip text="Switching Kernel threads involves the OS (System Calls), which is slow. Coroutines switch inside the application (User Space), which is almost instant.">
+                        <div className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-xs cursor-help">?</div>
+                     </Tooltip>
+                </div>
+            </header>
+
+            {/* Main Stage */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                {/* Left: CPU Internals */}
+                <div className="lg:col-span-4 flex flex-col gap-4">
+                    <div className="bg-slate-800 rounded-xl border border-slate-600 p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 bg-slate-700 px-2 py-1 text-xs rounded-bl-lg text-slate-300 font-mono">CORE 0</div>
+                        
+                        {/* CPU Status */}
+                        <div className="flex justify-between items-end mb-6">
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-1">CPU State</h2>
+                                <div className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${cpuState.status === 'SWITCHING' ? 'bg-yellow-500/20 text-yellow-400' : (cpuState.status === 'IDLE' ? 'bg-slate-600 text-slate-300' : 'bg-green-500/20 text-green-400')}`}>
+                                    {cpuState.status}
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-xs text-slate-400">Current Overhead</div>
+                                <div className={`text-2xl font-mono font-bold ${switchingCost > 500 ? 'text-red-400' : 'text-green-400'}`}>
+                                    {switchingCost}ms
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Registers */}
+                        <div className="bg-black/50 p-4 rounded-lg border border-slate-700 font-mono text-sm mb-4">
+                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Registers (Context)</div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex justify-between">
+                                    <span className="text-blue-400">PC:</span>
+                                    <span className={cpuState.status === 'SWITCHING' ? 'text-slate-600 blur-[2px] transition-all' : 'text-white transition-all'}>{cpuState.registers.PC}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-pink-400">SP:</span>
+                                    <span className={cpuState.status === 'SWITCHING' ? 'text-slate-600 blur-[2px] transition-all' : 'text-white transition-all'}>{cpuState.registers.SP}</span>
+                                </div>
+                                <div className="flex justify-between col-span-2 border-t border-slate-800 pt-2">
+                                    <span className="text-green-400">Owner:</span>
+                                    <span className="text-white">
+                                        {cpuState.activeProcessId ? `PID ${cpuState.activeProcessId} / TID ${cpuState.activeThreadId}` : "KERNEL IDLE"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* L1 Cache Visualization */}
+                        <div className="bg-black/50 p-4 rounded-lg border border-slate-700 font-mono text-sm">
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-xs text-slate-500 uppercase tracking-wider">L1 Cache (Data)</div>
+                                <div className={`w-2 h-2 rounded-full ${cpuState.cache.length > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 h-16">
+                                {cpuState.cache.length > 0 ? (
+                                    cpuState.cache.map((val, i) => (
+                                        <div key={i} className="bg-slate-700/80 rounded flex items-center justify-center text-xs text-slate-300 animate-pulse border border-slate-600">
+                                            {val}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-4 flex items-center justify-center text-slate-600 italic text-xs">
+                                        Cache Cold / Flushed
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-2 text-[10px] text-slate-500 text-center">
+                                {cpuState.activeProcessId ? "Warm Cache (Fast Access)" : "Cache Miss Hazard"}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Controls */}
+                    <Tooltip text="HEAVY OPERATION: Allocates a completely new virtual memory space (Page Table), File Descriptors, and Process Control Block (PCB). Slow & Expensive.">
+                        <button 
+                            onClick={spawnProcess}
+                            className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-lg font-bold shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                        >
+                            <span className="text-xl">+</span> Spawn New Process (Factory)
+                        </button>
+                    </Tooltip>
+                    
+                    {/* Log Console */}
+                    <div className="flex-1 bg-black rounded-lg border border-slate-800 p-4 overflow-hidden flex flex-col min-h-[150px]">
+                        <div className="text-xs text-slate-500 mb-2 border-b border-slate-800 pb-1">KERNEL LOG</div>
+                        <div className="flex-1 overflow-y-auto space-y-2 font-mono text-xs">
+                            {logs.length === 0 && <span className="text-slate-600">System ready...</span>}
+                            {logs.map((log) => (
+                                <div key={log.id} className={`${log.type === 'error' ? 'text-red-400' : log.type === 'warning' ? 'text-yellow-400' : log.type === 'segfault' ? 'text-red-500 font-bold bg-red-900/10 p-1' : log.type === 'success' ? 'text-green-400' : 'text-blue-300'}`}>
+                                    <span className="opacity-50 mr-2">[{new Date(log.id).toLocaleTimeString().split(' ')[0]}]</span>
+                                    {log.msg}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right: RAM / Process Map */}
+                <div className="lg:col-span-8 bg-slate-900/50 rounded-xl border border-slate-800 p-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-white">RAM (User Space)</h2>
+                        <div className="text-xs text-slate-500 flex items-center gap-4">
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-900 border border-blue-500 rounded"></div> Process Boundary</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-700 border border-slate-500 rounded"></div> Thread Stack</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 content-start">
+                        {processes.map((proc) => {
+                            const isCpuOwner = cpuState.activeProcessId === proc.id;
+                            
+                            return (
+                                <div 
+                                    key={proc.id} 
+                                    className={`relative p-4 rounded-lg border-2 transition-all duration-300 min-h-[200px] flex flex-col ${getProcessColorStyle(proc.color)} ${isCpuOwner ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-white scale-[1.02]' : 'opacity-80'}`}
+                                >
+                                    {/* Process Header */}
+                                    <div className="flex justify-between items-start mb-4 border-b border-white/10 pb-2">
+                                        <div>
+                                            <div className="font-bold text-lg flex items-center gap-2">
+                                                {proc.name} 
+                                                <span className="text-xs font-mono opacity-60">PID:{proc.id}</span>
+                                            </div>
+                                            <div className="text-xs opacity-70">Memory Space: 0x{proc.id}000...</div>
+                                        </div>
+                                        <button 
+                                            onClick={() => killProcess(proc.id)}
+                                            className="text-white/30 hover:text-red-400 transition-colors p-1"
+                                            title="Kill Process (SIGKILL)"
+                                        >
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
+
+                                    {/* Thread Pool */}
+                                    <div className="flex-1">
+                                        <div className="text-xs font-semibold mb-2 opacity-70 uppercase tracking-wider flex justify-between">
+                                            <span>Thread Pool</span>
+                                            <Tooltip text="LIGHT OPERATION: Reuses the existing Process memory. Only creates a new Stack for local variables. Very fast.">
+                                                <button 
+                                                    onClick={() => spawnThread(proc.id)} 
+                                                    className="hover:text-white text-white/50 transition-colors"
+                                                >
+                                                    + New Worker
+                                                </button>
+                                            </Tooltip>
+                                        </div>
+                                        
+                                        <div className="flex flex-wrap gap-3 mb-6">
+                                            {proc.threads.map(tid => {
+                                                const isActive = cpuState.activeThreadId === tid;
+                                                return (
+                                                    <button
+                                                        key={tid}
+                                                        onClick={() => contextSwitch(proc.id, tid)}
+                                                        className={`relative group flex flex-col items-center justify-center w-12 h-14 rounded border transition-all ${isActive ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-black/30 border-white/20 hover:bg-black/50 hover:border-white/50 text-white/70'}`}
+                                                    >
+                                                        <UserIcon />
+                                                        <span className="text-[10px] font-mono mt-1">T{tid}</span>
+                                                        
+                                                        {isActive && (
+                                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-black animate-pulse"></div>
+                                                        )}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+
+                                        {/* Shared Memory Section */}
+                                        <div className="bg-black/20 p-3 rounded border border-white/10 mt-auto">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <div className="text-xs flex items-center gap-1 opacity-80">
+                                                    <LockIcon width={12} /> Shared Heap
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-white/10 px-3 py-1 rounded text-sm font-mono border border-white/10">
+                                                    var1: <span className="text-yellow-300">{proc.memory.var1}</span>
+                                                </div>
+                                                <Tooltip text="SHARED MEMORY: Any thread in this Process can write here instantly. If a different Process tries to write here -> SEGFAULT (Crash).">
+                                                    <button 
+                                                        onClick={() => modifyMemory(proc.id, 'var1')}
+                                                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs border border-white/10 transition-colors"
+                                                    >
+                                                        Write (active thread)
+                                                    </button>
+                                                </Tooltip>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {/* Instruction Overlay when empty */}
+                        {processes.length === 0 && (
+                            <div className="col-span-2 flex flex-col items-center justify-center h-full text-slate-500 border-2 border-dashed border-slate-700 rounded-xl p-12">
+                                <div className="text-4xl mb-4 opacity-50">🏭</div>
+                                <p className="text-lg font-semibold">No Processes Running</p>
+                                <p className="text-sm">Click "Spawn New Process" to boot up a program.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+            
+            {/* Concept Guide Section */}
+            <div className="border-t border-slate-700 pt-8 mt-4">
+                <div className="flex items-center gap-3 mb-6">
+                    <BookOpenIcon className="text-purple-400" />
+                    <h2 className="text-2xl font-bold text-white">Concept Guide</h2>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <ConceptCard 
+                        title="1. The Process (Heavyweight)" 
+                        color="text-blue-400"
+                        metaphor="The Factory. A secure, distinct building."
+                        role="Isolation. If Chrome crashes, your music player shouldn't stop. Each process has its own memory space (the blue/green boxes above) so they cannot touch each other's data accidentally."
+                        missing="MS-DOS style instability. If one program crashes or writes to the wrong memory address, the entire computer halts (Blue Screen)."
+                    />
+                    <ConceptCard 
+                        title="2. The Thread (Lightweight)" 
+                        color="text-green-400"
+                        metaphor="The Worker inside the Factory."
+                        role="Concurrency & Responsiveness. A browser needs one thread to download a file and another to let you scroll the page. They share the same memory (the 'Shared Heap' above) to collaborate easily."
+                        missing="The 'Frozen Window' effect. If a program waits for the disk (I/O) and has no other threads, the UI freezes completely until the data arrives."
+                    />
+                    <ConceptCard 
+                        title="3. Context Switching" 
+                        color="text-orange-400"
+                        metaphor="Changing jobs at the desk."
+                        role="Multitasking. The CPU (Core 0) can only do one thing at a time. To fake parallelism, it switches rapidly. Switching Threads is fast (same Factory). Switching Processes is slow (new Factory, cold Cache)."
+                        missing="One program would hog the CPU forever. If an infinite loop occurred, you couldn't even move the mouse to kill it."
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+
+</script>
+</body>
+</html>
