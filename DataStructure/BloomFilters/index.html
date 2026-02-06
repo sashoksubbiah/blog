@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Bloom Filter Deep Dive</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #e2e8f0;
+            --primary: #3b82f6;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --highlight: #f59e0b;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+        h1, h2, h3 { color: #fff; margin-bottom: 0.5rem; }
+        .container { display: grid; grid-template-columns: 300px 1fr; gap: 2rem; }
+        .controls { background: var(--card); padding: 1.5rem; border-radius: 8px; height: fit-content; }
+        .visualizer { background: var(--card); padding: 1.5rem; border-radius: 8px; }
+        
+        /* Bit Array Grid */
+        .bit-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(25px, 1fr));
+            gap: 4px;
+            margin: 2rem 0;
+        }
+        .bit {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #334155;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: #94a3b8;
+            transition: all 0.3s ease;
+        }
+        .bit.active { background: var(--success); color: #000; font-weight: bold; }
+        .bit.checked { box-shadow: 0 0 0 2px var(--highlight); z-index: 10; transform: scale(1.2); }
+        .bit.collision { background: var(--danger); }
+
+        /* Inputs */
+        .control-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: #94a3b8; }
+        input[type="range"] { width: 100%; }
+        input[type="text"] { 
+            width: 100%; padding: 0.75rem; border-radius: 4px; 
+            border: 1px solid #475569; background: #0f172a; color: #fff; 
+            margin-bottom: 1rem; box-sizing: border-box;
+        }
+        button {
+            width: 100%; padding: 0.75rem; border: none; border-radius: 4px;
+            font-weight: 600; cursor: pointer; margin-bottom: 0.5rem;
+            transition: opacity 0.2s;
+        }
+        .btn-add { background: var(--primary); color: white; }
+        .btn-check { background: var(--card); border: 1px solid var(--primary); color: var(--primary); }
+        .btn-check:hover { background: #1e3a8a; }
+
+        .stats { font-family: monospace; font-size: 0.9rem; margin-top: 1rem; color: #cbd5e1; }
+        .log-box {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #0f172a;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .log-entry { margin-bottom: 0.5rem; border-bottom: 1px solid #1e293b; padding-bottom: 0.25rem; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-right: 8px;}
+        .math-block { background: #0f172a; padding: 1rem; margin-top: 1rem; border-left: 3px solid var(--highlight); }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Bloom Filter Internals</h1>
+        <p>A probabilistic data structure for set membership. Fast, space-efficient, but allows False Positives.</p>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <div class="control-group">
+                <label for="m-slider">Bit Array Size (m): <span id="m-val">50</span></label>
+                <input type="range" id="m-slider" min="10" max="200" value="50">
+            </div>
+            
+            <div class="control-group">
+                <label for="k-slider">Hash Functions (k): <span id="k-val">3</span></label>
+                <input type="range" id="k-slider" min="1" max="10" value="3">
+            </div>
+
+            <div class="control-group">
+                <input type="text" id="input-data" placeholder="Type string (e.g. 'kafka')">
+                <button class="btn-add" onclick="bloom.add()">Add String</button>
+                <button class="btn-check" onclick="bloom.check()">Check Existence</button>
+            </div>
+
+            <div class="math-block">
+                <h3>Math Stats</h3>
+                <div class="stats">
+                    <div>Items (n): <span id="n-count">0</span></div>
+                    <div>Fill Ratio: <span id="fill-ratio">0%</span></div>
+                    <div style="margin-top:8px; color: var(--highlight)">P(False Pos) ≈ <span id="fp-prob">0.00%</span></div>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Formula: (1 - e^(-kn/m))^k</div>
+                </div>
+            </div>
+            
+            <button onclick="bloom.reset()" style="margin-top: 2rem; background: #475569; color: white;">Reset</button>
+        </div>
+
+        <div class="visualizer">
+            <h3>Bit Array Representation</h3>
+            <div id="grid" class="bit-grid"></div>
+            
+            <h3>Operation Log</h3>
+            <div id="log" class="log-box"></div>
+        </div>
+    </div>
+
+    <script>
+        class BloomFilter {
+            constructor() {
+                this.m = 50; // Array size
+                this.k = 3;  // Hash functions
+                this.n = 0;  // Items added
+                this.bitArray = new Array(this.m).fill(0);
+                this.items = new Set(); // Just for ground truth checking in demo
+                
+                this.uiGrid = document.getElementById('grid');
+                this.uiLog = document.getElementById('log');
+                
+                this.initUI();
+            }
+
+            // A simple string hashing function that we can salt/seed
+            // In production, you'd use Murmur3 or similar.
+            // This is a variant of djb2
+            hash(str, seed) {
+                let hash = 5381 + seed; 
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) + hash) + str.charCodeAt(i); 
+                }
+                return Math.abs(hash % this.m);
+            }
+
+            updateConfig() {
+                this.m = parseInt(document.getElementById('m-slider').value);
+                this.k = parseInt(document.getElementById('k-slider').value);
+                document.getElementById('m-val').innerText = this.m;
+                document.getElementById('k-val').innerText = this.k;
+                this.reset();
+            }
+
+            reset() {
+                this.n = 0;
+                this.bitArray = new Array(this.m).fill(0);
+                this.items.clear();
+                this.renderGrid();
+                this.updateStats();
+                this.log("System Reset", "neutral");
+            }
+
+            // Core Logic: Add
+            add() {
+                const input = document.getElementById('input-data').value.trim();
+                if (!input) return;
+
+                if (this.items.has(input)) {
+                    this.log(`'${input}' is already added.`, "warning");
+                    return;
+                }
+
+                const indices = [];
+                for (let i = 0; i < this.k; i++) {
+                    const index = this.hash(input, i); // Use 'i' as seed for distinct hash functions
+                    this.bitArray[index] = 1;
+                    indices.push(index);
+                }
+
+                this.items.add(input);
+                this.n++;
+                
+                this.renderGrid(indices); // Highlight changes
+                this.updateStats();
+                this.log(`Added '${input}'. Bits set at: [${indices.join(', ')}]`, "success");
+                document.getElementById('input-data').value = '';
+            }
+
+            // Core Logic: Check
+            check() {
+                const input = document.getElementById('input-data').value.trim();
+                if (!input) return;
+
+                const indices = [];
+                let isPresent = true;
+
+                for (let i = 0; i < this.k; i++) {
+                    const index = this.hash(input, i);
+                    indices.push(index);
+                    if (this.bitArray[index] === 0) {
+                        isPresent = false;
+                        // Optimization: In real code we break here, but we continue for visualization
+                    }
+                }
+
+                // Visual Feedback
+                this.highlightCheck(indices);
+
+                // Determining Result Type
+                const groundTruth = this.items.has(input);
+                let resultType = "";
+                
+                if (isPresent && groundTruth) {
+                    resultType = "True Positive";
+                } else if (isPresent && !groundTruth) {
+                    resultType = "FALSE POSITIVE";
+                } else {
+                    resultType = "True Negative"; // Not present
+                }
+
+                const color = isPresent ? (groundTruth ? "success" : "danger") : "neutral";
+                this.log(`Checked '${input}'. Result: ${isPresent ? "MIGHT BE IN SET" : "DEFINITELY NOT IN SET"}. (${resultType})`, color);
+            }
+
+            // --- Visualization Helpers ---
+
+            initUI() {
+                // Listeners
+                document.getElementById('m-slider').addEventListener('input', () => this.updateConfig());
+                document.getElementById('k-slider').addEventListener('input', () => this.updateConfig());
+                this.renderGrid();
+            }
+
+            renderGrid(highlightIndices = []) {
+                this.uiGrid.innerHTML = '';
+                this.bitArray.forEach((bit, idx) => {
+                    const div = document.createElement('div');
+                    div.className = `bit ${bit === 1 ? 'active' : ''}`;
+                    if (highlightIndices.includes(idx)) {
+                        div.style.transform = 'scale(1.3)';
+                        div.style.border = '1px solid #fff';
+                    }
+                    div.innerText = idx;
+                    this.uiGrid.appendChild(div);
+                });
+            }
+
+            highlightCheck(indices) {
+                // Clear previous highlights
+                const bits = document.querySelectorAll('.bit');
+                bits.forEach(b => b.classList.remove('checked'));
+
+                // Add new highlights
+                indices.forEach(idx => {
+                    if (bits[idx]) bits[idx].classList.add('checked');
+                });
+
+                // Remove highlight after 1s
+                setTimeout(() => {
+                    bits.forEach(b => b.classList.remove('checked'));
+                }, 1500);
+            }
+
+            updateStats() {
+                document.getElementById('n-count').innerText = this.n;
+                
+                const setBits = this.bitArray.filter(b => b === 1).length;
+                const ratio = ((setBits / this.m) * 100).toFixed(1);
+                document.getElementById('fill-ratio').innerText = `${ratio}%`;
+
+                // Theoretical FP Probability Formula: (1 - e^(-kn/m))^k
+                const exponent = -1 * ((this.k * this.n) / this.m);
+                const prob = Math.pow((1 - Math.exp(exponent)), this.k);
+                document.getElementById('fp-prob').innerText = (prob * 100).toFixed(4) + "%";
+            }
+
+            log(msg, type) {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+                let color = '#94a3b8';
+                if (type === 'success') color = '#4ade80';
+                if (type === 'danger') color = '#f87171'; // For False Positives
+                if (type === 'warning') color = '#facc15';
+                
+                div.style.color = color;
+                div.innerHTML = `<span class="badge" style="border:1px solid ${color}">${new Date().toLocaleTimeString()}</span> ${msg}`;
+                this.uiLog.prepend(div);
+            }
+        }
+
+        const bloom = new BloomFilter();
+    </script>
+</body>
+</html>
