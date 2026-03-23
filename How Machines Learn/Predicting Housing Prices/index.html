@@ -266,19 +266,25 @@
             justify-content: center;
             overflow: hidden;
         }
-        .map-grid {
+        
+        /* Enhanced Topographical Background */
+        .map-contour-bg {
             position: absolute;
             inset: 0;
-            opacity: 0.1;
-            background-image: radial-gradient(circle at center, transparent 0%, transparent 40%, white 40%, white 41%, transparent 41%);
-            background-size: 50px 50px;
+            opacity: 0.15;
+            background: 
+                radial-gradient(ellipse at 80% 80%, transparent 0%, transparent 10%, white 10%, white 11%, transparent 11%),
+                radial-gradient(ellipse at 80% 80%, transparent 0%, transparent 20%, white 20%, white 21%, transparent 21%),
+                radial-gradient(ellipse at 80% 80%, transparent 0%, transparent 35%, white 35%, white 36%, transparent 36%),
+                radial-gradient(ellipse at 80% 80%, transparent 0%, transparent 55%, white 55%, white 56%, transparent 56%),
+                radial-gradient(ellipse at 80% 80%, transparent 0%, transparent 80%, white 80%, white 81%, transparent 81%);
         }
         
         .map-bounds {
             position: relative;
             height: 200px;
             width: 100%;
-            background: rgba(30, 41, 59, 0.5);
+            background: rgba(30, 41, 59, 0.4);
             border: 1px solid var(--slate-700);
             border-radius: 0.5rem;
             z-index: 10;
@@ -286,21 +292,38 @@
 
         #map-dot {
             position: absolute;
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             background: var(--red-500);
             border-radius: 50%;
             transform: translate(-50%, -50%);
             box-shadow: 0 0 15px rgba(239,68,68,0.8);
             transition: all 0.3s ease-out;
+            z-index: 20;
+        }
+        
+        .path-line {
+            position: absolute;
+            background: rgba(239, 68, 68, 0.3);
+            height: 2px;
+            transform-origin: left center;
+            z-index: 15;
+            pointer-events: none;
+        }
+        
+        .exploded-dot {
+            background: #ffeb3b !important;
+            box-shadow: 0 0 30px #ffeb3b !important;
+            transform: scale(3) translate(-15%, -15%) !important;
         }
 
         .target-star {
             position: absolute;
-            bottom: 1rem;
-            right: 1rem;
+            bottom: 10%;
+            right: 10%;
             color: var(--blue-400);
             font-size: 1.5rem;
+            transform: translate(50%, 50%);
             animation: pulse 2s infinite;
         }
 
@@ -317,6 +340,20 @@
         }
         .badge-green { background: var(--green-100); color: var(--green-600); }
         .badge-red { background: var(--red-100); color: var(--red-600); }
+        
+        /* Interactive Inputs */
+        input[type=range] { width: 100%; margin: 10px 0; }
+        
+        .math-block {
+            background: var(--slate-800);
+            color: var(--slate-100);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            font-family: var(--font-mono);
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.2);
+        }
 
     </style>
 </head>
@@ -346,11 +383,10 @@
 
     <div class="container">
         
-        <!-- Header -->
         <header style="text-align: center; margin-bottom: 4rem;">
             <h1 style="font-size: 3rem; margin-bottom: 1rem;">How Machines Learn</h1>
             <p style="font-size: 1.25rem; color: var(--slate-600); max-width: 600px; margin: 0 auto;">
-                A visual, interactive journey into the math behind Artificial Intelligence. We're going to build a model from scratch to predict housing prices.
+                A visual, interactive journey into the math behind Artificial Intelligence. Let's build a model to predict housing prices.
             </p>
         </header>
 
@@ -360,9 +396,9 @@
                 <div class="section-number">1</div>
                 <h2>The Basic Machine</h2>
             </div>
-            <p>Welcome to the core concept of machine learning! We are going to build a model—think of it as a machine—to predict housing prices.</p>
+            <p>I want to explain the idea of "learning weights". We'll do it using an example where we can keep the numbers somewhat simple. We're going to build a model to predict home prices based on two factors.</p>
             <p><strong>Intuition Check:</strong> Imagine you have a soundboard with two volume knobs. One knob controls the bass, one controls the treble. By turning them, you change the final audio output. Our "machine" has two inputs (<strong>House Size</strong> and <strong>Lot Size</strong>), and it gives one output: a <strong>Predicted Price</strong>.</p>
-            <p>Without overthinking it, a simple way to do this is to multiply the house size by some number, multiply the lot size by another number, and add them together. Let's call these multiplier numbers the <strong>weights</strong> of our model: <code style="color: var(--blue-700)">w₁</code> and <code style="color: var(--green-700)">w₂</code>.</p>
+            <p>Without thinking too hard, it seems like we could multiply the house size by some number, multiply the lot size by some other number, and add those together to get our prediction. Let's call these numbers <strong>weights</strong>: <code style="color: var(--blue-700)">w₁</code> and <code style="color: var(--green-700)">w₂</code>.</p>
 
             <div class="card machine-diagram">
                 <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%; flex: 1;">
@@ -424,8 +460,8 @@
                 <div class="section-number">3</div>
                 <h2>The First Guess & Measuring Error</h2>
             </div>
-            <p>Hundreds of years ago, mathematicians figured out exact algebra to calculate the perfect weights. But we are going to do it the hard, iterative way, because <strong>this "guess and adjust" technique is the exact mechanism that proves magical for modern AI</strong> (like Neural Networks).</p>
-            <p>Forget finding the perfect weights right now; let's just pick random numbers. We'll start with our volume knobs turned to <code>w₁ = 1000</code> and <code>w₂ = 3000</code>.</p>
+            <p>People figured out the math for picking the best possible w₁ and w₂ hundreds of years ago. However, we're not going to worry about that. Instead we'll purposely go about it in a way that will seem overcomplicated and expensive to compute because <strong>this technique will prove magical for modern AI.</strong></p>
+            <p>Forget about finding the ideal weights right now; just pick some random numbers. Let's pick <code>w₁ = 1000</code> and <code>w₂ = 3000</code>.</p>
 
             <div class="card">
                 <h3 style="border-bottom: 1px solid var(--slate-200); padding-bottom: 0.5rem; margin-bottom: 1rem;">Calculating the Error</h3>
@@ -446,6 +482,7 @@
                     </div>
                 </div>
             </div>
+            <p style="margin-top: 1rem;">Wow! Not too bad for a random guess. But if we pick new weights that improve the prediction for house 1 but make it much worse for house 2, that wouldn't be so great. We need a single number that says how good our prediction is across <em>all</em> the houses.</p>
         </section>
 
         <!-- Section 4 -->
@@ -454,65 +491,111 @@
                 <div class="section-number">4</div>
                 <h2>Calculating "Loss"</h2>
             </div>
-
-            <!-- Quiz 1 -->
-            <div class="quiz" id="quiz-1" data-answered="false">
-                <h3>Check Your Understanding</h3>
-                <p>Why can't we just add the errors (+500, +1000, -250) together to get our total accuracy score?</p>
-                <button class="quiz-btn" onclick="handleQuiz('quiz-1', 0, 1)">Because addition is too slow for computers to process.</button>
-                <button class="quiz-btn" onclick="handleQuiz('quiz-1', 1, 1)">Because positive and negative errors would cancel each other out, hiding how bad our predictions actually are.</button>
-                <button class="quiz-btn" onclick="handleQuiz('quiz-1', 2, 1)">Because the housing prices are too large to add directly.</button>
-                <div class="quiz-explanation" data-text="Exactly! If you guess $1M too high on house A, and $1M too low on house B, adding those errors gives you ZERO. The model would think it's perfect, even though both guesses were terrible!"></div>
-            </div>
-
-            <p>To fix the cancellation problem, we <strong>square</strong> the errors. Squaring turns negative numbers positive, treating a mistake of -250 the exact same as a mistake of +250.</p>
-            <p><strong>Alternative Perspective:</strong> Think of Loss as a "Penalty Score" in a video game. Squaring the error also disproportionately punishes <em>big</em> mistakes. Being off by 1000 isn't just twice as bad as being off by 500; squared, it's <em>four times</em> as bad! The machine will prioritize fixing its biggest blunders first.</p>
-
-            <div style="background: var(--slate-900); color: var(--slate-100); padding: 1.5rem; border-radius: 1rem; font-family: var(--font-mono); margin-top: 2rem;">
-                <h3 style="color: var(--slate-400); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 1rem;">Loss Calculation (w₁=1000, w₂=3000)</h3>
-                <ul style="list-style: none; margin-bottom: 1.5rem;">
-                    <li style="margin-bottom: 0.5rem;">House 1: (500)&sup2; = <span style="color: var(--red-400);">250,000</span></li>
-                    <li style="margin-bottom: 0.5rem;">House 2: (1000)&sup2; = <span style="color: var(--red-400);">1,000,000</span></li>
-                    <li style="margin-bottom: 0.5rem;">House 3: (-250)&sup2; = <span style="color: var(--red-400);">62,500</span></li>
-                </ul>
-                <div style="border-top: 1px solid var(--slate-700); padding-top: 1rem; display: flex; justify-content: space-between; align-items: flex-end;">
-                    <span>Total Loss (Sum of squared errors):</span>
-                    <span style="font-size: 1.875rem; font-weight: 700; color: var(--red-500);">1,312,500</span>
+            
+            <p>If we just add the errors together, a prediction that is 1000 too high (+1000) and another that is 1000 too low (-1000) will equal zero. The machine would think it's perfect, even though both guesses were terrible.</p>
+            <p>We could take the absolute value, but instead we are going to <strong>square</strong> the errors. Squaring takes negative numbers and makes them positive, treating a mistake of -250 the exact same as a mistake of +250. It also has a secret advantage: it disproportionately punishes <em>big</em> mistakes.</p>
+            
+            <div class="card" style="background: var(--slate-900); color: white; border: none;">
+                <h3 style="color: var(--slate-400); font-size: 0.9rem; text-transform: uppercase; margin-bottom: 1rem;">Interactive: The Punishment of Squaring</h3>
+                <p style="font-size: 0.9rem; color: var(--slate-300);">Drag the slider to predict a price for a house actually worth <strong>5000</strong>. Watch how the squared loss explodes the further away you get.</p>
+                
+                <input type="range" id="loss-slider" min="3000" max="7000" step="10" value="5000" oninput="updateInteractiveLoss()">
+                
+                <div style="display: flex; justify-content: space-between; margin-top: 1rem; font-family: var(--font-mono);">
+                    <div>
+                        <span style="color: var(--slate-400); font-size: 0.8rem; display: block;">Your Prediction</span>
+                        <strong id="int-pred" style="font-size: 1.5rem; color: #fbbf24;">5000</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--slate-400); font-size: 0.8rem; display: block;">Raw Error</span>
+                        <strong id="int-error" style="font-size: 1.5rem; color: var(--blue-400);">0</strong>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="color: var(--slate-400); font-size: 0.8rem; display: block;">Squared Error</span>
+                        <strong id="int-loss" style="font-size: 1.5rem; color: var(--red-400);">0</strong>
+                    </div>
                 </div>
             </div>
+
+            <p style="margin-top: 2rem;"><strong>Loss</strong> is the sum of the squared errors across all the houses. Think of it as how much we are losing in our predictions. The less, the better.</p>
+            <ul style="font-family: var(--font-mono); margin-left: 2rem; margin-bottom: 1rem;">
+                <li>House 1: (500)&sup2; = 250,000</li>
+                <li>House 2: (1000)&sup2; = 1,000,000</li>
+                <li>House 3: (-250)&sup2; = 62,500</li>
+            </ul>
+            <p>Our starting Loss with random weights is <strong>1,312,500</strong>. This single Loss number is a beautiful thing. If we tweak our weights and the loss goes down, we're moving in the right direction.</p>
         </section>
 
-        <!-- Section 5 -->
+        <!-- Section 5: Deep Dive into Equations -->
         <section class="section-block">
             <div class="section-header">
                 <div class="section-number">5</div>
-                <h2>The Magic of Calculus (Derivatives)</h2>
+                <h2>The Magic of Calculus (Expanding the Math)</h2>
             </div>
             
-            <p>If we turn our w₁ knob up slightly, will our Loss go up (bad) or down (good)? To find out, we use high school calculus—specifically, the <strong>derivative</strong>.</p>
-            <p><strong>Gut-Level Intuition:</strong> Imagine you are blindfolded, standing on the side of a hill. You can't see the bottom, but you can feel the slope of the ground beneath your feet. The derivative is simply your foot telling you, <em>"The ground is sloping UP in front of you, and DOWN behind you."</em></p>
-            <p>Because we have two weights to adjust (w₁ and w₂), we use a <strong>partial derivative</strong>. This just means we freeze time, keep w₂ completely still, and feel the slope only in the w₁ direction.</p>
+            <p>If we increase w₁ a little bit, will the loss go up (bad) or down (good)? What about w₂? That type of question might sound familiar from high school calculus.</p>
             
-            <div style="display: flex; gap: 1.5rem; margin: 2rem 0; flex-wrap: wrap;">
-                <div class="card" style="flex: 1; min-width: 200px; border-left: 4px solid var(--blue-500); margin-top: 0;">
-                    <span style="font-size: 0.8rem; color: var(--slate-500); text-transform: uppercase;">Slope for w₁</span>
-                    <div style="font-size: 1.875rem; font-weight: 700;">1875</div>
+            <div style="background: var(--blue-50); padding: 1.5rem; border-radius: 0.5rem; border-left: 4px solid var(--blue-500); margin-bottom: 2rem;">
+                <strong>Calculus Refresher:</strong> Remember the function <code style="background: transparent;">f(x) = x&sup2;</code>? The derivative is <code style="background: transparent;">2x</code>. <br>
+                If <code style="background: transparent;">x = 3</code>, the derivative is <code style="background: transparent;">2(3) = 6</code>. This means if we increase <code style="background: transparent;">x</code> by a tiny amount (like 0.01), <code style="background: transparent;">f(x)</code> will increase by exactly 6 times that amount (0.06). The derivative tells us the <strong>slope</strong>.
+            </div>
+
+            <p>Since we want to compute derivatives of our Loss, let's actually write out the entire Loss calculation as a giant algebra equation using variables instead of hardcoded numbers.</p>
+            
+            <div class="math-block">
+                <span style="color: var(--slate-400);">// Total Loss = (House 1 Error)&sup2; + (House 2 Error)&sup2; + (House 3 Error)&sup2;</span><br><br>
+                Loss = <br>
+                (5000 - (1*w₁ + 1.5*w₂))&sup2; + <br>
+                (3500 - (0.75*w₁ + 1.25*w₂))&sup2; + <br>
+                (4500 - (1.25*w₁ + 1*w₂))&sup2;
+            </div>
+
+            <p>If you multiply that all out by hand and combine like terms (or ask an online calculator to do it), you get this beast of a polynomial equation:</p>
+            
+            <div class="math-block" style="border-left: 4px solid var(--indigo-500);">
+                Loss = 3.125(w₁)&sup2; + 7.375(w₁)(w₂) - 26500(w₁) + 4.8125(w₂)&sup2; - 32750(w₂) + 57500000
+            </div>
+
+            <p>We want the derivative of the loss, but with respect to what? w₁ or w₂? We care about both! Here we cross into a concept called the <strong>Partial Derivative</strong>. Think of this like: if we hold w₂ completely steady like a constant number, and we increase w₁ a tiny bit, how much will the loss increase or decrease?</p>
+            
+            <!-- Quiz: Partial Derivative -->
+            <div class="quiz" id="quiz-deriv" data-answered="false">
+                <h3>Check Your Understanding</h3>
+                <p>If we treat w₂ as a constant, what happens to the term <code>4.8125(w₂)&sup2;</code> when we take the partial derivative with respect to w₁?</p>
+                <button class="quiz-btn" onclick="handleQuiz('quiz-deriv', 0, 1)">It becomes 9.625(w₂).</button>
+                <button class="quiz-btn" onclick="handleQuiz('quiz-deriv', 1, 1)">It completely disappears (becomes 0).</button>
+                <button class="quiz-btn" onclick="handleQuiz('quiz-deriv', 2, 1)">It turns into w₁.</button>
+                <div class="quiz-explanation" data-text="Correct! Since there is no w₁ in that term, treating w₂ as a constant means that whole block of math is just a static, unchanging number. The derivative (rate of change) of a constant number is zero!"></div>
+            </div>
+
+            <p>Using basic calculus power rules (<code style="background: var(--slate-200); padding: 0.2rem 0.4rem; border-radius: 4px;">x&sup2; &rarr; 2x</code> and <code style="background: var(--slate-200); padding: 0.2rem 0.4rem; border-radius: 4px;">cx &rarr; c</code>), taking the partial derivative of that long polynomial gives us two beautifully simple equations for our slopes:</p>
+
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
+                <div class="card" style="flex: 1; min-width: 250px; border-top: 4px solid var(--blue-500); margin-top: 0;">
+                    <h4 style="color: var(--blue-700); margin-bottom: 0.5rem;">Slope for w₁</h4>
+                    <code style="display: block; background: var(--slate-100); padding: 0.5rem; font-size: 0.85rem; border-radius: 4px;">
+                        6.25(w₁) + 7.375(w₂) - 26500
+                    </code>
+                    <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--slate-600);">
+                        <em>(The 6.25 comes from 2 &times; 3.125)</em><br>
+                        At w₁=1000, w₂=3000:<br>
+                        6.25(1k) + 7.375(3k) - 26500 = <strong>1875</strong>
+                    </div>
                 </div>
-                <div class="card" style="flex: 1; min-width: 200px; border-left: 4px solid var(--green-500); margin-top: 0;">
-                    <span style="font-size: 0.8rem; color: var(--slate-500); text-transform: uppercase;">Slope for w₂</span>
-                    <div style="font-size: 1.875rem; font-weight: 700;">3500</div>
+                <div class="card" style="flex: 1; min-width: 250px; border-top: 4px solid var(--green-500); margin-top: 0;">
+                    <h4 style="color: var(--green-700); margin-bottom: 0.5rem;">Slope for w₂</h4>
+                    <code style="display: block; background: var(--slate-100); padding: 0.5rem; font-size: 0.85rem; border-radius: 4px;">
+                        7.375(w₁) + 9.625(w₂) - 32750
+                    </code>
+                    <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--slate-600);">
+                        <em>(The 9.625 comes from 2 &times; 4.8125)</em><br>
+                        At w₁=1000, w₂=3000:<br>
+                        7.375(1k) + 9.625(3k) - 32750 = <strong>3500</strong>
+                    </div>
                 </div>
             </div>
 
-            <!-- Quiz 2 -->
-            <div class="quiz" id="quiz-2" data-answered="false">
-                <h3>Check Your Understanding</h3>
-                <p>Both of our derivatives (slopes) are positive numbers. What does a positive slope mean for our weights?</p>
-                <button class="quiz-btn" onclick="handleQuiz('quiz-2', 0, 1)">Increasing the weight will decrease the loss (we should increase weights).</button>
-                <button class="quiz-btn" onclick="handleQuiz('quiz-2', 1, 1)">Increasing the weight will increase the loss (we should decrease weights).</button>
-                <button class="quiz-btn" onclick="handleQuiz('quiz-2', 2, 1)">The weights are already perfect.</button>
-                <div class="quiz-explanation" data-text="Spot on! A positive slope means the graph is going UPHILL as the weight increases. Since we want to reach the BOTTOM of the hill (lowest loss), we must move backwards, decreasing our weights!"></div>
-            </div>
+            <p>If we increase w₁ a little bit, Loss will go up by around 1875 times that little bit. So we should <strong>decrease</strong> w₁. Same for w₂. Now we know exactly which direction to move to find the bottom of the valley.</p>
         </section>
 
         <!-- Section 6 -->
@@ -522,14 +605,16 @@
                 <h2>Taking a Step (Learning Rate)</h2>
             </div>
             
-            <p>We know the direction to move (decrease), but how big of a step should we take? If we take a massive leap, we might overshoot the valley floor entirely and end up higher on the opposite mountain. If we take microscopic baby steps, it will take centuries to get to the bottom.</p>
-            <p>We control this step size using a <strong>Learning Rate</strong>. Let's set it to 1% (0.01). We update our weights using this beautiful, simple rule:</p>
+            <p>We know the direction to move, but how big of an adjustment do we make? If we adjust by a very small amount, the loss will barely change. If we adjust by a huge amount, we might overshoot the optimal value.</p>
             
+            <p>We assume a <strong>Learning Rate</strong> which we'll set to 1% (0.01). We adjust each weight by subtracting the partial derivative multiplied by the learning rate.</p>
+
             <div style="background: var(--indigo-50); color: var(--indigo-700); padding: 1.5rem; border-radius: 0.5rem; text-align: center; font-family: var(--font-mono); border: 1px solid #e0e7ff; margin: 2rem 0; font-weight: bold;">
-                New Weight = Old Weight - (Learning Rate &times; Derivative)
+                Updated w₁ = 1000 - (0.01 &times; 1875) = 981<br>
+                Updated w₂ = 3000 - (0.01 &times; 3500) = 2965
             </div>
             
-            <p>Why multiply by the derivative? It's a brilliant math trick! When we are high up on the mountain, the slope (derivative) is very steep (a large number), so we take a large jump. As we get closer to the flat bottom of the valley, the slope gets closer to zero, so our steps automatically get smaller, preventing us from overshooting!</p>
+            <p>Why do we multiply by the derivative instead of just moving a flat 10 units every time? Because we want to take larger jumps when w₁ and w₂ are far away from optimal (where the slope is steep), and smaller jumps when we get closer to the flat bottom of the valley.</p>
         </section>
 
         <!-- Section 7 (Interactive) -->
@@ -539,16 +624,41 @@
                 <h2>Journey to the Bottom</h2>
             </div>
             
-            <p>Imagine you are dropped in Death Valley National Park, and your goal is to hike to the lowest point. Our Loss surface is shaped like a giant bowl. As our machine repeatedly updates its weights, it is taking steps down this bowl toward the lowest possible loss.</p>
-            <p>Below is the live brain of our machine. Watch it learn! Click the button to calculate the slopes and update the weights step-by-step, or fast forward to see it descend into the valley.</p>
+            <p>Imagine you were placed somewhere in Death Valley National Park and your goal was to hike to the lowest point in the park: Badwater Basin. If the park were shaped like a perfectly round cereal bowl, no matter where you started, you could just step in the steepest direction and walk in a straight line to the bottom.</p>
+            <p>But our Loss surface is shaped like an <strong>elliptical bowl</strong>. To move in the steepest direction, you must cross the contour lines perpendicularly. Your path isn't going to be straight.</p>
+
+            <!-- Quiz: Winding Path -->
+            <div class="quiz" id="quiz-contour" data-answered="false">
+                <h3>Check Your Understanding</h3>
+                <p>Because the "bowl" of our loss function is elliptical (stretched out), our path to the bottom curves. Based on the concept of walking perpendicularly across contour lines, what might happen to one of our weights (like w₁) during the journey?</p>
+                <button class="quiz-btn" onclick="handleQuiz('quiz-contour', 0, 1)">It will constantly decrease in a straight, perfect line.</button>
+                <button class="quiz-btn" onclick="handleQuiz('quiz-contour', 1, 1)">It might actually decrease at first, then curve and start increasing again to reach the bottom.</button>
+                <button class="quiz-btn" onclick="handleQuiz('quiz-contour', 2, 1)">It will jump randomly to the other side of the map.</button>
+                <div class="quiz-explanation" data-text="Exactly! Because you are navigating a stretched bowl, the steepest immediate path down doesn't always point directly at the absolute bottom. w₁ actually goes down for a bit, then turns around and goes back up as it curves toward the final target. You will see this happen in the live simulation below!"></div>
+            </div>
+
+            <p><strong>Interactive Exercise:</strong> Below is the live brain of our machine. Hit "Fast Forward" to watch it take 1000 steps down into the valley. Watch how the path traces a curve! <em>(Bonus: try cranking up the Learning Rate slider and watch the math explode).</em></p>
 
             <div class="card dashboard-grid" style="padding: 2rem; border-radius: 1.5rem; border: none; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
                 
                 <!-- Controls -->
                 <div>
+                    <!-- Learning Rate Slider -->
+                    <div style="margin-bottom: 1.5rem; background: var(--blue-50); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--blue-200);">
+                        <label for="lr-main" style="display: flex; justify-content: space-between; font-weight: bold; color: var(--blue-900); font-size: 0.9rem;">
+                            <span>Learning Rate (Step Size)</span>
+                            <span id="lr-display" style="font-family: var(--font-mono);">0.010</span>
+                        </label>
+                        <input type="range" id="lr-main" min="0.001" max="0.035" step="0.001" value="0.010" oninput="updateLRDisplay()">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--blue-700);">
+                            <span>Too Slow</span>
+                            <span>Explosion Risk!</span>
+                        </div>
+                    </div>
+
                     <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
                         <button id="btn-step" class="btn btn-blue" onclick="takeStep()">Take 1 Step</button>
-                        <button id="btn-fast" class="btn btn-indigo" onclick="fastForward()">Fast Forward 1000</button>
+                        <button id="btn-fast" class="btn btn-indigo" onclick="fastForward()">Fast Forward</button>
                     </div>
 
                     <div style="background: var(--slate-50); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--slate-200);">
@@ -573,18 +683,23 @@
 
                 <!-- Visual Map -->
                 <div class="map-container">
-                    <div class="map-grid"></div>
+                    <div class="map-contour-bg"></div>
+                    <div id="map-warning" style="display: none; position: absolute; top: 1rem; left: 1rem; right: 1rem; background: rgba(239, 68, 68, 0.9); color: white; padding: 0.5rem; text-align: center; border-radius: 0.5rem; font-weight: bold; z-index: 20; font-size: 0.8rem;">
+                        DIVERGENCE DETECTED! Learning rate too high. The machine exploded over the mountain. Hit Reset!
+                    </div>
+
                     <div style="text-align: center; color: var(--slate-400); font-size: 0.75rem; font-family: var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 1rem; position: relative; z-index: 10;">
-                        Gradient Descent Terrain
+                        Elliptical Loss Bowl
                     </div>
                     
-                    <div class="map-bounds">
+                    <div class="map-bounds" id="map-bounds-area">
                         <div class="target-star">&#9733;</div>
                         <div id="map-dot" style="left: 10%; top: 10%;"></div>
+                        <div id="path-container" style="position: absolute; inset: 0; overflow: hidden;"></div>
                     </div>
                     
                     <div style="text-align: center; color: var(--slate-500); font-size: 0.75rem; margin-top: 1rem; position: relative; z-index: 10;">
-                        Red dot moves toward the optimal valley floor as loss decreases.
+                        Watch the path curve perpendicularly across the invisible contour lines.
                     </div>
                 </div>
             </div>
@@ -597,7 +712,7 @@
                 <h2>The Final Predictions</h2>
             </div>
             
-            <p>Let's see how our educated machine performs compared to our terrible first guess. As you take steps above, watch these predictions update in real-time!</p>
+            <p>After 1000 steps, let's see how our educated machine performs compared to our terrible first guess. As you take steps above, watch these predictions update in real-time!</p>
 
             <div class="table-container">
                 <table>
@@ -633,10 +748,13 @@
             <div style="background: linear-gradient(to right, var(--blue-50), var(--indigo-50)); padding: 2rem; border-radius: 1rem; border: 1px solid var(--blue-100); margin-top: 3rem;">
                 <h3 style="color: var(--indigo-900); font-size: 1.5rem; margin-bottom: 1rem;">Conclusion</h3>
                 <p style="color: var(--indigo-800); font-size: 1.1rem;">
-                    If you ran the fast-forward above, you witnessed a massive improvement from our first random guess! If we used complex algebra to solve for the absolute perfect weights, they would be w₁=2347 and w₂=1604.
+                    We are only off by 22 on house #3! You may be itching to know how close we got to the <em>optimal</em> answer. People figured out how to solve these equations algebraically a long time ago without doing 1000 steps of computation. If you set both partial derivatives to 0 and solve for w₁ and w₂, you get:
                 </p>
+                <div style="text-align: center; font-family: var(--font-mono); font-size: 1.25rem; font-weight: bold; color: var(--indigo-900); margin: 1.5rem 0;">
+                    w₁ = 2347 &nbsp; | &nbsp; w₂ = 1604
+                </div>
                 <p style="color: var(--indigo-800); font-size: 1.1rem; margin-bottom: 0;">
-                    Through the incredibly simple iterative process of guessing, measuring loss, feeling the slope with derivatives, and stepping forward, <strong>our machine literally taught itself</strong> to get incredibly close to the perfect answer all on its own.
+                    We got incredibly close (w₁ ≈ 2311, w₂ ≈ 1633). Through the simple iterative process of guessing, measuring loss, calculating the slopes, and stepping forward, <strong>our machine literally taught itself</strong> to find the bottom of the valley.
                 </p>
             </div>
         </section>
@@ -650,7 +768,7 @@
             { id: 2, size: 0.75, lot: 1.25, actual: 3500 },
             { id: 3, size: 1.25, lot: 1, actual: 4500 }
         ];
-        const LR = 0.01;
+        
         const OPTIMAL_W1 = 2347;
         const OPTIMAL_W2 = 1604;
 
@@ -659,34 +777,50 @@
             w1: 1000,
             w2: 3000,
             steps: 0,
-            isAnimating: false
+            isAnimating: false,
+            exploded: false,
+            pathPoints: [] // Store previous points to draw the curved path
         };
 
         let animationInterval = null;
 
-        // Math Functions
+        // Interactive Loss Section Logic
+        function updateInteractiveLoss() {
+            const slider = document.getElementById('loss-slider');
+            const pred = parseInt(slider.value);
+            const actual = 5000;
+            const error = pred - actual;
+            const loss = error * error;
+
+            document.getElementById('int-pred').textContent = pred;
+            document.getElementById('int-error').textContent = (error > 0 ? '+' : '') + error;
+            document.getElementById('int-loss').textContent = loss.toLocaleString();
+        }
+
+        // Learning Rate display
+        function updateLRDisplay() {
+            const val = parseFloat(document.getElementById('lr-main').value);
+            document.getElementById('lr-display').textContent = val.toFixed(3);
+        }
+
+        function getCurrentLR() {
+            return parseFloat(document.getElementById('lr-main').value);
+        }
+
+        // Math Functions based exactly on the expanded polynomial from the text
         function calcPrediction(size, lot, w1, w2) {
             return (size * w1) + (lot * w2);
         }
 
         function calcLoss(w1, w2) {
-            let sum = 0;
-            HOUSES.forEach(house => {
-                const pred = calcPrediction(house.size, house.lot, w1, w2);
-                const error = pred - house.actual;
-                sum += (error * error);
-            });
-            return sum;
+            // Using the explicit polynomial for exact mapping to text
+            return 3.125 * (w1 * w1) + 7.375 * (w1 * w2) - 26500 * w1 + 4.8125 * (w2 * w2) - 32750 * w2 + 57500000;
         }
 
         function calcDerivatives(w1, w2) {
-            let dw1 = 0, dw2 = 0;
-            HOUSES.forEach(house => {
-                const pred = calcPrediction(house.size, house.lot, w1, w2);
-                const error = pred - house.actual;
-                dw1 += 2 * error * house.size;
-                dw2 += 2 * error * house.lot;
-            });
+            // Using the explicit partial derivatives derived in the text
+            const dw1 = 6.25 * w1 + 7.375 * w2 - 26500;
+            const dw2 = 7.375 * w1 + 9.625 * w2 - 32750;
             return { dw1, dw2 };
         }
 
@@ -694,51 +828,113 @@
         function updateUI() {
             const loss = calcLoss(state.w1, state.w2);
 
+            // Check for divergence (explosion)
+            if (!isFinite(loss) || loss > 10000000000) {
+                state.exploded = true;
+                if (animationInterval) clearInterval(animationInterval);
+                state.isAnimating = false;
+            }
+
             // Update Header & Stats Panel
-            document.querySelectorAll('.val-w1').forEach(el => el.textContent = Math.round(state.w1));
-            document.querySelectorAll('.val-w2').forEach(el => el.textContent = Math.round(state.w2));
-            document.querySelectorAll('.val-loss').forEach(el => el.textContent = Math.round(loss).toLocaleString());
+            document.querySelectorAll('.val-w1').forEach(el => el.textContent = state.exploded ? "NaN" : Math.round(state.w1));
+            document.querySelectorAll('.val-w2').forEach(el => el.textContent = state.exploded ? "NaN" : Math.round(state.w2));
+            document.querySelectorAll('.val-loss').forEach(el => el.textContent = state.exploded ? "EXPLODED" : Math.round(loss).toLocaleString());
             document.querySelectorAll('.val-steps').forEach(el => {
                 el.textContent = state.steps + (el.parentElement.classList.contains('stat-box') ? " / 1000" : "");
             });
 
-            // Update Map Dot
+            // Update Map Dot and Path
             const dot = document.getElementById('map-dot');
-            // Mapping bounds for visual intuition: 
-            // Top Left (10%, 10%) represents starting weights (1000, 3000)
-            // Bottom Right (90%, 90%) represents optimal weights (2347, 1604)
-            const leftPct = Math.min(90, Math.max(10, ((state.w1 - 1000) / (OPTIMAL_W1 - 1000)) * 80 + 10));
-            const topPct = Math.min(90, Math.max(10, ((3000 - state.w2) / (3000 - OPTIMAL_W2)) * 80 + 10));
+            const mapWarning = document.getElementById('map-warning');
             
-            dot.style.left = `${leftPct}%`;
-            dot.style.top = `${topPct}%`;
+            if (state.exploded) {
+                dot.classList.add('exploded-dot');
+                mapWarning.style.display = 'block';
+            } else {
+                dot.classList.remove('exploded-dot');
+                mapWarning.style.display = 'none';
+                
+                // Calculate percentage mapping based on specific visual bounds to show the curve nicely
+                // W1 bounds: 500 to 2500 (covers 1000 to 2347 well)
+                // W2 bounds: 1400 to 3200 (covers 3000 to 1604 well)
+                const leftPct = ((state.w1 - 500) / (2500 - 500)) * 100;
+                // Invert Y axis so higher W2 is higher up on the visual
+                const topPct = 100 - (((state.w2 - 1400) / (3200 - 1400)) * 100); 
+                
+                // Constrain for visual safety
+                const safeLeft = Math.min(100, Math.max(0, leftPct));
+                const safeTop = Math.min(100, Math.max(0, topPct));
+                
+                dot.style.left = `${safeLeft}%`;
+                dot.style.top = `${safeTop}%`;
+
+                // Add point to path
+                if (state.steps === 0 || state.steps % 10 === 0) {
+                    state.pathPoints.push({ x: safeLeft, y: safeTop });
+                    drawPath();
+                }
+            }
 
             // Update Final Table
             HOUSES.forEach(house => {
                 const pred = calcPrediction(house.size, house.lot, state.w1, state.w2);
                 const err = pred - house.actual;
                 
-                document.getElementById(`pred-${house.id}`).textContent = Math.round(pred);
+                document.getElementById(`pred-${house.id}`).textContent = state.exploded ? "NaN" : Math.round(pred);
                 
                 const errEl = document.getElementById(`err-${house.id}`);
-                errEl.textContent = (err > 0 ? '+' : '') + Math.round(err);
-                errEl.className = `badge ${Math.abs(err) < 300 ? 'badge-green' : 'badge-red'}`;
+                if (state.exploded) {
+                    errEl.textContent = "ERR";
+                    errEl.className = "badge badge-red";
+                } else {
+                    errEl.textContent = (err > 0 ? '+' : '') + Math.round(err);
+                    errEl.className = `badge ${Math.abs(err) < 300 ? 'badge-green' : 'badge-red'}`;
+                }
             });
 
             // Handle Button States
             const btnStep = document.getElementById('btn-step');
             const btnFast = document.getElementById('btn-fast');
             
-            const disabled = state.isAnimating || state.steps >= 1000;
+            const disabled = state.isAnimating || state.steps >= 1000 || state.exploded;
             btnStep.disabled = disabled;
             btnFast.disabled = disabled;
         }
 
+        // Draw the path using tiny divs to form lines
+        function drawPath() {
+            const container = document.getElementById('path-container');
+            container.innerHTML = ''; // Clear old lines
+            
+            for (let i = 1; i < state.pathPoints.length; i++) {
+                const p1 = state.pathPoints[i-1];
+                const p2 = state.pathPoints[i];
+                
+                // Calculate distance and angle for CSS transform
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const length = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                
+                const line = document.createElement('div');
+                line.className = 'path-line';
+                line.style.left = `${p1.x}%`;
+                line.style.top = `${p1.y}%`;
+                // Adjust width relative to container percentage (rough approximation)
+                line.style.width = `${length}%`;
+                line.style.transform = `rotate(${angle}deg)`;
+                
+                container.appendChild(line);
+            }
+        }
+
         // Core Actions
         function performSingleStep() {
+            if (state.exploded) return;
+            const lr = getCurrentLR();
             const { dw1, dw2 } = calcDerivatives(state.w1, state.w2);
-            state.w1 = state.w1 - (LR * dw1);
-            state.w2 = state.w2 - (LR * dw2);
+            state.w1 = state.w1 - (lr * dw1);
+            state.w2 = state.w2 - (lr * dw2);
             state.steps += 1;
         }
 
@@ -752,19 +948,20 @@
             updateUI();
 
             animationInterval = setInterval(() => {
-                // Do 10 math steps per visual frame to speed it up
+                // Do 10 steps per frame to speed up visual
                 for(let i=0; i<10; i++) {
                     performSingleStep();
+                    if(state.exploded) break;
                 }
                 
                 updateUI();
 
-                if (state.steps >= 1000) {
+                if (state.steps >= 1000 || state.exploded) {
                     clearInterval(animationInterval);
                     state.isAnimating = false;
                     updateUI();
                 }
-            }, 30); // ~33fps
+            }, 30);
         }
 
         function resetApp() {
@@ -773,13 +970,18 @@
             state.w2 = 3000;
             state.steps = 0;
             state.isAnimating = false;
+            state.exploded = false;
+            state.pathPoints = [];
+            document.getElementById('path-container').innerHTML = '';
+            document.getElementById('lr-main').value = "0.010";
+            updateLRDisplay();
             updateUI();
         }
 
         // Quiz Logic
         function handleQuiz(quizId, selectedIdx, correctIdx) {
             const container = document.getElementById(quizId);
-            if (container.dataset.answered === "true") return; // Prevent changing answer
+            if (container.dataset.answered === "true") return; 
             container.dataset.answered = "true";
 
             const buttons = container.querySelectorAll('.quiz-btn');
@@ -808,6 +1010,18 @@
 
         // Initialize App on load
         window.onload = () => {
+            updateInteractiveLoss();
+            updateLRDisplay();
+            // Manually set target star position to match our custom bounds (w1=2347, w2=1604)
+            const starLeft = ((2347 - 500) / (2500 - 500)) * 100;
+            const starTop = 100 - (((1604 - 1400) / (3200 - 1400)) * 100);
+            const star = document.querySelector('.target-star');
+            star.style.left = `${starLeft}%`;
+            star.style.top = `${starTop}%`;
+            star.style.right = 'auto';
+            star.style.bottom = 'auto';
+            star.style.transform = 'translate(-50%, -50%)';
+
             updateUI();
         };
     </script>
