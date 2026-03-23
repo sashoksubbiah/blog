@@ -1,0 +1,587 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, RotateCcw, CheckCircle, AlertCircle, ChevronDown, Info } from 'lucide-react';
+
+// --- DATA & CONSTANTS ---
+const HOUSES = [
+  { id: 1, size: 1, lot: 1.5, actual: 5000 },
+  { id: 2, size: 0.75, lot: 1.25, actual: 3500 },
+  { id: 3, size: 1.25, lot: 1, actual: 4500 },
+];
+
+const LR = 0.01;
+const OPTIMAL_W1 = 2347;
+const OPTIMAL_W2 = 1604;
+
+// --- UTILITY MATH FUNCTIONS ---
+const calcPrediction = (size, lot, w1, w2) => (size * w1) + (lot * w2);
+const calcError = (pred, actual) => pred - actual;
+const calcLoss = (w1, w2) => {
+  return HOUSES.reduce((sum, house) => {
+    const pred = calcPrediction(house.size, house.lot, w1, w2);
+    return sum + Math.pow(calcError(pred, house.actual), 2);
+  }, 0);
+};
+
+const calcDerivatives = (w1, w2) => {
+  let dw1 = 0;
+  let dw2 = 0;
+  HOUSES.forEach(house => {
+    const pred = calcPrediction(house.size, house.lot, w1, w2);
+    const error = calcError(pred, house.actual);
+    // Chain rule: d(Error^2)/dw1 = 2 * Error * d(Error)/dw1 = 2 * Error * size
+    dw1 += 2 * error * house.size;
+    dw2 += 2 * error * house.lot;
+  });
+  return { dw1, dw2 };
+};
+
+// --- COMPONENTS ---
+
+// Quiz Component for Active Learning
+const Quiz = ({ question, options, correctAnswer, explanation }) => {
+  const [selected, setSelected] = useState(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+
+  const handleSelect = (index) => {
+    setSelected(index);
+    setShowExplanation(true);
+  };
+
+  return (
+    <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-xl my-8 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <Info className="text-blue-600" size={20} />
+        <h3 className="font-bold text-blue-900">Check Your Understanding</h3>
+      </div>
+      <p className="text-slate-800 mb-4 font-medium">{question}</p>
+      <div className="flex flex-col gap-2">
+        {options.map((opt, i) => {
+          let btnClass = "text-left px-4 py-3 rounded-lg border transition-all duration-200 ";
+          if (selected === null) {
+            btnClass += "bg-white border-blue-200 hover:bg-blue-100";
+          } else if (i === correctAnswer) {
+            btnClass += "bg-green-100 border-green-500 text-green-900 font-semibold";
+          } else if (selected === i) {
+            btnClass += "bg-red-100 border-red-500 text-red-900";
+          } else {
+            btnClass += "bg-slate-50 border-slate-200 opacity-50";
+          }
+
+          return (
+            <button key={i} onClick={() => selected === null && handleSelect(i)} disabled={selected !== null} className={btnClass}>
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {showExplanation && (
+        <div className={`mt-4 p-4 rounded-lg flex gap-3 items-start ${selected === correctAnswer ? 'bg-green-50 text-green-800' : 'bg-orange-50 text-orange-800'}`}>
+          {selected === correctAnswer ? <CheckCircle className="shrink-0 text-green-600 mt-1" size={20} /> : <AlertCircle className="shrink-0 text-orange-600 mt-1" size={20} />}
+          <div>
+            <p className="font-bold">{selected === correctAnswer ? "Correct!" : "Not quite."}</p>
+            <p className="text-sm mt-1">{explanation}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function App() {
+  const [w1, setW1] = useState(1000);
+  const [w2, setW2] = useState(3000);
+  const [stepCount, setStepCount] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const currentLoss = calcLoss(w1, w2);
+  const { dw1, dw2 } = calcDerivatives(w1, w2);
+
+  const performStep = () => {
+    setW1(prev => prev - (LR * dw1));
+    setW2(prev => prev - (LR * dw2));
+    setStepCount(prev => prev + 1);
+  };
+
+  const fastForward = async () => {
+    setIsAnimating(true);
+    let currentW1 = w1;
+    let currentW2 = w2;
+    let steps = 0;
+    
+    // Using a simple interval to show animation
+    const interval = setInterval(() => {
+      const derivs = calcDerivatives(currentW1, currentW2);
+      currentW1 = currentW1 - (LR * derivs.dw1);
+      currentW2 = currentW2 - (LR * derivs.dw2);
+      steps += 10; // Jump by 10 to speed it up visually
+      
+      setW1(currentW1);
+      setW2(currentW2);
+      setStepCount(prev => prev + 10);
+
+      if (steps >= 1000) {
+        clearInterval(interval);
+        setIsAnimating(false);
+      }
+    }, 20);
+  };
+
+  const reset = () => {
+    setW1(1000);
+    setW2(3000);
+    setStepCount(0);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans selection:bg-blue-200">
+      
+      {/* Sticky Header with Current Stats */}
+      <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm px-6 py-3 flex justify-between items-center text-sm">
+        <div className="font-bold text-lg text-slate-700">Predictive Machine</div>
+        <div className="flex gap-6 items-center">
+          <div className="flex flex-col items-end">
+            <span className="text-slate-500 uppercase tracking-wider text-xs">Current Weights</span>
+            <span className="font-mono font-semibold">w₁: {w1.toFixed(0)} | w₂: {w2.toFixed(0)}</span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-slate-500 uppercase tracking-wider text-xs">Total Loss</span>
+            <span className="font-mono font-semibold text-red-600">{currentLoss.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-slate-500 uppercase tracking-wider text-xs">Steps</span>
+            <span className="font-mono font-semibold text-blue-600">{stepCount}</span>
+          </div>
+          <button onClick={reset} className="p-2 bg-slate-200 hover:bg-slate-300 rounded-full transition-colors" title="Reset to start">
+            <RotateCcw size={16} />
+          </button>
+        </div>
+      </div>
+
+      <main className="max-w-4xl mx-auto py-12 px-6 space-y-24">
+        
+        {/* Title Section */}
+        <header className="text-center space-y-4">
+          <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight">How Machines Learn</h1>
+          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+            A visual, interactive journey into the math behind Artificial Intelligence. We're going to build a model from scratch to predict housing prices.
+          </p>
+        </header>
+
+        {/* Section 1 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">1</div>
+            <h2 className="text-3xl font-bold">The Basic Machine</h2>
+          </div>
+          
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              Welcome to the core concept of machine learning! We are going to build a model—think of it as a machine—to predict housing prices.
+            </p>
+            <p>
+              <strong>Intuition Check:</strong> Imagine you have a soundboard with two volume knobs. One knob controls the bass, one controls the treble. By turning them, you change the final audio output. 
+              Our "machine" has two inputs (<strong>House Size</strong> and <strong>Lot Size</strong>), and it gives one output: a <strong>Predicted Price</strong>.
+            </p>
+            <p>
+              Without overthinking it, a simple way to do this is to multiply the house size by some number, multiply the lot size by another number, and add them together. Let's call these multiplier numbers the <strong>weights</strong> of our model: <code className="bg-slate-200 px-1 rounded text-blue-700">w₁</code> and <code className="bg-slate-200 px-1 rounded text-green-700">w₂</code>.
+            </p>
+          </div>
+
+          <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 flex flex-col md:flex-row items-center justify-center gap-8">
+            <div className="flex flex-col gap-4 w-full md:w-1/3">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center shadow-inner">
+                <span className="block text-sm text-blue-600 font-bold uppercase tracking-wider mb-1">Input 1</span>
+                <span className="text-xl font-semibold">House Size</span>
+                <div className="mt-2 text-sm bg-white p-2 rounded text-blue-800">× w₁ (Weight 1)</div>
+              </div>
+              <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center shadow-inner">
+                <span className="block text-sm text-green-600 font-bold uppercase tracking-wider mb-1">Input 2</span>
+                <span className="text-xl font-semibold">Lot Size</span>
+                <div className="mt-2 text-sm bg-white p-2 rounded text-green-800">× w₂ (Weight 2)</div>
+              </div>
+            </div>
+            
+            <div className="text-4xl font-light text-slate-400">➔</div>
+            
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white p-6 rounded-2xl w-full md:w-1/3 text-center shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-16 h-16 bg-white opacity-5 rounded-bl-full"></div>
+              <span className="block text-sm text-slate-400 font-bold uppercase tracking-wider mb-2">Output</span>
+              <span className="text-2xl font-bold text-yellow-400">Predicted Price</span>
+              <div className="mt-4 font-mono text-sm opacity-80 break-words">
+                (Size × w₁) + (Lot × w₂)
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 2 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">2</div>
+            <h2 className="text-3xl font-bold">Our Housing Data</h2>
+          </div>
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              Let's look at some data for three houses where we already know the exact numbers. <em>(Note: Price is represented in hundreds of dollars, so 5000 means $500,000 to keep the math clean).</em>
+            </p>
+            <p>
+              If our model is any good, our formula should output numbers very close to 5000, 3500, and 4500 for these respective houses.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <th className="p-4 font-semibold">House</th>
+                  <th className="p-4 font-semibold text-blue-700">Size (Input 1)</th>
+                  <th className="p-4 font-semibold text-green-700">Lot (Input 2)</th>
+                  <th className="p-4 font-semibold text-purple-700">Actual Price (Target)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {HOUSES.map(h => (
+                  <tr key={h.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="p-4 font-medium">House {h.id}</td>
+                    <td className="p-4 font-mono">{h.size}</td>
+                    <td className="p-4 font-mono">{h.lot}</td>
+                    <td className="p-4 font-mono font-bold">{h.actual}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Section 3 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">3</div>
+            <h2 className="text-3xl font-bold">The First Guess & Measuring Error</h2>
+          </div>
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              Hundreds of years ago, mathematicians figured out exact algebra to calculate the perfect weights. But we are going to do it the hard, iterative way, because <strong>this "guess and adjust" technique is the exact mechanism that proves magical for modern AI</strong> (like Neural Networks).
+            </p>
+            <p>
+              Forget finding the perfect weights right now; let's just pick random numbers. We'll start with our volume knobs turned to <code className="bg-slate-200 px-1 rounded">w₁ = 1000</code> and <code className="bg-slate-200 px-1 rounded">w₂ = 3000</code>.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
+            <h3 className="font-bold text-lg text-slate-800 border-b pb-2">Calculating the Error</h3>
+            <p className="text-slate-600 text-sm">Error = Predicted Price - Actual Price</p>
+            
+            <div className="space-y-3 font-mono text-sm md:text-base">
+              {HOUSES.map(h => {
+                const pred = calcPrediction(h.size, h.lot, 1000, 3000); // Fixed for initial guess explanation
+                const err = calcError(pred, h.actual);
+                return (
+                  <div key={h.id} className="flex flex-col md:flex-row md:items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <span><strong>House {h.id}:</strong> ({h.size} × 1000) + ({h.lot} × 3000) = <span className="text-yellow-600 font-bold">{pred}</span></span>
+                    <span className="mt-2 md:mt-0 px-3 py-1 rounded bg-white border">
+                      Error: {pred} - {h.actual} = <strong className={err > 0 ? 'text-red-500' : 'text-blue-500'}>{err > 0 ? `+${err}` : err}</strong>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="pt-2 text-slate-600">
+              Wow, 5500 isn't too far from 5000 for House 1! We are 500 too high. For House 2, we are 1000 too high. And for House 3, we are 250 short (-250).
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">4</div>
+            <h2 className="text-3xl font-bold">Calculating "Loss"</h2>
+          </div>
+          
+          <Quiz 
+            question="Why can't we just add the errors (+500, +1000, -250) together to get our total accuracy score?"
+            options={[
+              "Because addition is too slow for computers to process.",
+              "Because positive and negative errors would cancel each other out, hiding how bad our predictions actually are.",
+              "Because the housing prices are too large to add directly."
+            ]}
+            correctAnswer={1}
+            explanation="Exactly! If you guess $1M too high on house A, and $1M too low on house B, adding those errors gives you ZERO. The model would think it's perfect, even though both guesses were terrible!"
+          />
+
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              To fix the cancellation problem, we <strong>square</strong> the errors. Squaring turns negative numbers positive, treating a mistake of -250 the exact same as a mistake of +250.
+            </p>
+            <p>
+              <strong>Alternative Perspective:</strong> Think of Loss as a "Penalty Score" in a video game. Squaring the error also disproportionately punishes <em>big</em> mistakes. Being off by 1000 isn't just twice as bad as being off by 500; squared, it's <em>four times</em> as bad! The machine will prioritize fixing its biggest blunders first.
+            </p>
+          </div>
+
+          <div className="bg-slate-900 text-slate-100 p-6 rounded-xl shadow-lg font-mono">
+            <h3 className="text-slate-400 uppercase tracking-wider text-sm mb-4">Loss Calculation (w₁=1000, w₂=3000)</h3>
+            <ul className="space-y-2 mb-6">
+              <li>House 1: (500)² = <span className="text-red-400">250,000</span></li>
+              <li>House 2: (1000)² = <span className="text-red-400">1,000,000</span></li>
+              <li>House 3: (-250)² = <span className="text-red-400">62,500</span></li>
+            </ul>
+            <div className="border-t border-slate-700 pt-4 flex justify-between items-end">
+              <span>Total Loss (Sum of squared errors):</span>
+              <span className="text-3xl font-bold text-red-500">1,312,500</span>
+            </div>
+          </div>
+          <p className="text-slate-600 italic">Our starting Loss is 1,312,500. The goal of machine learning is simple: Make this number as close to zero as possible.</p>
+        </section>
+
+        {/* Section 5 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">5</div>
+            <h2 className="text-3xl font-bold">The Magic of Calculus (Derivatives)</h2>
+          </div>
+          
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              If we turn our w₁ knob up slightly, will our Loss go up (bad) or down (good)? To find out, we use high school calculus—specifically, the <strong>derivative</strong>.
+            </p>
+            <p>
+              <strong>Gut-Level Intuition:</strong> Imagine you are blindfolded, standing on the side of a hill. You can't see the bottom, but you can feel the slope of the ground beneath your feet. The derivative is simply your foot telling you, <em>"The ground is sloping UP in front of you, and DOWN behind you."</em>
+            </p>
+            <p>
+              Because we have two weights to adjust (w₁ and w₂), we use a <strong>partial derivative</strong>. This just means we freeze time, keep w₂ completely still, and feel the slope only in the w₁ direction.
+            </p>
+            <p>
+              When we run our Loss equation through calculus using our current weights (w₁=1000, w₂=3000), our "foot" feels this:
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex-1 bg-white p-6 rounded-xl border-l-4 border-blue-500 shadow-sm">
+              <span className="block text-sm text-slate-500 uppercase">Slope for w₁</span>
+              <span className="text-2xl font-bold text-slate-800">1875</span>
+            </div>
+            <div className="flex-1 bg-white p-6 rounded-xl border-l-4 border-green-500 shadow-sm">
+              <span className="block text-sm text-slate-500 uppercase">Slope for w₂</span>
+              <span className="text-2xl font-bold text-slate-800">3500</span>
+            </div>
+          </div>
+
+          <Quiz 
+            question="Both of our derivatives (slopes) are positive numbers. What does a positive slope mean for our weights?"
+            options={[
+              "Increasing the weight will decrease the loss (we should increase weights).",
+              "Increasing the weight will increase the loss (we should decrease weights).",
+              "The weights are already perfect."
+            ]}
+            correctAnswer={1}
+            explanation="Spot on! A positive slope means the graph is going UPHILL as the weight increases. Since we want to reach the BOTTOM of the hill (lowest loss), we must move backwards, decreasing our weights!"
+          />
+        </section>
+
+        {/* Section 6 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">6</div>
+            <h2 className="text-3xl font-bold">Taking a Step (Learning Rate)</h2>
+          </div>
+          
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              We know the direction to move (decrease), but how big of a step should we take? If we take a massive leap, we might overshoot the valley floor entirely and end up higher on the opposite mountain. If we take microscopic baby steps, it will take centuries to get to the bottom.
+            </p>
+            <p>
+              We control this step size using a <strong>Learning Rate</strong>. Let's set it to 1% (0.01). 
+              We update our weights using this beautiful, simple rule:
+            </p>
+            <div className="bg-indigo-50 text-indigo-900 p-4 rounded-lg font-mono text-center shadow-inner border border-indigo-100 my-6">
+              New Weight = Old Weight - (Learning Rate × Derivative)
+            </div>
+            <p>
+              Why multiply by the derivative? It's a brilliant math trick! When we are high up on the mountain, the slope (derivative) is very steep (a large number), so we take a large jump. As we get closer to the flat bottom of the valley, the slope gets closer to zero, so our steps automatically get smaller, preventing us from overshooting!
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+              <Play className="text-blue-500" size={20} /> Let's take our first step
+            </h3>
+            <div className="font-mono text-sm space-y-4">
+              <div className="p-4 bg-slate-50 rounded border">
+                Updated w₁: 1000 - (0.01 × 1875) = <strong className="text-blue-600">981</strong>
+              </div>
+              <div className="p-4 bg-slate-50 rounded border">
+                Updated w₂: 3000 - (0.01 × 3500) = <strong className="text-green-600">2965</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 7 */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">7</div>
+            <h2 className="text-3xl font-bold">Journey to the Bottom</h2>
+          </div>
+          
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              Imagine you are dropped in Death Valley National Park, and your goal is to hike to the lowest point. 
+              Our Loss surface is shaped like a giant bowl. As our machine repeatedly updates its weights, it is taking steps down this bowl toward the lowest possible loss.
+            </p>
+            <p>
+              Below is the live brain of our machine. Watch it learn! Click the button to calculate the slopes and update the weights step-by-step, or fast forward to see it descend into the valley.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* Controls & Stats */}
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <button 
+                    onClick={performStep} 
+                    disabled={isAnimating || stepCount >= 1000}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-3 px-4 rounded-lg font-bold transition-all shadow-md active:scale-95 flex justify-center items-center gap-2"
+                  >
+                    Take 1 Step
+                  </button>
+                  <button 
+                    onClick={fastForward} 
+                    disabled={isAnimating || stepCount >= 1000}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-3 px-4 rounded-lg font-bold transition-all shadow-md active:scale-95 flex justify-center items-center gap-2"
+                  >
+                    Fast Forward 1000
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="text-slate-500 font-medium">Steps Taken</span>
+                    <span className="font-mono text-xl font-bold text-indigo-700">{stepCount} / 1000</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="text-slate-500 font-medium">w₁ (House Size Weight)</span>
+                    <span className="font-mono text-xl text-blue-700">{w1.toFixed(0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="text-slate-500 font-medium">w₂ (Lot Size Weight)</span>
+                    <span className="font-mono text-xl text-green-700">{w2.toFixed(0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-slate-800 font-bold">Total Loss</span>
+                    <span className="font-mono text-2xl font-bold text-red-600 transition-all duration-300">
+                      {currentLoss.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visual "Map" Area */}
+              <div className="bg-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center p-6 min-h-[300px]">
+                {/* Abstract Contours */}
+                <div className="absolute inset-0 opacity-20 pointer-events-none">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="absolute rounded-full border border-white" style={{
+                      top: `${10 + i * 8}%`, left: `${10 + i * 8}%`, right: `${10 + i * 8}%`, bottom: `${10 + i * 8}%`
+                    }}></div>
+                  ))}
+                </div>
+                
+                <div className="relative w-full h-full flex flex-col justify-between z-10">
+                  <div className="text-center text-slate-400 text-xs font-mono uppercase tracking-widest mb-4">Gradient Descent Terrain</div>
+                  
+                  {/* The visual representation of the point moving */}
+                  <div className="relative h-48 w-full bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                    <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                       <span className="w-3 h-3 text-blue-400 animate-pulse text-2xl leading-none">★</span> 
+                       <span className="text-xs text-slate-400">Target Bottom</span>
+                    </div>
+                    
+                    {/* Moving Dot */}
+                    <div 
+                      className="absolute w-4 h-4 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.8)] transition-all duration-300 ease-out"
+                      style={{
+                        // Math to map weights roughly to the screen purely for visual intuition
+                        // Start: 1000, 3000 -> Top Left
+                        // End: 2347, 1604 -> Bottom Right
+                        left: `${Math.min(90, Math.max(10, ((w1 - 1000) / (OPTIMAL_W1 - 1000)) * 80 + 10))}%`,
+                        top: `${Math.min(90, Math.max(10, ((3000 - w2) / (3000 - OPTIMAL_W2)) * 80 + 10))}%`,
+                        transform: 'translate(-50%, -50%)'
+                      }}
+                    ></div>
+                    
+                    {/* Trail logic could go here, but omitted to keep react state simple, the moving dot is sufficient intuition */}
+                  </div>
+                  <div className="text-center text-slate-500 text-xs mt-4">Red dot moves closer to the optimal valley floor as loss decreases.</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        {/* Section 8 */}
+        <section className="space-y-6 pb-24">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl">8</div>
+            <h2 className="text-3xl font-bold">The Final Predictions</h2>
+          </div>
+          
+          <div className="prose prose-lg text-slate-700 max-w-none">
+            <p>
+              If you clicked the "Fast Forward" button, your machine just took 1,000 steps of learning. Our weights should now be roughly <strong>w₁ = 2311</strong> and <strong>w₂ = 1633</strong>. Let's see how our educated machine performs compared to our terrible first guess.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto bg-white rounded-xl shadow-md border border-slate-200">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <th className="p-4 font-semibold">House</th>
+                  <th className="p-4 font-semibold text-purple-700">Actual Target</th>
+                  <th className="p-4 font-semibold text-slate-400">First Guess (w₁=1k, w₂=3k)</th>
+                  <th className="p-4 font-semibold text-blue-700">New Prediction</th>
+                  <th className="p-4 font-semibold">New Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {HOUSES.map(h => {
+                  const badPred = calcPrediction(h.size, h.lot, 1000, 3000);
+                  const currentPred = calcPrediction(h.size, h.lot, w1, w2);
+                  const newError = calcError(currentPred, h.actual);
+                  
+                  return (
+                    <tr key={h.id} className="border-b border-slate-100">
+                      <td className="p-4 font-medium">House {h.id}</td>
+                      <td className="p-4 font-mono font-bold">{h.actual}</td>
+                      <td className="p-4 font-mono text-slate-400 line-through">{badPred.toFixed(0)}</td>
+                      <td className="p-4 font-mono font-bold text-blue-600">{currentPred.toFixed(0)}</td>
+                      <td className="p-4 font-mono">
+                        <span className={`px-2 py-1 rounded text-sm ${Math.abs(newError) < 300 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {newError > 0 ? '+' : ''}{newError.toFixed(0)}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-8 rounded-2xl border border-blue-100 mt-8">
+            <h3 className="text-2xl font-bold text-indigo-900 mb-4">Conclusion</h3>
+            <p className="text-lg text-indigo-800 leading-relaxed">
+              This is a massive improvement from our first random guess! If we used complex algebra to solve for the absolute perfect weights (which is often impossible in advanced AI, but easy here), the perfect weights would be w₁=2347 and w₂=1604.
+            </p>
+            <p className="text-lg text-indigo-800 leading-relaxed mt-4">
+              Through the incredibly simple iterative process of guessing, measuring loss, feeling the slope with derivatives, and stepping forward, <strong>our machine literally taught itself</strong> to get incredibly close to the perfect answer all on its own.
+            </p>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  );
+}
