@@ -430,12 +430,28 @@
                 <h2>The Calculus Engine (Finding the Slope)</h2>
             </div>
             
-            <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">1. What is a "Partial" Derivative?</h3>
-            <p><strong>Gut Intuition:</strong> Imagine you are standing on the side of a 3D mountain. Your GPS coordinates are longitude (<code>w₁</code>) and latitude (<code>w₂</code>). You are blindfolded, and you want to walk down to the bottom of the valley (the lowest Loss).</p>
-            <p>A normal derivative is for a 2D line. You only have one option: go left or right. But on a 3D mountain, you can walk North/South, or East/West.</p>
-            <p>A <strong>Partial Derivative</strong> just means: <strong>"Freeze one direction."</strong> If I lock my latitude (<code>w₂</code>) completely still so I can only step North or South (<code>w₁</code>), is the mountain sloping up or down in front of me?</p>
+            <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">1. The Magic Cheat Code (Tangent Lines)</h3>
+            <p>Before dealing with 3D mountains, let's prove <em>why</em> a derivative is so incredibly powerful. Take a simple curved function: <code>f(x) = x&sup2;</code>.</p>
+            <div style="background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 8px; border-left: 4px solid var(--accent-purple); margin-bottom: 2rem;">
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 0.5rem;"><strong>1. The Start:</strong> Let's say <code>x = 3</code>. The result is <code>3&sup2; = 9</code>.</li>
+                    <li style="margin-bottom: 0.5rem;"><strong>2. The Derivative (Slope):</strong> The derivative of <code>x&sup2;</code> is <code>2x</code>. At <code>x = 3</code>, the slope is <code>2(3) = 6</code>.</li>
+                    <li style="margin-bottom: 0.5rem;"><strong>3. The Prediction:</strong> If we take a tiny step of <code>0.01</code> forward to <code>x = 3.01</code>, the derivative lets us use a straight line to predict the curve. It predicts an increase of <code>slope &times; step</code> (<code>6 &times; 0.01 = 0.06</code>). Our predicted new value is <strong>9.06</strong>.</li>
+                    <li><strong>4. The Actual Math:</strong> If we actually calculate <code>3.01&sup2;</code>, we get <strong>9.0601</strong>.</li>
+                </ul>
+                <p style="margin-top: 1rem; margin-bottom: 0; color: var(--accent-blue); font-weight: bold;">The straight tangent line almost perfectly predicted the complex curve! This means our machine can figure out exactly how to step towards zero without having to guess-and-check a million times.</p>
+            </div>
 
-            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">2. Where does the massive equation come from?</h3>
+            <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">2. What is a "Partial" Derivative?</h3>
+            <p><strong>Gut Intuition:</strong> Imagine you are standing on the side of a 3D mountain. Your GPS coordinates are longitude (<code>w₁</code>) and latitude (<code>w₂</code>). You are blindfolded, and you want to walk down to the bottom of the valley (the lowest Loss).</p>
+            
+            <p>A normal derivative is for a 2D line. You only have one option: go left or right. But on a 3D mountain, you can walk North/South, or East/West.</p>
+            
+            <div style="background: rgba(59, 130, 246, 0.05); padding: 1.5rem; border-radius: 8px; border-left: 4px solid var(--accent-blue); margin-bottom: 2rem;">
+                <p style="margin-bottom: 0;">A <strong>Partial Derivative</strong> just means: <strong>"Freeze one direction."</strong> If I lock my latitude (<code>w₂</code>) completely still so I can only step North or South (<code>w₁</code>), is the mountain sloping up or down in front of me?</p>
+            </div>
+
+            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">3. Where does the massive equation come from?</h3>
             <p>To find the slope, we need an equation for the Total Loss. This is just <strong>middle school algebra (FOIL) on steroids</strong>.</p>
             <p>Let's look <em>only</em> at House 1: Size = 1, Lot = 1.5, Actual Price = 5000.</p>
             <ul style="margin-left: 2rem; margin-bottom: 1.5rem; color: var(--text-muted);">
@@ -450,7 +466,7 @@
                 Loss = 3.125(w₁)&sup2; + 7.375(w₁)(w₂) - 26500(w₁) + 4.8125(w₂)&sup2; - 32750(w₂) + 57500000
             </div>
 
-            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">3. Calculating the Slope</h3>
+            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">4. Calculating the Slope</h3>
             <p>Let's put this monster equation into the Derivation Engine to find the Partial Derivative for <code>w₁</code> (freezing <code>w₂</code>).</p>
 
             <div class="derivation-engine">
@@ -572,8 +588,57 @@
                     Steps: <span id="map-steps">0</span>
                 </div>
             </div>
+
+            <!-- New Quiz on Zero Loss -->
+            <div class="quiz-box" style="margin-top: 3rem;">
+                <h3 style="margin-bottom: 1rem; color: var(--accent-blue); font-size: 1.1rem;">Check Your Understanding: The Zero Loss Dream</h3>
+                <p>As you take steps and watch the total loss drop, you might hope for a Loss of exactly zero. But it will never reach perfect zero here (even at the exact bottom of the valley). Why?</p>
+                <button class="quiz-btn" onclick="checkQuiz(this, false)">Our learning rate is too large to find the exact bottom.</button>
+                <button class="quiz-btn" onclick="checkQuiz(this, true)">We have three houses but only two weights. It's mathematically impossible to perfectly satisfy 3 different equations with only 2 variables.</button>
+                <button class="quiz-btn" onclick="checkQuiz(this, false)">Because we squared the errors.</button>
+                <div class="quiz-explanation" style="display:none; margin-top: 1rem; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 6px; color: var(--accent-green);">
+                    <strong>Correct!</strong> A loss of zero would mean we perfectly predicted the price of every single house. But because we only have 2 "knobs" to turn (w₁ and w₂), we simply don't have enough flexibility to perfectly fit 3 independent data points. The machine is just finding the best possible compromise!
+                </div>
+            </div>
             
-            <p style="margin-top: 2rem;">If we use exact algebra to solve for the absolute bottom of the bowl (setting slopes to 0), the perfect weights are <strong>w₁ = 2347</strong> and <strong>w₂ = 1604</strong>. See how close the machine gets by iteratively walking down the hill!</p>
+            <p style="margin-top: 2rem;">If we use exact algebra to solve for the absolute bottom of the bowl (setting both slopes to exactly 0), the perfect compromise weights are <strong>w₁ = 2347</strong> and <strong>w₂ = 1604</strong>. After 1000 steps, we get extremely close to that (w₁ &approx; 2311, w₂ &approx; 1633).</p>
+
+            <div style="background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 8px; border-left: 4px solid var(--accent-purple); margin-top: 2rem; margin-bottom: 2rem;">
+                <p style="margin-bottom: 0;"><strong>A Final Question:</strong> You may be wondering if we could have gotten even closer to those optimal, perfect weights if we used a <em>smaller</em> learning rate and took <em>more</em> steps? The answer is a resounding <strong>yes</strong>! Feel free to reset the board, lower the Learning Rate slightly, and click Fast Forward again to see for yourself.</p>
+            </div>
+
+            <!-- The Final Scorecard Table -->
+            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">The Final Scorecard</h3>
+            <p>Let's see how our educated machine performs right now compared to our terrible first guess (1000 and 3000). As you take steps on the map above, watch these predictions update!</p>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>House</th>
+                        <th style="color: #c084fc;">Actual Price</th>
+                        <th>First Guess <br><span style="font-size:0.75rem; color:var(--text-muted);">(w₁=1000, w₂=3000)</span></th>
+                        <th style="color: var(--accent-blue);">Current Prediction</th>
+                        <th>Current Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>#1</td><td style="color: #c084fc;">5000</td><td style="text-decoration: line-through; opacity: 0.5;">5500</td>
+                        <td id="f-pred-1" style="color: var(--accent-blue); font-weight: bold; font-size: 1.2rem;"></td>
+                        <td><span id="f-err-1"></span></td>
+                    </tr>
+                    <tr>
+                        <td>#2</td><td style="color: #c084fc;">3500</td><td style="text-decoration: line-through; opacity: 0.5;">4500</td>
+                        <td id="f-pred-2" style="color: var(--accent-blue); font-weight: bold; font-size: 1.2rem;"></td>
+                        <td><span id="f-err-2"></span></td>
+                    </tr>
+                    <tr>
+                        <td>#3</td><td style="color: #c084fc;">4500</td><td style="text-decoration: line-through; opacity: 0.5;">4250</td>
+                        <td id="f-pred-3" style="color: var(--accent-blue); font-weight: bold; font-size: 1.2rem;"></td>
+                        <td><span id="f-err-3"></span></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
     </div>
@@ -660,6 +725,28 @@
             document.getElementById('slope-2').textContent = Math.round(stats.slope2);
             updateUpdateRule();
             updateMap(stats.loss);
+
+            // Final Scorecard Updates
+            document.getElementById('f-pred-1').textContent = state.exploded ? "NaN" : Math.round(stats.p1);
+            document.getElementById('f-pred-2').textContent = state.exploded ? "NaN" : Math.round(stats.p2);
+            document.getElementById('f-pred-3').textContent = state.exploded ? "NaN" : Math.round(stats.p3);
+            
+            let fErr1 = document.getElementById('f-err-1');
+            let fErr2 = document.getElementById('f-err-2');
+            let fErr3 = document.getElementById('f-err-3');
+            
+            if (state.exploded) {
+                fErr1.textContent = "ERR"; fErr1.className = "badge badge-red";
+                fErr2.textContent = "ERR"; fErr2.className = "badge badge-red";
+                fErr3.textContent = "ERR"; fErr3.className = "badge badge-red";
+            } else {
+                fErr1.textContent = (stats.e1 > 0 ? '+' : '') + Math.round(stats.e1);
+                fErr1.className = `badge ${Math.abs(stats.e1) < 300 ? 'badge-green' : 'badge-red'}`;
+                fErr2.textContent = (stats.e2 > 0 ? '+' : '') + Math.round(stats.e2);
+                fErr2.className = `badge ${Math.abs(stats.e2) < 300 ? 'badge-green' : 'badge-red'}`;
+                fErr3.textContent = (stats.e3 > 0 ? '+' : '') + Math.round(stats.e3);
+                fErr3.className = `badge ${Math.abs(stats.e3) < 300 ? 'badge-green' : 'badge-red'}`;
+            }
         }
 
         function updateUpdateRule() {
