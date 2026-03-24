@@ -429,32 +429,56 @@
                 <div class="module-number">04</div>
                 <h2>The Calculus Engine (Finding the Slope)</h2>
             </div>
-            <p>If we increase w₁ slightly, will our Loss go up or down? To find out, we need the <strong>derivative</strong> (the slope) of the loss equation. We must calculate this step-by-step.</p>
             
+            <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">1. What is a "Partial" Derivative?</h3>
+            <p><strong>Gut Intuition:</strong> Imagine you are standing on the side of a 3D mountain. Your GPS coordinates are longitude (<code>w₁</code>) and latitude (<code>w₂</code>). You are blindfolded, and you want to walk down to the bottom of the valley (the lowest Loss).</p>
+            <p>A normal derivative is for a 2D line. You only have one option: go left or right. But on a 3D mountain, you can walk North/South, or East/West.</p>
+            <p>A <strong>Partial Derivative</strong> just means: <strong>"Freeze one direction."</strong> If I lock my latitude (<code>w₂</code>) completely still so I can only step North or South (<code>w₁</code>), is the mountain sloping up or down in front of me?</p>
+
+            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">2. Where does the massive equation come from?</h3>
+            <p>To find the slope, we need an equation for the Total Loss. This is just <strong>middle school algebra (FOIL) on steroids</strong>.</p>
+            <p>Let's look <em>only</em> at House 1: Size = 1, Lot = 1.5, Actual Price = 5000.</p>
+            <ul style="margin-left: 2rem; margin-bottom: 1.5rem; color: var(--text-muted);">
+                <li><strong>Prediction:</strong> <code style="background: transparent; padding: 0;">1w₁ + 1.5w₂</code></li>
+                <li><strong>Error:</strong> <code style="background: transparent; padding: 0;">(1w₁ + 1.5w₂ - 5000)</code></li>
+                <li><strong>Squared Error:</strong> <code style="background: transparent; padding: 0;">(1w₁ + 1.5w₂ - 5000) &times; (1w₁ + 1.5w₂ - 5000)</code></li>
+            </ul>
+            <p>If you multiply that out (FOIL), you get House 1's specific piece: <br><code style="background: rgba(255,255,255,0.05); margin-top: 0.5rem; display: inline-block;">1(w₁)&sup2; + 3(w₁w₂) - 10000(w₁) + 2.25(w₂)&sup2; - 15000(w₂) + 25,000,000</code></p>
+            <p>If you do that exact same algebra for House 2, and then for House 3, and <strong>add all three together</strong>, you get our master Loss equation:</p>
+            
+            <div class="math-step-container" style="border-left: 4px solid var(--accent-purple);">
+                Loss = 3.125(w₁)&sup2; + 7.375(w₁)(w₂) - 26500(w₁) + 4.8125(w₂)&sup2; - 32750(w₂) + 57500000
+            </div>
+
+            <h3 style="color: var(--accent-blue); margin-top: 3rem; margin-bottom: 1rem;">3. Calculating the Slope</h3>
+            <p>Let's put this monster equation into the Derivation Engine to find the Partial Derivative for <code>w₁</code> (freezing <code>w₂</code>).</p>
+
             <div class="derivation-engine">
-                <button class="btn" onclick="nextDerivStep()" id="btn-deriv">Reveal Step 1: Expand Polynomial</button>
+                <button class="btn" onclick="nextDerivStep()" id="btn-deriv">Reveal Step 1: Freeze w₂</button>
                 
-                <div class="deriv-step" id="d-step-1">
-                    <div class="deriv-desc">1. If we write out the Loss calculation algebraically for all 3 houses and expand it, we get this massive polynomial:</div>
-                    <div class="deriv-eq">Loss = 3.125(w₁)&sup2; + 7.375(w₁)(w₂) - 26500(w₁) + 4.8125(w₂)&sup2; - 32750(w₂) + 57500000</div>
+                <div class="deriv-step" id="d-step-1" style="border-left-color: var(--accent-red);">
+                    <div class="deriv-desc"><strong>1. The Empty Term (The Boulder).</strong> Look at <code>4.8125(w₂)&sup2;</code>. Because we froze <code>w₂</code>, this whole chunk is just a static, unchanging number (like a boulder on the mountain). The slope of a static boulder is 0. It completely disappears! The same happens to <code>-32750(w₂)</code> and the <code>57500000</code>.</div>
+                    <div class="deriv-eq">
+                        Loss' = 3.125(w₁)&sup2; + 7.375(w₁)(w₂) - 26500(w₁) <span class="term-const">+ 4.8125(w₂)&sup2;</span> <span class="term-const">- 32750(w₂)</span> <span class="term-const">+ 57500000</span>
+                    </div>
                 </div>
 
                 <div class="deriv-step" id="d-step-2" style="border-left-color: var(--accent-blue);">
-                    <div class="deriv-desc">2. We want the <strong>Partial Derivative for w₁</strong>. This means we treat w₂ as a constant, unchanging number. Notice how terms without w₁ drop to zero:</div>
+                    <div class="deriv-desc"><strong>2. The <code>w₁</code> Only Term.</strong> Apply the basic power rule (bring the 2 down and multiply: 3.125 &times; 2 = 6.25).</div>
                     <div class="deriv-eq">
-                        Loss' = <span class="term-highlight">3.125(w₁)&sup2;</span> + <span class="term-highlight">7.375(w₂)(w₁)</span> - <span class="term-highlight">26500(w₁)</span> + <span class="term-const">4.8125(w₂)&sup2;</span> - <span class="term-const">32750(w₂)</span> + <span class="term-const">57500000</span>
+                        &rarr; <span class="term-highlight">6.25(w₁)</span> + 7.375(w₁)(w₂) - 26500(w₁)
                     </div>
                 </div>
 
-                <div class="deriv-step" id="d-step-3" style="border-left-color: var(--accent-blue);">
-                    <div class="deriv-desc">3. Apply the Power Rule (bring down the exponent) to the remaining terms:</div>
+                <div class="deriv-step" id="d-step-3" style="border-left-color: var(--accent-green);">
+                    <div class="deriv-desc"><strong>3. The Tricky Mixed Term.</strong> Look at <code>7.375(w₁)(w₂)</code>. Since <code>w₂</code> is frozen, <code>7.375(w₂)</code> is just a constant number attached to <code>w₁</code>. So, the <code>w₁</code> drops away, leaving just the multiplier behind. Same for the <code>-26500(w₁)</code>.</div>
                     <div class="deriv-eq">
-                        Slope w₁ = <span style="color:var(--accent-blue)">6.25(w₁)</span> + <span style="color:var(--accent-blue)">7.375(w₂)</span> - <span style="color:var(--accent-blue)">26500</span>
+                        &rarr; 6.25(w₁) + <span class="term-highlight">7.375(w₂)</span> - <span class="term-highlight">26500</span>
                     </div>
                 </div>
 
-                <div class="deriv-step" id="d-step-4">
-                    <div class="deriv-desc">4. Now let's calculate the exact mathematical slope using our current weights:</div>
+                <div class="deriv-step" id="d-step-4" style="border-left-color: var(--text-main);">
+                    <div class="deriv-desc"><strong>4. Final Slope Equation.</strong> We now have the clean formulas to calculate the exact slopes! Try editing the weights in Module 1 to see these numbers recalculate.</div>
                     <div class="math-step-container" style="background: rgba(255,255,255,0.05); margin: 0.5rem 0;">
                         <div class="math-line active">
                             <div class="math-label">Current Slopes</div>
@@ -473,12 +497,18 @@
 
             <!-- Quiz -->
             <div class="quiz-box">
-                <h3 style="margin-bottom: 1rem; color: var(--accent-blue); font-size: 1.1rem;">Check Your Understanding</h3>
-                <p>Both of our calculated slopes are positive numbers (1875 and 3500). What does a positive slope mean for our weights?</p>
-                <button class="quiz-btn" onclick="checkQuiz(this, false)">Increasing the weight will decrease the loss (we should increase weights).</button>
-                <button class="quiz-btn" onclick="checkQuiz(this, true)">Increasing the weight will increase the loss (we should decrease weights).</button>
+                <h3 style="margin-bottom: 1rem; color: var(--accent-blue); font-size: 1.1rem;">Check Your Understanding: The Freezing Concept</h3>
+                <p>Let's see if this "freezing" clicks. Here is a brand new, shorter dummy Loss equation:</p>
+                <code style="display: block; padding: 1rem; font-size: 1.1rem; margin-bottom: 1rem; background: #000; border: 1px solid var(--border-color);">Loss = 10(w₁)&sup2; + 5(w₁)(w₂) + 8(w₂)&sup2;</code>
+                <p>If we want to find the <strong>Partial Derivative for w₁</strong> (meaning we freeze w₂ as a constant), what is the final slope equation for w₁?</p>
+                <button class="quiz-btn" onclick="checkQuiz(this, false)">10(w₁) + 5</button>
+                <button class="quiz-btn" onclick="checkQuiz(this, true)">20(w₁) + 5(w₂)</button>
+                <button class="quiz-btn" onclick="checkQuiz(this, false)">20(w₁) + 5(w₂) + 16(w₂)</button>
                 <div class="quiz-explanation" style="display:none; margin-top: 1rem; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 6px; color: var(--accent-green);">
-                    <strong>Correct!</strong> A positive slope means the graph is going UPHILL as the weight increases. Since we want to reach the BOTTOM of the valley (lowest loss), we must move backwards, decreasing our weights!
+                    <strong>Correct!</strong> <br><br>
+                    1. The <code>10(w₁)&sup2;</code> becomes <code>20(w₁)</code> (power rule).<br>
+                    2. In <code>5(w₁)(w₂)</code>, the <code>5(w₂)</code> is just a constant multiplier, so the <code>w₁</code> drops, leaving <code>5(w₂)</code>.<br>
+                    3. The <code>8(w₂)&sup2;</code> has no <code>w₁</code> in it at all, so it's a static "boulder" and disappears entirely to <code>0</code>!
                 </div>
             </div>
         </div>
