@@ -229,21 +229,21 @@
 <!-- HERO -->
 <section class="hero">
   <div class="hero-tag">Interactive Explainer · Language & AI</div>
-  <h1>How Computers Learn to <span>Read Language</span></h1>
-  <p>From basic spell-checking to predicting the next word — the same core idea that powers your phone's autocomplete and ChatGPT.</p>
+  <h1>How Do Computers Know When <span>Language Sounds Wrong?</span></h1>
+  <p>A spell checker fails at a surprisingly simple test. Fixing that failure — through Tamil, of all languages — leads directly to the idea inside ChatGPT.</p>
   <div class="hero-steps">
-    <div class="hero-step"><strong>01</strong> Spell Checker</div>
-    <div class="hero-step"><strong>02</strong> Tamil Language Challenge</div>
-    <div class="hero-step"><strong>03</strong> Bigram Model</div>
-    <div class="hero-step"><strong>04</strong> Text Generator</div>
+    <div class="hero-step"><strong>01</strong> The Problem with Spell Checkers</div>
+    <div class="hero-step"><strong>02</strong> Why Tamil Breaks Everything</div>
+    <div class="hero-step"><strong>03</strong> The Fix: Count Word Pairs</div>
+    <div class="hero-step"><strong>04</strong> The Surprise: It Can Also Write</div>
   </div>
 </section>
 
 <nav class="progress-nav">
-  <a href="#s1" class="nav-step active"><span class="nav-num">1</span> Spell Check</a>
-  <a href="#s2" class="nav-step"><span class="nav-num">2</span> Tamil Pairs</a>
-  <a href="#s3" class="nav-step"><span class="nav-num">3</span> Bigram Model</a>
-  <a href="#s4" class="nav-step"><span class="nav-num">4</span> Generate Text</a>
+  <a href="#s1" class="nav-step active"><span class="nav-num">1</span> The Problem</a>
+  <a href="#s2" class="nav-step"><span class="nav-num">2</span> Tamil Breaks It</a>
+  <a href="#s3" class="nav-step"><span class="nav-num">3</span> The Fix</a>
+  <a href="#s4" class="nav-step"><span class="nav-num">4</span> The Surprise</a>
   <a href="#s5" class="nav-step"><span class="nav-num">5</span> Big Picture</a>
 </nav>
 
@@ -253,11 +253,11 @@
 <!-- ═══════════════════════════════════════ -->
 <section class="section" id="s1">
   <div class="section-num">Section 01</div>
-  <h2>How does a basic spell checker work?</h2>
-  <p class="intro">The very first spell checkers had one simple idea: keep a giant list of valid words. Check each word in a sentence against that list. If a word is missing from the list — flag it as a possible typo.</p>
+  <h2>The Spell Checker Has One Job — and It Fails</h2>
+  <p class="intro">The very first spell checkers had one simple idea: keep a giant list of valid words. Check each word in a sentence against that list. If a word is missing — flag it as a possible typo. Simple, fast, and it works. Until it doesn't.</p>
 
   <div class="analogy-box">
-    💡 <strong>Think of it like a bouncer at a club.</strong> The bouncer has a guest list. If your name is on it → you're in (✅ correct spelling). If not → you're flagged (❌ possible typo). The bouncer doesn't ask <em>why</em> you're there — just: are you on the list?
+    💡 <strong>Think of it like a bouncer at a club.</strong> The bouncer has a guest list. If your name is on it → you're in (✅ correct spelling). If not → you're flagged (❌ possible typo). The bouncer doesn't ask <em>why</em> you're there or whether you belong — just: are you on the list?
   </div>
 
   <div class="card">
@@ -279,13 +279,14 @@
   </div>
 
   <div class="explainer">
-    <h4>🤔 But what about "He walk to the store"?</h4>
-    Every word is in the dictionary — no red flags. The spell checker passes it. It cannot understand grammar or meaning; it only checks whether individual words exist. "Walk" is a real word, so the checker is satisfied. This is the limitation we need to fix.
+    <h4>🚨 Here is where it breaks. Try typing: "He walk to the store"</h4>
+    Every word is in the dictionary. No red flags. The spell checker passes it — confidently. But the sentence is wrong. "He walk" is a grammar error, not a spelling error. The checker cannot see this because it only ever asks one question: <em>"Does this word exist?"</em> It never asks: <em>"Does this word belong next to that word?"</em>
+    <br><br>That second question — does this word <em>belong</em> next to that word — is the question we actually need to answer. And the clearest way to see why individual word lookup can never answer it is to look at a language where the problem becomes completely impossible to ignore.
   </div>
 
   <div class="bridge">
-    Looking up individual words isn't enough. We need to look at <em>pairs</em> of words — and Tamil shows us exactly why.
-    <br><span>↓ Next: The Tamil Language Challenge</span>
+    If checking one word at a time isn't enough — what should we check instead? A language called Tamil forces that question into the open in the most dramatic way possible.
+    <br><span>↓ Next: Why Tamil Breaks Everything</span>
   </div>
 </section>
 
@@ -295,14 +296,14 @@
 <!-- ═══════════════════════════════════════ -->
 <section class="section" id="s2">
   <div class="section-num">Section 02</div>
-  <h2>The Tamil Language Challenge</h2>
-  <p class="intro">Tamil is an <em>agglutinative</em> language — suffixes are glued onto root words to change their meaning. The same root word appears in dozens of different forms. A simple dictionary cannot list every possible form, so a smarter approach is needed: look at which <strong>word combinations</strong> are natural.</p>
+  <h2>Tamil Forces Us to Abandon the List Idea Entirely</h2>
+  <p class="intro">Tamil is an <em>agglutinative</em> language — meaning suffixes are glued onto root words to change their meaning. The same root word appears in dozens of different forms. A dictionary list doesn't just struggle with Tamil — it completely collapses. And in collapsing, it reveals something important: <strong>the meaning isn't in individual words. It's in the relationship between words.</strong></p>
 
   <div class="analogy-box">
-    💡 <strong>Think of it like Lego bricks.</strong> In English, words are mostly fixed shapes. In Tamil, you start with a root brick and snap suffixes onto it. The root "கடை" (kadai = shop) becomes an entirely different word depending on which suffix you attach:
+    💡 <strong>Think of it like Lego bricks.</strong> In English, words are mostly fixed shapes — you look them up one at a time. In Tamil, you start with a root brick and snap suffixes onto it, creating an entirely new word each time. The root "கடை" (kadai = shop) becomes a different word — with a different meaning — depending on which suffix you attach. A dictionary would need a separate entry for every possible combination:
   </div>
 
-  <!-- Interactive suffix cards — click any card to see an example sentence -->
+  <!-- Interactive suffix cards -->
   <div class="suffix-demo">
     <div class="suffix-card suffix-root" onclick="showSuffixExample('root')" id="scard-root">
       <span class="suffix-tamil">கடை</span>
@@ -331,17 +332,17 @@
     </div>
   </div>
 
-  <!-- Example sentence box — revealed on card click -->
+  <!-- Example sentence box -->
   <div class="suffix-example-box" id="suffixExampleBox">
     <span class="suffix-example-tamil" id="suffixExampleTamil"></span>
     <span class="suffix-example-eng" id="suffixExampleEng"></span>
     <span class="suffix-example-note" id="suffixExampleNote"></span>
   </div>
-  <p style="font-size:0.82rem; color:var(--muted); margin-bottom:28px;">These are all the same root word. 👆 <strong>Click any card</strong> to see it used in a real Tamil sentence. A basic spell checker would need a separate dictionary entry for every single form — an impossible task. A smarter approach: learn which <em>word pairs</em> are natural from real Tamil text.</p>
+  <p style="font-size:0.82rem; color:var(--muted); margin-bottom:28px;">These are all the same root word — but a spell checker treats them as five completely different, unrelated entries. 👆 <strong>Click any card</strong> to see it used in a real Tamil sentence. Building a complete dictionary of every suffix combination for every Tamil root word is effectively impossible. We need a completely different approach.</p>
 
   <div class="card">
     <h3 style="margin-bottom:6px; font-size:1.05rem;">Watch a Tamil sentence appear — word by word</h3>
-    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:20px;">One word has been swapped with a wrong one. Can you sense when something goes wrong?</p>
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:20px;">One word has been swapped with a wrong one. Notice that both words are perfectly valid Tamil words on their own. The problem only appears when you see them <em>together</em>.</p>
 
     <div class="tamil-stage" id="tamilStage"></div>
 
@@ -360,7 +361,7 @@
     <div class="info-card">
       <h4>❌ Wrong pair (what's in the sentence)</h4>
       <div class="tamil-pair">வானம் + கடைக்கு</div>
-      <p style="font-size:0.82rem; color:var(--muted); margin-top:6px;">"வானம்" (vaanam = sky) + "கடைக்கு" (to the shop) → "the sky went to the shop." This word pair has never appeared in any Tamil text. The computer flags it immediately.</p>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:6px;">"வானம்" (vaanam = sky) + "கடைக்கு" (to the shop) → "the sky went to the shop." Both words exist. Neither is a typo. But this pair has never appeared in any Tamil text — the computer flags it immediately.</p>
     </div>
     <div class="info-card">
       <h4>✅ Correct pair (what it should be)</h4>
@@ -370,13 +371,14 @@
   </div>
 
   <div class="explainer">
-    <h4>💡 The key insight — pairs matter more than individual words</h4>
-    Collect large amounts of Tamil text and count every pair of adjacent words. If "அவன் கடைக்கு" appears thousands of times and "வானம் கடைக்கு" appears <em>zero times</em> — the computer knows something is wrong. No grammar rules written. Just counting. This is called a <strong>bigram model</strong>.
+    <h4>💡 This is the answer to Section 1's unsolved problem</h4>
+    Remember: "He walk to the store" passed the spell checker because both words exist. Tamil shows us why that was never the right question. The right question is: <em>has this pair of words ever appeared together before?</em>
+    <br><br>
+    Collect large amounts of Tamil text and count every pair of adjacent words. If "அவன் கடைக்கு" appears thousands of times and "வானம் கடைக்கு" appears <em>zero times</em> — the computer knows something is wrong. No grammar rules. No dictionary of every suffix form. Just counting pairs. This approach is called a <strong>bigram model</strong> — and it works for Tamil, English, and every other language.
   </div>
 
-  <!-- IMPROVEMENT 7: bridge sentence S2→S3 -->
   <div class="bridge">
-    So how do we count all these word pairs systematically across an entire language?
+    We now know <em>what</em> to count — word pairs. But how do we actually build a system that counts them, stores them, and uses them? Let's build one from scratch.
     <br><span>↓ Next: Build a Bigram Model</span>
   </div>
 </section>
@@ -387,8 +389,8 @@
 <!-- ═══════════════════════════════════════ -->
 <section class="section" id="s3">
   <div class="section-num">Section 03</div>
-  <h2>Build a Bigram Model</h2>
-  <p class="intro">Let's build a bigram model step by step. We'll use a tiny made-up world where only 11 words exist — small enough to count by hand, but the logic is identical to what runs on your phone and inside large language models.</p>
+  <h2>Building the Pair-Counting System</h2>
+  <p class="intro">We now know the idea: count word pairs, not individual words. But how exactly do you turn a pile of text into a system that can catch errors? Let's build one from scratch — with a tiny made-up world of 11 words — and watch the logic come to life.</p>
 
   <div class="analogy-box">
     💡 <strong>Think of it like a tally chart.</strong> Every time you see two words sitting next to each other in the text, put a tally mark against that pair. After reading all the text, pairs with many tallies are "normal." Pairs with zero tallies? The model has never seen them — suspicious.
@@ -466,8 +468,8 @@
 <!-- ═══════════════════════════════════════ -->
 <section class="section" id="s4">
   <div class="section-num">Section 04</div>
-  <h2>Generate Text Like an AI</h2>
-  <p class="intro">To <em>check</em> a sentence: look up a word pair in the table — if its probability is near zero, flag it. To <em>generate</em> a sentence: start with a word, look up the most probable next words, pick one, then repeat from the new word. It's the same table, used in the opposite direction.</p>
+  <h2>The Surprise: The Same Table Can Write New Sentences</h2>
+  <p class="intro">Look at the probability table you just built. You used it to <em>check</em> a sentence — look up a pair, see if its probability is near zero, flag it. Now here is the surprise: to <em>generate</em> a sentence, you use the exact same table, in the exact opposite direction. Start with a word. Look up the most probable next words. Pick one. Repeat. That's it. Checking and generating are two sides of the same coin.</p>
 
   <div class="analogy-box">
     💡 <strong>Think of it like following signposts.</strong> Each word is a town with signposts pointing to possible next towns, showing how likely each road is. You pick a road, arrive at the next town, and it has its own signposts. No map needed. No plan needed. Just follow the signs, one step at a time.
@@ -522,8 +524,8 @@
 <!-- ═══════════════════════════════════════ -->
 <section class="section summary-section" id="s5">
   <div class="section-num" style="color:#f4a261;">Section 05</div>
-  <h2>The Big Picture</h2>
-  <p class="intro">You've just traced the entire journey — from a simple list lookup to the core mechanism behind ChatGPT. Here's how it all connects.</p>
+  <h2>One Idea, Scaled Up by a Trillion</h2>
+  <p class="intro">A spell checker failed a simple test. Tamil showed us why individual words aren't enough. Counting pairs fixed it. That same pair-counting table turned out to also write new sentences. And that writing ability, when you scale it to hundreds of billions of words and look at thousands of words of context instead of one — is ChatGPT. Here's the whole journey at once.</p>
 
   <!-- Journey map -->
   <div class="journey-map">
