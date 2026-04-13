@@ -833,26 +833,166 @@ canvas { display: block; width: 100%; height: 100%; border-radius: 8px; }
 
   <h3>Partial Derivatives — When There Are Multiple Weights</h3>
   <p>
-    What if we have two weights, w₁ and w₂? We ask: <em>if we hold w₂ steady and nudge w₁ a tiny bit, how does the loss change?</em> That's the <span class="highlight">partial derivative</span> with respect to w₁. We do the same for w₂.
+    What if we have two weights, w₁ and w₂? We ask: <em>"If I hold w₂ completely still and nudge w₁ just a tiny bit, how does the loss change?"</em> That's the <span class="highlight">partial derivative</span> of loss with respect to w₁.
   </p>
-  <p>
-    This gives us a direction for each weight independently. In our example:
-  </p>
+  <!-- STEP-BY-STEP PARTIAL DERIVATIVE DERIVATION -->
+  <div class="demo-panel">
+    <span class="instruction">Click "Next Step" to walk through the full derivation — no calculus background needed</span>
 
-  <div class="formula">
-    ∂Loss/∂w₁ = 6.25·w₁ + 7.375·w₂ − 26500<br>
-    ∂Loss/∂w₂ = 7.375·w₁ + 9.625·w₂ − 32750
+    <div id="pd-steps">
+
+      <div class="step shown">
+        <span class="step-num">STEP 1 — RECALL OUR THREE VENDORS &amp; THE PREDICTION FORMULA</span>
+        <p>We have three vendors. For each vendor we know two inputs (let's call them <strong>a</strong> = input₁ and <strong>b</strong> = input₂) and the actual output <strong>y</strong>. Our model predicts:</p>
+        <div class="step-math">Prediction = a·w₁ + b·w₂</div>
+        <div style="margin-top:0.75rem;">
+          <table class="data-table">
+            <thead><tr><th>Vendor</th><th>a (input₁)</th><th>b (input₂)</th><th>y (actual, ₹)</th></tr></thead>
+            <tbody>
+              <tr><td style="color:#c8b898;">Murugan</td><td class="hi">1.00</td><td class="hi">1.50</td><td class="hi">5000</td></tr>
+              <tr><td style="color:#c8b898;">Kamala</td><td class="hi">0.75</td><td class="hi">1.25</td><td class="hi">3500</td></tr>
+              <tr><td style="color:#c8b898;">Rajan</td><td class="hi">1.25</td><td class="hi">1.00</td><td class="hi">4500</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 2 — WRITE OUT THE LOSS AS ONE BIG EQUATION</span>
+        <p>Loss = sum of squared errors across all three vendors. An "error" for each vendor = (prediction − actual)².</p>
+        <div class="step-math">
+          Loss = (1·w₁ + 1.5·w₂ − 5000)²<br>
+          &nbsp;&nbsp;&nbsp;&nbsp; + (0.75·w₁ + 1.25·w₂ − 3500)²<br>
+          &nbsp;&nbsp;&nbsp;&nbsp; + (1.25·w₁ + 1·w₂ − 4500)²
+        </div>
+        <p style="margin-top:0.6rem;">This is just three squared terms added up. Now we need to ask: <em>"if w₁ changes a little, how does this whole thing change?"</em></p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 3 — THE CHAIN RULE IN PLAIN ENGLISH</span>
+        <p>To differentiate a squared term like <strong>(something)²</strong>, we use one simple rule:</p>
+        <div class="step-math">d/dw₁ of (something)² = 2 × (something) × d(something)/dw₁</div>
+        <p style="margin-top:0.5rem;">In plain English: <em>"bring down the 2, keep the bracket, then multiply by the derivative of what's inside the bracket."</em></p>
+        <p>But what exactly IS that last part — <code>d(something)/dw₁</code>? Let's figure it out.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 3b — WHAT IS d(something)/dw₁ ?</span>
+        <p>The "something" inside the bracket for Vendor 1 is:</p>
+        <div class="step-math">something = a·w₁ + b·w₂ − y</div>
+        <p style="margin-top:0.5rem;">Substituting Vendor 1's actual numbers (a=1, b=1.5, y=5000):</p>
+        <div class="step-math">something = 1·w₁ + 1.5·w₂ − 5000</div>
+        <p style="margin-top:0.5rem;">Now we ask: <em>"if w₁ increases by a tiny amount, how much does this expression change?"</em> We go term by term:</p>
+
+        <div class="step-math">
+          Term 1: &nbsp;1·w₁ &nbsp;&nbsp;→ derivative w.r.t. w₁ = <span style="color:var(--glow);">1</span> &nbsp;&nbsp;(just the coefficient of w₁)<br>
+          Term 2: &nbsp;1.5·w₂ → derivative w.r.t. w₁ = <span style="color:var(--glow);">0</span> &nbsp;&nbsp;(w₂ is frozen — a constant vanishes)<br>
+          Term 3: &nbsp;−5000 &nbsp;→ derivative w.r.t. w₁ = <span style="color:var(--glow);">0</span> &nbsp;&nbsp;(plain numbers always vanish)
+        </div>
+
+        <p style="margin-top:0.75rem;">Add them up: 1 + 0 + 0 = <strong style="color:var(--glow-green);">1</strong>. So <code>d(something)/dw₁ = 1</code> for Vendor 1.</p>
+        <p>For Vendor 2 (a=0.75): the only w₁ term is <code>0.75·w₁</code>, so <code>d(something)/dw₁ = 0.75</code>.</p>
+        <p>For Vendor 3 (a=1.25): the only w₁ term is <code>1.25·w₁</code>, so <code>d(something)/dw₁ = 1.25</code>.</p>
+        <p style="margin-top:0.5rem;padding:0.6rem 0.9rem;background:rgba(240,160,80,0.08);border-radius:6px;border-left:3px solid var(--glow);">
+          <strong>The pattern:</strong> <code>d(something)/dw₁</code> always equals <strong>a</strong> — the coefficient of w₁ in the prediction formula. Everything else disappears because it doesn't contain w₁.
+        </p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 3c — NOW PUT IT ALL TOGETHER</span>
+        <p>We now have all three parts of the chain rule formula. Let's plug them in for Vendor 1:</p>
+        <div class="step-math">
+          d/dw₁ of (something)² &nbsp;= 2 × (something) × d(something)/dw₁<br><br>
+          = 2 × (1·w₁ + 1.5·w₂ − 5000) × <span style="color:var(--glow);">1</span>
+        </div>
+        <p style="margin-top:0.5rem;">For Vendor 2:</p>
+        <div class="step-math">= 2 × (0.75·w₁ + 1.25·w₂ − 3500) × <span style="color:var(--glow);">0.75</span></div>
+        <p style="margin-top:0.5rem;">For Vendor 3:</p>
+        <div class="step-math">= 2 × (1.25·w₁ + 1·w₂ − 4500) × <span style="color:var(--glow);">1.25</span></div>
+        <p style="margin-top:0.75rem;">These three terms get added together to form ∂Loss/∂w₁. The next steps show the arithmetic of expanding and collecting them.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 4 — APPLY TO EACH VENDOR ONE BY ONE</span>
+        <p>Let's apply the rule to each of the three squared terms:</p>
+        <div class="step-math">
+          Vendor 1 (a=1):&nbsp;&nbsp; 2·(1·w₁ + 1.5·w₂ − 5000)·<span style="color:var(--glow);">1</span><br>
+          Vendor 2 (a=0.75): 2·(0.75·w₁ + 1.25·w₂ − 3500)·<span style="color:var(--glow);">0.75</span><br>
+          Vendor 3 (a=1.25): 2·(1.25·w₁ + 1·w₂ − 4500)·<span style="color:var(--glow);">1.25</span>
+        </div>
+        <p style="margin-top:0.5rem;">The orange number at the end is just <strong>a</strong> — the first input of each vendor. That's it. That's the whole derivative for one term.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 5 — ADD ALL THREE TOGETHER &amp; EXPAND</span>
+        <p>The full partial derivative ∂Loss/∂w₁ is the sum of all three terms above. Let's expand each bracket (multiply everything out):</p>
+        <div class="step-math" style="font-size:0.82rem;">
+          = 2·(w₁ + 1.5w₂ − 5000)<br>
+          + 2·0.75·(0.75w₁ + 1.25w₂ − 3500)<br>
+          + 2·1.25·(1.25w₁ + w₂ − 4500)<br><br>
+          = 2w₁ + 3w₂ − 10000<br>
+          + 1.125w₁ + 1.875w₂ − 5250<br>
+          + 3.125w₁ + 2.5w₂ − 11250
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 6 — COLLECT LIKE TERMS</span>
+        <p>Group all the w₁ terms, all the w₂ terms, and all the plain numbers:</p>
+        <div class="step-math">
+          w₁ terms: &nbsp;2 + 1.125 + 3.125 = <span style="color:var(--glow);">6.25</span><br>
+          w₂ terms: &nbsp;3 + 1.875 + 2.5 &nbsp;= <span style="color:var(--glow);">7.375</span><br>
+          constants: −10000 − 5250 − 11250 = <span style="color:var(--glow);">−26500</span>
+        </div>
+        <p style="margin-top:0.75rem;">Put them together and you get exactly the formula that seemed mysterious before:</p>
+        <div class="step-math" style="color:var(--glow-green);font-size:1.05em;">
+          ∂Loss/∂w₁ = 6.25·w₁ + 7.375·w₂ − 26500
+        </div>
+        <p style="margin-top:0.5rem;color:#9a8a7a;">Those numbers came purely from our vendor data (the a and b values) and basic algebra. No magic!</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 7 — SAME PROCESS FOR w₂ (b is used instead of a)</span>
+        <p>For ∂Loss/∂w₂, we do the exact same thing but this time treat w₁ as frozen and differentiate with respect to w₂. The rule gives us <strong>b</strong> (input₂) instead of a:</p>
+        <div class="step-math" style="font-size:0.82rem;">
+          Vendor 1 (b=1.5):&nbsp;&nbsp; 2·(w₁ + 1.5w₂ − 5000)·1.5<br>
+          Vendor 2 (b=1.25): 2·(0.75w₁ + 1.25w₂ − 3500)·1.25<br>
+          Vendor 3 (b=1.0):&nbsp;&nbsp; 2·(1.25w₁ + w₂ − 4500)·1.0
+        </div>
+        <p style="margin-top:0.5rem;">Expand, collect like terms (try it yourself — same steps as above) and you get:</p>
+        <div class="step-math" style="color:var(--glow-green);">
+          ∂Loss/∂w₂ = 7.375·w₁ + 9.625·w₂ − 32750
+        </div>
+        <p style="margin-top:0.5rem;color:#9a8a7a;">The 9.625 comes from 1.5² + 1.25² + 1² × 2 = 4.5+3.125+2 = 9.625. It's just the squared b-values, doubled.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">STEP 8 — PLUG IN w₁=1000, w₂=3000 AND READ THE RESULT</span>
+        <p>Now substitute our starting weights into both partial derivatives:</p>
+        <div class="step-math">
+          ∂Loss/∂w₁ = 6.25×1000 + 7.375×3000 − 26500<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 6250 + 22125 − 26500 = <span style="color:var(--glow-green);">+1875</span><br><br>
+          ∂Loss/∂w₂ = 7.375×1000 + 9.625×3000 − 32750<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 7375 + 28875 − 32750 = <span style="color:var(--glow-green);">+3500</span>
+        </div>
+        <p style="margin-top:0.75rem;">Both are <strong style="color:var(--glow);">positive</strong>. A positive partial derivative means: "if you increase this weight, the loss goes UP — that's bad." So we must <strong>decrease</strong> both w₁ and w₂. That's the direction of our next step!</p>
+      </div>
+
+    </div>
+
+    <div style="display:flex;gap:0.75rem;margin-top:1.25rem;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="pd-next-btn" onclick="revealNextPDStep()">Next Step →</button>
+      <button class="btn btn-secondary" onclick="resetPDSteps()">Reset</button>
+      <span id="pd-progress" style="font-family:var(--mono);font-size:0.78rem;color:#7a6a5a;align-self:center;">Step 1 of 10</span>
+    </div>
+  </div>
+
+  <div class="callout analogy" style="margin-top:1.5rem;">
+    <strong>The pattern in one sentence:</strong> To find how the loss changes with respect to any weight, take the error for each data point, multiply it by that data point's input for that weight, sum them all up, and multiply by 2. The rest is just arithmetic.
   </div>
 
   <p>
-    At our starting weights (w₁=1000, w₂=3000):
-  </p>
-  <div class="formula" style="font-size:0.9rem;">
-    ∂Loss/∂w₁ = 6.25×1000 + 7.375×3000 − 26500 = <span style="color:var(--glow-green)">+1875</span><br>
-    ∂Loss/∂w₂ = 7.375×1000 + 9.625×3000 − 32750 = <span style="color:var(--glow-green)">+3500</span>
-  </div>
-  <p>
-    Both are <strong>positive</strong> — meaning increasing either weight makes the loss go <em>up</em>. So we should <em>decrease</em> both weights.
+    Both partial derivatives are <strong>positive</strong> — meaning increasing either weight makes the loss go <em>up</em>. So we should <em>decrease</em> both weights.
   </p>
 
   <div class="callout warning">
@@ -1245,6 +1385,29 @@ function resetSteps() {
   document.getElementById('step-progress').textContent = 'Step 1 of 4';
   document.getElementById('step-next-btn').disabled = false;
   document.getElementById('step-next-btn').style.opacity = '1';
+}
+
+// =================== PARTIAL DERIVATIVE STEPS ===================
+let pdStep = 0;
+const pdSteps = document.querySelectorAll('#pd-steps .step');
+function revealNextPDStep() {
+  if (pdStep < pdSteps.length - 1) {
+    pdStep++;
+    pdSteps[pdStep].classList.add('shown');
+    document.getElementById('pd-progress').textContent = `Step ${pdStep + 1} of 10`;
+    pdSteps[pdStep].scrollIntoView({behavior:'smooth', block:'nearest'});
+    if (pdStep === pdSteps.length - 1) {
+      document.getElementById('pd-next-btn').disabled = true;
+      document.getElementById('pd-next-btn').style.opacity = '0.4';
+    }
+  }
+}
+function resetPDSteps() {
+  pdSteps.forEach((s, i) => { if (i > 0) s.classList.remove('shown'); });
+  pdStep = 0;
+  document.getElementById('pd-progress').textContent = 'Step 1 of 10';
+  document.getElementById('pd-next-btn').disabled = false;
+  document.getElementById('pd-next-btn').style.opacity = '1';
 }
 
 // =================== DERIVATIVE CANVAS ===================
