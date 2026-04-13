@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Computers Learn Language — An Interactive Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --paper: #f5f0e8;
+    --accent: #e63946;
+    --gold: #f4a261;
+    --teal: #2a9d8f;
+    --sky: #457b9d;
+    --card: #ffffff;
+    --muted: #6b7280;
+    --border: #e0d9cc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sora', sans-serif; background: var(--paper); color: var(--ink); line-height: 1.7; overflow-x: hidden; }
+
+  /* HERO */
+  .hero { background: var(--ink); color: var(--paper); padding: 80px 24px 60px; text-align: center; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 50%, rgba(231,57,70,0.18) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(42,157,143,0.15) 0%, transparent 50%); pointer-events: none; }
+  .hero-tag { display: inline-block; background: var(--accent); color: #fff; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; padding: 4px 14px; border-radius: 2px; margin-bottom: 20px; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 700; line-height: 1.15; max-width: 760px; margin: 0 auto 20px; }
+  .hero h1 span { color: var(--gold); }
+  .hero p { font-size: 1.05rem; color: #b0b8c4; max-width: 560px; margin: 0 auto 36px; }
+  .hero-steps { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .hero-step { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 20px; font-size: 0.85rem; color: #cdd5de; }
+  .hero-step strong { color: var(--gold); font-family: 'Space Mono', monospace; }
+
+  /* SECTION */
+  .section { max-width: 860px; margin: 0 auto; padding: 64px 24px; border-bottom: 1px solid var(--border); }
+  .section:last-child { border-bottom: none; }
+  .section-num { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .section h2 { font-size: clamp(1.5rem, 3vw, 2.1rem); font-weight: 700; margin-bottom: 12px; line-height: 1.25; }
+  .section .intro { color: #4a5568; font-size: 1rem; margin-bottom: 32px; max-width: 680px; }
+
+  /* BOXES */
+  .analogy-box { background: #fff7ed; border-left: 4px solid var(--gold); border-radius: 0 8px 8px 0; padding: 16px 20px; margin-bottom: 28px; font-size: 0.95rem; color: #5c4a1e; }
+  .analogy-box strong { color: #c85000; }
+  .callout { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 16px 20px; margin-top: 16px; font-size: 0.88rem; color: #065f46; }
+  .callout strong { color: #14532d; }
+  .limit-box { background: #fef9c3; border-left: 4px solid #eab308; border-radius: 0 8px 8px 0; padding: 16px 20px; margin-top: 20px; font-size: 0.9rem; color: #713f12; }
+  .limit-box strong { color: #92400e; }
+  .explainer { background: linear-gradient(135deg, #e0f2fe 0%, #ede9fe 100%); border-radius: 10px; padding: 20px 24px; margin-top: 24px; font-size: 0.9rem; color: #1e3a5f; }
+  .explainer h4 { font-weight: 700; margin-bottom: 6px; color: #0c2340; }
+  .bridge { text-align: center; padding: 28px 0 0; font-size: 0.95rem; color: var(--muted); }
+  .bridge span { display: inline-block; background: var(--ink); color: var(--paper); padding: 8px 20px; border-radius: 20px; font-size: 0.85rem; margin-top: 8px; }
+
+  /* CARDS */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-top: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 8px; font-family: 'Sora', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+  .btn-primary { background: var(--ink); color: #fff; }
+  .btn-primary:hover { background: #2d3a5e; transform: translateY(-1px); }
+  .btn-teal { background: var(--teal); color: #fff; }
+  .btn-teal:hover { background: #21867a; transform: translateY(-1px); }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: #c1121f; transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+  .btn-outline:hover { background: var(--ink); color: #fff; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+
+  /* S1 SPELL CHECKER */
+  .spell-input-wrap { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .spell-input-wrap input { flex: 1; min-width: 220px; padding: 13px 16px; border: 2px solid var(--border); border-radius: 8px; font-family: 'Sora', sans-serif; font-size: 1rem; outline: none; transition: border 0.2s; }
+  .spell-input-wrap input:focus { border-color: var(--sky); }
+  .word-tokens { display: flex; flex-wrap: wrap; gap: 8px; min-height: 52px; align-items: center; }
+  .token { padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; animation: popIn 0.25s ease; }
+  @keyframes popIn { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .token.ok  { background: #d1fae5; color: #065f46; border: 1.5px solid #6ee7b7; }
+  .token.err { background: #fee2e2; color: #991b1b; border: 1.5px solid #fca5a5; text-decoration: underline wavy #ef4444; }
+  .dict-peek { margin-top: 20px; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+  .dict-peek h4 { font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .dict-words { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dict-word { background: #e8f4f8; color: var(--sky); font-family: 'Space Mono', monospace; font-size: 0.78rem; padding: 3px 10px; border-radius: 4px; }
+  .legend { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+  .legend-dot.ok { background: #6ee7b7; } .legend-dot.err { background: #fca5a5; }
+
+  /* S2 TAMIL */
+  .suffix-demo { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
+  .suffix-card { background: #1a1a2e; border-radius: 10px; padding: 14px 18px; text-align: center; flex: 1; min-width: 120px; }
+  .suffix-tamil { font-size: 1.5rem; color: #fff; display: block; margin-bottom: 4px; line-height: 1.4; }
+  .suffix-roman { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: #94a3b8; display: block; }
+  .suffix-meaning { font-size: 0.78rem; color: var(--gold); display: block; margin-top: 4px; }
+  .suffix-root { border: 2px solid var(--teal); }
+  .suffix-form { border: 1.5px solid rgba(244,162,97,0.4); }
+  .tamil-stage { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; padding: 36px 24px; background: #1a1a2e; border-radius: 12px; min-height: 120px; margin-bottom: 20px; }
+  .tchar { font-size: 2rem; color: #fff; padding: 8px 16px; border-radius: 8px; transition: all 0.4s; opacity: 0; transform: translateY(12px); position: relative; line-height: 1.4; }
+  .tchar.visible { opacity: 1; transform: translateY(0); }
+  .tchar.ok-char { background: rgba(42,157,143,0.3); border: 1.5px solid var(--teal); }
+  .tchar.bad-char { background: rgba(230,57,70,0.35); border: 2px solid var(--accent); animation: shake 0.4s ease; }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .tchar-label { position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 0.58rem; color: #94a3b8; white-space: nowrap; font-family: 'Space Mono', monospace; }
+  .tamil-thought { padding: 16px 20px; border-radius: 8px; font-size: 0.9rem; min-height: 60px; display: flex; align-items: flex-start; gap: 10px; transition: all 0.3s; background: #f0fdf4; color: #065f46; border: 1.5px solid #86efac; }
+  .tamil-thought.alarmed { background: #fff1f2; color: #9f1239; border-color: #fda4af; }
+  .thought-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
+  .tamil-info { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 560px) { .tamil-info { grid-template-columns: 1fr; } }
+  .info-card { background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 0.88rem; }
+  .info-card h4 { font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .tamil-pair { font-size: 1.4rem; text-align: center; margin: 6px 0; line-height: 1.6; }
+
+  /* S3 BIGRAM */
+  .corpus-label { font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; color: #64748b; font-family: 'Space Mono', monospace; margin-bottom: 10px; }
+  .corpus-display { background: #0f172a; border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+  .corpus-sent { font-family: 'Space Mono', monospace; font-size: 0.88rem; color: #94a3b8; padding: 6px 0; border-bottom: 1px solid #1e293b; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .corpus-sent:last-child { border-bottom: none; }
+  .corpus-word { padding: 2px 8px; border-radius: 4px; color: #e2e8f0; cursor: pointer; transition: background 0.15s; }
+  .corpus-word:hover { background: rgba(244,162,97,0.25); color: #fbbf24; }
+  .corpus-word.highlight { background: rgba(244,162,97,0.35); color: #f4a261; }
+  .corpus-word.selected { background: rgba(42,157,143,0.45); color: #5eead4; outline: 1.5px solid var(--teal); border-radius: 4px; }
+  .bigram-controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .table-wrap { overflow-x: auto; }
+  table.bigram-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .bigram-table th { background: var(--ink); color: #fff; padding: 10px 14px; text-align: left; font-family: 'Space Mono', monospace; font-size: 0.78rem; }
+  .bigram-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); transition: opacity 0.3s, background 0.3s; }
+  .bigram-table tr:nth-child(even) td { background: #fafaf8; }
+  .bigram-table tr.dimmed td { opacity: 0.2; }
+  .bigram-table tr.lit td { opacity: 1 !important; background: #fffbeb !important; }
+  .bigram-table .pair-col { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--sky); }
+  .bigram-table .count-col { font-family: 'Space Mono', monospace; text-align: center; }
+  .bigram-table .prob-col { font-family: 'Space Mono', monospace; text-align: center; color: var(--teal); font-weight: 700; }
+  .bigram-table .bar-col { min-width: 120px; }
+  .prob-bar-bg { background: #e8f4f8; border-radius: 4px; height: 10px; overflow: hidden; }
+  .prob-bar { background: var(--teal); height: 10px; border-radius: 4px; transition: width 0.6s ease; width: 0; }
+  .row-anim td { animation: rowFadeIn 0.3s ease; }
+  @keyframes rowFadeIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform:none; } }
+  /* click-a-word panel */
+  .dist-panel { background: #0f172a; border-radius: 10px; padding: 18px 20px; margin-top: 14px; display: none; }
+  .dist-panel-title { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: #94a3b8; margin-bottom: 14px; letter-spacing: 1px; text-transform: uppercase; }
+  .dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .dist-label { font-family: 'Space Mono', monospace; font-size: 0.82rem; color: #e2e8f0; min-width: 90px; }
+  .dist-bar-bg { flex: 1; background: #1e293b; border-radius: 4px; height: 22px; overflow: hidden; }
+  .dist-bar { height: 22px; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 0.72rem; font-weight: 700; color: #fff; transition: width 0.5s ease; width: 0; white-space: nowrap; }
+  .dist-pct { font-family: 'Space Mono', monospace; font-size: 0.78rem; color: var(--gold); min-width: 38px; text-align: right; }
+  .dist-zero .dist-label { opacity: 0.35; } .dist-zero .dist-pct { opacity: 0.35; }
+
+  /* S4 GENERATOR */
+  .gen-sentence-display { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 28px 32px; font-size: 1.5rem; font-weight: 600; min-height: 90px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .gen-word { padding: 4px 10px; border-radius: 6px; animation: wordPop 0.3s ease; }
+  @keyframes wordPop { 0% { transform: scale(0) rotate(-6deg); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+  .gen-word.new-word { background: var(--gold); color: var(--ink); }
+  .gen-word.old-word { background: rgba(255,255,255,0.12); color: #e2e8f0; }
+  .prob-picker { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .prob-picker h4 { font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .prob-option { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .prob-option .word-label { font-family: 'Space Mono', monospace; font-weight: 700; min-width: 80px; color: var(--ink); font-size: 0.9rem; }
+  .prob-bar-wrap { flex: 1; }
+  .prob-bar-bg2 { background: #f0f4f8; border-radius: 6px; height: 22px; overflow: hidden; }
+  .prob-bar2 { height: 22px; border-radius: 6px; display: flex; align-items: center; padding-left: 10px; font-size: 0.78rem; font-weight: 700; color: #fff; transition: width 0.5s cubic-bezier(.34,1.56,.64,1); }
+  .gen-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .gen-status { font-size: 0.85rem; color: var(--muted); padding: 8px 14px; background: #f8f9fa; border-radius: 6px; }
+
+  /* NAV */
+  .progress-nav { position: sticky; top: 0; z-index: 100; background: rgba(245,240,232,0.93); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; justify-content: center; overflow-x: auto; }
+  .nav-step { display: flex; align-items: center; gap: 6px; padding: 14px 16px; font-size: 0.8rem; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.2s; }
+  .nav-step:hover { color: var(--ink); }
+  .nav-step.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .nav-num { width: 20px; height: 20px; background: var(--muted); color: #fff; border-radius: 50%; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; transition: background 0.2s; }
+  .nav-step.active .nav-num { background: var(--accent); }
+
+  /* SUFFIX CARD INTERACTIVE */
+  .suffix-card { cursor: pointer; transition: transform 0.18s, box-shadow 0.18s; }
+  .suffix-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .suffix-card.active-card { outline: 2px solid var(--gold); transform: translateY(-4px); }
+  .suffix-example-box { background: #0f172a; border: 1.5px solid rgba(244,162,97,0.4); border-radius: 10px; padding: 16px 20px; margin-top: 4px; display: none; animation: fadeSlide 0.25s ease; }
+  @keyframes fadeSlide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+  .suffix-example-tamil { font-size: 1.4rem; color: #fff; display: block; margin-bottom: 6px; line-height: 1.5; }
+  .suffix-example-eng { font-size: 0.85rem; color: #94a3b8; display: block; font-family: 'Space Mono', monospace; }
+  .suffix-example-note { font-size: 0.8rem; color: var(--gold); display: block; margin-top: 6px; }
+
+  /* CLOSING SUMMARY SECTION */
+  .summary-section { background: var(--ink); color: var(--paper); }
+  .summary-section h2 { color: #fff; }
+  .summary-section .intro { color: #94a3b8; }
+  .journey-map { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 32px 0; position: relative; }
+  .journey-map::before { content: ''; position: absolute; top: 48px; left: 12.5%; right: 12.5%; height: 2px; background: linear-gradient(90deg, var(--accent), var(--gold), var(--teal), var(--sky)); z-index: 0; }
+  @media (max-width: 640px) {
+    .journey-map { grid-template-columns: 1fr 1fr; gap: 16px; }
+    .journey-map::before { display: none; }
+  }
+  .journey-step { text-align: center; position: relative; z-index: 1; padding: 0 8px; }
+  .journey-icon { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin: 0 auto 12px; border: 2px solid; }
+  .journey-step:nth-child(1) .journey-icon { background: rgba(230,57,70,0.2); border-color: var(--accent); }
+  .journey-step:nth-child(2) .journey-icon { background: rgba(244,162,97,0.2); border-color: var(--gold); }
+  .journey-step:nth-child(3) .journey-icon { background: rgba(42,157,143,0.2); border-color: var(--teal); }
+  .journey-step:nth-child(4) .journey-icon { background: rgba(69,123,157,0.2); border-color: var(--sky); }
+  .journey-title { font-size: 0.82rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+  .journey-desc { font-size: 0.72rem; color: #64748b; line-height: 1.4; }
+  .journey-tech { font-family: 'Space Mono', monospace; font-size: 0.65rem; margin-top: 6px; padding: 2px 8px; border-radius: 10px; display: inline-block; }
+  .journey-step:nth-child(1) .journey-tech { background: rgba(230,57,70,0.15); color: #fca5a5; }
+  .journey-step:nth-child(2) .journey-tech { background: rgba(244,162,97,0.15); color: var(--gold); }
+  .journey-step:nth-child(3) .journey-tech { background: rgba(42,157,143,0.15); color: #5eead4; }
+  .journey-step:nth-child(4) .journey-tech { background: rgba(69,123,157,0.15); color: #93c5fd; }
+  .one-sentence { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 24px 28px; text-align: center; font-size: 1.05rem; line-height: 1.7; color: #e2e8f0; margin-top: 8px; }
+  .one-sentence strong { color: var(--gold); }
+  .scale-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+  @media (max-width: 560px) { .scale-compare { grid-template-columns: 1fr; } }
+  .scale-card { border-radius: 10px; padding: 18px 20px; }
+  .scale-card.bigram-card { background: rgba(42,157,143,0.1); border: 1px solid rgba(42,157,143,0.3); }
+  .scale-card.gpt-card { background: rgba(69,123,157,0.1); border: 1px solid rgba(69,123,157,0.3); }
+  .scale-card h4 { font-size: 0.78rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .scale-card.bigram-card h4 { color: #5eead4; }
+  .scale-card.gpt-card h4 { color: #93c5fd; }
+  .scale-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.82rem; }
+  .scale-row:last-child { border-bottom: none; }
+  .scale-label { color: #64748b; }
+  .scale-val { font-family: 'Space Mono', monospace; font-weight: 700; }
+  .scale-card.bigram-card .scale-val { color: #5eead4; }
+  .scale-card.gpt-card .scale-val { color: #93c5fd; }
+
+  @media (max-width: 600px) {
+    .tamil-stage { padding: 20px 12px; gap: 8px; }
+    .tchar { font-size: 1.5rem; }
+    .gen-sentence-display { font-size: 1.1rem; padding: 20px; }
+    .suffix-card { min-width: 100px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-tag">Interactive Explainer · Language & AI</div>
+  <h1>How Computers Learn to <span>Read Language</span></h1>
+  <p>From basic spell-checking to predicting the next word — the same core idea that powers your phone's autocomplete and ChatGPT.</p>
+  <div class="hero-steps">
+    <div class="hero-step"><strong>01</strong> Spell Checker</div>
+    <div class="hero-step"><strong>02</strong> Tamil Language Challenge</div>
+    <div class="hero-step"><strong>03</strong> Bigram Model</div>
+    <div class="hero-step"><strong>04</strong> Text Generator</div>
+  </div>
+</section>
+
+<nav class="progress-nav">
+  <a href="#s1" class="nav-step active"><span class="nav-num">1</span> Spell Check</a>
+  <a href="#s2" class="nav-step"><span class="nav-num">2</span> Tamil Pairs</a>
+  <a href="#s3" class="nav-step"><span class="nav-num">3</span> Bigram Model</a>
+  <a href="#s4" class="nav-step"><span class="nav-num">4</span> Generate Text</a>
+  <a href="#s5" class="nav-step"><span class="nav-num">5</span> Big Picture</a>
+</nav>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  SECTION 1 — SPELL CHECKER             -->
+<!-- ═══════════════════════════════════════ -->
+<section class="section" id="s1">
+  <div class="section-num">Section 01</div>
+  <h2>How does a basic spell checker work?</h2>
+  <p class="intro">The very first spell checkers had one simple idea: keep a giant list of valid words. Check each word in a sentence against that list. If a word is missing from the list — flag it as a possible typo.</p>
+
+  <div class="analogy-box">
+    💡 <strong>Think of it like a bouncer at a club.</strong> The bouncer has a guest list. If your name is on it → you're in (✅ correct spelling). If not → you're flagged (❌ possible typo). The bouncer doesn't ask <em>why</em> you're there — just: are you on the list?
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:16px; font-size:1.05rem;">Try it yourself — type a sentence below</h3>
+    <div class="spell-input-wrap">
+      <input type="text" id="spellInput" placeholder="e.g. He wnt to the store" value="He wnt to the store" />
+      <button class="btn btn-primary" onclick="checkSpelling()">Check Spelling</button>
+    </div>
+    <div class="word-tokens" id="tokenDisplay"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot ok"></div> Word found in dictionary</div>
+      <div class="legend-item"><div class="legend-dot err"></div> Word NOT in dictionary → possible typo</div>
+    </div>
+  </div>
+
+  <div class="dict-peek card" style="margin-top:16px;">
+    <h4>📚 A small slice of the dictionary the computer checks against</h4>
+    <div class="dict-words" id="dictSample"></div>
+  </div>
+
+  <div class="explainer">
+    <h4>🤔 But what about "He walk to the store"?</h4>
+    Every word is in the dictionary — no red flags. The spell checker passes it. It cannot understand grammar or meaning; it only checks whether individual words exist. "Walk" is a real word, so the checker is satisfied. This is the limitation we need to fix.
+  </div>
+
+  <div class="bridge">
+    Looking up individual words isn't enough. We need to look at <em>pairs</em> of words — and Tamil shows us exactly why.
+    <br><span>↓ Next: The Tamil Language Challenge</span>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  SECTION 2 — TAMIL CHALLENGE           -->
+<!-- ═══════════════════════════════════════ -->
+<section class="section" id="s2">
+  <div class="section-num">Section 02</div>
+  <h2>The Tamil Language Challenge</h2>
+  <p class="intro">Tamil is an <em>agglutinative</em> language — suffixes are glued onto root words to change their meaning. The same root word appears in dozens of different forms. A simple dictionary cannot list every possible form, so a smarter approach is needed: look at which <strong>word combinations</strong> are natural.</p>
+
+  <div class="analogy-box">
+    💡 <strong>Think of it like Lego bricks.</strong> In English, words are mostly fixed shapes. In Tamil, you start with a root brick and snap suffixes onto it. The root "கடை" (kadai = shop) becomes an entirely different word depending on which suffix you attach:
+  </div>
+
+  <!-- Interactive suffix cards — click any card to see an example sentence -->
+  <div class="suffix-demo">
+    <div class="suffix-card suffix-root" onclick="showSuffixExample('root')" id="scard-root">
+      <span class="suffix-tamil">கடை</span>
+      <span class="suffix-roman">kadai</span>
+      <span class="suffix-meaning">shop (root)</span>
+    </div>
+    <div class="suffix-card suffix-form" onclick="showSuffixExample('kku')" id="scard-kku">
+      <span class="suffix-tamil">கடைக்கு</span>
+      <span class="suffix-roman">kadai + kku</span>
+      <span class="suffix-meaning">to the shop</span>
+    </div>
+    <div class="suffix-card suffix-form" onclick="showSuffixExample('il')" id="scard-il">
+      <span class="suffix-tamil">கடையில்</span>
+      <span class="suffix-roman">kadai + il</span>
+      <span class="suffix-meaning">in the shop</span>
+    </div>
+    <div class="suffix-card suffix-form" onclick="showSuffixExample('ilirundhu')" id="scard-ilirundhu">
+      <span class="suffix-tamil">கடையிலிருந்து</span>
+      <span class="suffix-roman">kadai + ilirundhu</span>
+      <span class="suffix-meaning">from the shop</span>
+    </div>
+    <div class="suffix-card suffix-form" onclick="showSuffixExample('kal')" id="scard-kal">
+      <span class="suffix-tamil">கடைகள்</span>
+      <span class="suffix-roman">kadai + kal</span>
+      <span class="suffix-meaning">shops (plural)</span>
+    </div>
+  </div>
+
+  <!-- Example sentence box — revealed on card click -->
+  <div class="suffix-example-box" id="suffixExampleBox">
+    <span class="suffix-example-tamil" id="suffixExampleTamil"></span>
+    <span class="suffix-example-eng" id="suffixExampleEng"></span>
+    <span class="suffix-example-note" id="suffixExampleNote"></span>
+  </div>
+  <p style="font-size:0.82rem; color:var(--muted); margin-bottom:28px;">These are all the same root word. 👆 <strong>Click any card</strong> to see it used in a real Tamil sentence. A basic spell checker would need a separate dictionary entry for every single form — an impossible task. A smarter approach: learn which <em>word pairs</em> are natural from real Tamil text.</p>
+
+  <div class="card">
+    <h3 style="margin-bottom:6px; font-size:1.05rem;">Watch a Tamil sentence appear — word by word</h3>
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:20px;">One word has been swapped with a wrong one. Can you sense when something goes wrong?</p>
+
+    <div class="tamil-stage" id="tamilStage"></div>
+
+    <div class="tamil-thought" id="tamilThought">
+      <span class="thought-icon">🧠</span>
+      <span id="thoughtText">Press "Reveal" to start reading the sentence word by word...</span>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+      <button class="btn btn-teal" id="revealBtn" onclick="startTamilReveal()">▶ Reveal Word by Word</button>
+      <button class="btn btn-outline" onclick="resetTamil()">↺ Reset</button>
+    </div>
+  </div>
+
+  <div class="tamil-info">
+    <div class="info-card">
+      <h4>❌ Wrong pair (what's in the sentence)</h4>
+      <div class="tamil-pair">வானம் + கடைக்கு</div>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:6px;">"வானம்" (vaanam = sky) + "கடைக்கு" (to the shop) → "the sky went to the shop." This word pair has never appeared in any Tamil text. The computer flags it immediately.</p>
+    </div>
+    <div class="info-card">
+      <h4>✅ Correct pair (what it should be)</h4>
+      <div class="tamil-pair">அவன் + கடைக்கு</div>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:6px;">"அவன்" (avan = he) + "கடைக்கு" (to the shop) → a perfectly natural, common Tamil phrase seen thousands of times in everyday text.</p>
+    </div>
+  </div>
+
+  <div class="explainer">
+    <h4>💡 The key insight — pairs matter more than individual words</h4>
+    Collect large amounts of Tamil text and count every pair of adjacent words. If "அவன் கடைக்கு" appears thousands of times and "வானம் கடைக்கு" appears <em>zero times</em> — the computer knows something is wrong. No grammar rules written. Just counting. This is called a <strong>bigram model</strong>.
+  </div>
+
+  <!-- IMPROVEMENT 7: bridge sentence S2→S3 -->
+  <div class="bridge">
+    So how do we count all these word pairs systematically across an entire language?
+    <br><span>↓ Next: Build a Bigram Model</span>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  SECTION 3 — BIGRAM BUILDER            -->
+<!-- ═══════════════════════════════════════ -->
+<section class="section" id="s3">
+  <div class="section-num">Section 03</div>
+  <h2>Build a Bigram Model</h2>
+  <p class="intro">Let's build a bigram model step by step. We'll use a tiny made-up world where only 11 words exist — small enough to count by hand, but the logic is identical to what runs on your phone and inside large language models.</p>
+
+  <div class="analogy-box">
+    💡 <strong>Think of it like a tally chart.</strong> Every time you see two words sitting next to each other in the text, put a tally mark against that pair. After reading all the text, pairs with many tallies are "normal." Pairs with zero tallies? The model has never seen them — suspicious.
+  </div>
+
+  <!-- IMPROVEMENT 4: define corpus -->
+  <div class="callout" style="margin-bottom:24px;">
+    📖 <strong>What is a corpus?</strong> A corpus (plural: corpora) is simply a collection of text — the raw material a language model learns from. It could be a few sentences, a library of books, or the entire internet. The bigger and more varied the corpus, the better the model learns.
+  </div>
+
+  <div class="card">
+    <div class="corpus-label">Mini Corpus — 5 sentences, 11 unique words. Small enough to count by hand.</div>
+    <div class="corpus-display" id="corpusDisplay"></div>
+
+    <p id="clickHint" style="font-size:0.82rem; color:#94a3b8; margin-bottom:16px; display:none;">
+      👆 Click any word in the corpus above to see its full probability distribution
+    </p>
+
+    <div class="bigram-controls">
+      <button class="btn btn-primary" onclick="buildBigrams()">📊 Count All Word Pairs</button>
+      <button class="btn btn-outline" onclick="clearBigrams()">Clear</button>
+    </div>
+
+    <!-- IMPROVEMENT 9: click-a-word distribution panel -->
+    <div class="dist-panel" id="distPanel">
+      <div class="dist-panel-title" id="distTitle">Click a word in the corpus above</div>
+      <div id="distRows"></div>
+    </div>
+
+    <!-- IMPROVEMENT 5: how-to-read callout -->
+    <div class="callout" id="tableCallout" style="display:none; margin-bottom:16px;">
+      📖 <strong>How to read this table:</strong> Each row is one word pair. The <strong>Probability</strong> answers the question "Given the first word appeared, how likely is this the next word?" — for example, "He → went" at 75% means: every time "He" appears in this text, 75% of the time the very next word is "went." Probability = count of the pair ÷ count of the first word alone.
+    </div>
+
+    <div class="table-wrap" id="bigramTableWrap" style="display:none; margin-top:4px;">
+      <table class="bigram-table">
+        <thead>
+          <tr>
+            <th>Word Pair</th>
+            <th>Count</th>
+            <th>Probability</th>
+            <th style="min-width:140px;">Visual</th>
+          </tr>
+        </thead>
+        <tbody id="bigramTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" id="errorTestCard" style="display:none; margin-top:20px;">
+    <h3 style="margin-bottom:12px; font-size:1.05rem;">🔍 Test a sentence for errors</h3>
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:16px;">Try <strong>"He went the store"</strong> (has an error) or <strong>"He went to the store"</strong> (correct). The model catches errors purely through probability — not a single grammar rule was written.</p>
+    <div class="spell-input-wrap">
+      <input type="text" id="bigramTestInput" placeholder='Try "He went the store"' value="He went the store" />
+      <button class="btn btn-teal" onclick="testSentence()">Analyse</button>
+    </div>
+    <div id="bigramTestResult" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- IMPROVEMENT 6: limitation note + bridge to transformers -->
+  <div class="limit-box">
+    ⚠️ <strong>The limitation of bigrams:</strong> A bigram model only looks <em>one word back</em>. It can catch "went → the" as suspicious (probability 0%), but it cannot tell that "He no come home" is intentional dialogue in a story — understanding that requires remembering context from much earlier. This is where <strong>trigrams</strong> (looking 3 words back), then <strong>n-grams</strong>, and eventually <strong>transformer models</strong> come in. ChatGPT is a transformer — one that looks at the entire conversation at once. The bigram is its distant ancestor.
+  </div>
+
+  <!-- IMPROVEMENT 2: bridge sentence "checking = generating" -->
+  <div class="bridge">
+    The same probability table you just built can also <em>write</em> new sentences — not just check existing ones. Checking and generating are two sides of the same coin.
+    <br><span>↓ Next: Generate Text Like an AI</span>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  SECTION 4 — TEXT GENERATOR            -->
+<!-- ═══════════════════════════════════════ -->
+<section class="section" id="s4">
+  <div class="section-num">Section 04</div>
+  <h2>Generate Text Like an AI</h2>
+  <p class="intro">To <em>check</em> a sentence: look up a word pair in the table — if its probability is near zero, flag it. To <em>generate</em> a sentence: start with a word, look up the most probable next words, pick one, then repeat from the new word. It's the same table, used in the opposite direction.</p>
+
+  <div class="analogy-box">
+    💡 <strong>Think of it like following signposts.</strong> Each word is a town with signposts pointing to possible next towns, showing how likely each road is. You pick a road, arrive at the next town, and it has its own signposts. No map needed. No plan needed. Just follow the signs, one step at a time.
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:16px; font-size:1.05rem;">Generate a sentence — word by word</h3>
+
+    <div style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <span style="font-size:0.9rem; font-weight:600;">Start with:</span>
+      <button class="btn btn-outline" onclick="startGeneration('He')">He</button>
+      <button class="btn btn-outline" onclick="startGeneration('The')">The</button>
+    </div>
+
+    <div class="gen-sentence-display" id="genDisplay">
+      <span style="color:#6b7280; font-size:1rem; font-weight:400;">Pick a starting word above ↑</span>
+    </div>
+
+    <div id="probPickerWrap" style="display:none;">
+      <div class="prob-picker">
+        <h4 id="probPickerTitle">Possible next words & their probabilities</h4>
+        <div id="probOptions"></div>
+      </div>
+      <div class="gen-controls">
+        <button class="btn btn-accent" id="pickRandomBtn" onclick="pickRandom()">🎲 Pick Randomly (weighted by probability)</button>
+        <button class="btn btn-primary" id="pickBestBtn" onclick="pickBest()">⭐ Pick Most Likely</button>
+        <span class="gen-status" id="genStatus">Choose how to pick the next word</span>
+      </div>
+    </div>
+
+    <div id="genDone" style="display:none; margin-top:16px;" class="explainer">
+      <h4>🎉 Sentence complete!</h4>
+      <span id="genDoneText"></span>
+      <br><button class="btn btn-outline" style="padding:6px 14px; font-size:0.8rem; margin-top:12px;" onclick="resetGenerator()">Generate another →</button>
+    </div>
+  </div>
+
+  <!-- IMPROVEMENT 8: "what just happened" moment -->
+  <div class="callout" style="margin-top:20px;">
+    🔍 <strong>Notice what just happened.</strong> You did not write a single grammar rule. The model never "learned" that a subject must come before a verb. It simply counted which words appeared next to each other in the corpus — and that counting alone was enough to produce grammatically plausible sentences. All structure emerged from data, not rules.
+  </div>
+
+  <div class="explainer">
+    <h4>🔗 The connection to ChatGPT</h4>
+    ChatGPT does exactly this — but trained on <strong>hundreds of billions of words</strong> from the internet, books, and code. And instead of looking at just the one previous word, it looks at your entire conversation so far, using a mathematical structure called a <strong>transformer</strong>. The core idea, though, is the same seed planted by the bigram: <em>predict the most probable next word, one step at a time, guided entirely by patterns in data.</em>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  SECTION 5 — BIG PICTURE SUMMARY      -->
+<!-- ═══════════════════════════════════════ -->
+<section class="section summary-section" id="s5">
+  <div class="section-num" style="color:#f4a261;">Section 05</div>
+  <h2>The Big Picture</h2>
+  <p class="intro">You've just traced the entire journey — from a simple list lookup to the core mechanism behind ChatGPT. Here's how it all connects.</p>
+
+  <!-- Journey map -->
+  <div class="journey-map">
+    <div class="journey-step">
+      <div class="journey-icon">📋</div>
+      <div class="journey-title">Dictionary Lookup</div>
+      <div class="journey-desc">Check if each word exists in a list. Fast, simple, but blind to grammar.</div>
+      <span class="journey-tech">Spell Checker</span>
+    </div>
+    <div class="journey-step">
+      <div class="journey-icon">✌️</div>
+      <div class="journey-title">Word Pairs</div>
+      <div class="journey-desc">Count which words appear next to each other. Flag pairs never seen before.</div>
+      <span class="journey-tech">Bigram Model</span>
+    </div>
+    <div class="journey-step">
+      <div class="journey-icon">🔢</div>
+      <div class="journey-title">Probability</div>
+      <div class="journey-desc">Turn counts into probabilities. Use them to both check and generate text.</div>
+      <span class="journey-tech">N-gram Models</span>
+    </div>
+    <div class="journey-step">
+      <div class="journey-icon">🧠</div>
+      <div class="journey-title">Full Context</div>
+      <div class="journey-desc">Look at everything at once — the whole conversation — not just one word back.</div>
+      <span class="journey-tech">Transformer / ChatGPT</span>
+    </div>
+  </div>
+
+  <!-- One sentence summary -->
+  <div class="one-sentence">
+    At every step, the core act is the same: <strong>look at patterns in text, turn them into probabilities, and use those probabilities to predict what comes next.</strong> The only thing that changed from bigrams to ChatGPT is <em>how much text</em> was read, <em>how far back</em> the model looks, and <em>how richly</em> it represents what it learned.
+  </div>
+
+  <!-- Scale comparison -->
+  <div class="scale-compare">
+    <div class="scale-card bigram-card">
+      <h4>🔬 Our Bigram Model</h4>
+      <div class="scale-row"><span class="scale-label">Corpus size</span><span class="scale-val">5 sentences</span></div>
+      <div class="scale-row"><span class="scale-label">Vocabulary</span><span class="scale-val">11 words</span></div>
+      <div class="scale-row"><span class="scale-label">Context window</span><span class="scale-val">1 word back</span></div>
+      <div class="scale-row"><span class="scale-label">Word pairs tracked</span><span class="scale-val">10 pairs</span></div>
+      <div class="scale-row"><span class="scale-label">Can it generate text?</span><span class="scale-val">Yes ✓</span></div>
+    </div>
+    <div class="scale-card gpt-card">
+      <h4>🚀 GPT-4 (for comparison)</h4>
+      <div class="scale-row"><span class="scale-label">Corpus size</span><span class="scale-val">~1 trillion words</span></div>
+      <div class="scale-row"><span class="scale-label">Vocabulary</span><span class="scale-val">~100,000 tokens</span></div>
+      <div class="scale-row"><span class="scale-label">Context window</span><span class="scale-val">128,000 tokens</span></div>
+      <div class="scale-row"><span class="scale-label">Parameters</span><span class="scale-val">~1.8 trillion</span></div>
+      <div class="scale-row"><span class="scale-label">Can it generate text?</span><span class="scale-val">Yes ✓</span></div>
+    </div>
+  </div>
+
+  <div class="explainer" style="background: linear-gradient(135deg, rgba(42,157,143,0.15) 0%, rgba(69,123,157,0.15) 100%); color: #e2e8f0; margin-top: 24px;">
+    <h4 style="color:#fff;">🎯 The one thing to remember</h4>
+    Neither our tiny model nor ChatGPT truly "understands" language the way a human does. Both are doing the same thing at heart: making very fast, very educated guesses about what word comes next — based entirely on patterns learned from reading a lot of text. The difference is scale. Billions of parameters and trillions of words of training make those guesses so good they can feel like understanding.
+  </div>
+</section>
+
+<script>
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+const DICT = new Set([
+  'a','an','the','he','she','it','they','we','i','you',
+  'is','are','was','were','be','been','being','am',
+  'to','of','in','on','at','by','for','with','from','as',
+  'and','but','or','not','no','so','if','this','that',
+  'went','go','goes','gone','walk','run','said','says',
+  'store','house','bed','man','woman','red','blue','big',
+  'small','old','new','good','bad','can','will','have',
+  'has','had','do','does','did','get','got','make','made',
+  'come','came','see','saw','know','think','look','want',
+  'give','take','tell','feel','try','leave','put','keep',
+  'let','seem','help','show','hear','play','turn','move',
+  'nice','great','here','there','where','when','how','what',
+  'who','which','all','some','many','much','more','most',
+  'then','than','just','also','back','only','over','after'
+]);
+
+const CORPUS_SENTENCES = [
+  ['He', 'is', 'a', 'man'],
+  ['He', 'went', 'to', 'the', 'store'],
+  ['He', 'went', 'to', 'the', 'house'],
+  ['He', 'went', 'to', 'bed'],
+  ['The', 'house', 'is', 'red'],
+];
+
+const wordCount = {};
+CORPUS_SENTENCES.forEach(s => s.forEach(w => { wordCount[w] = (wordCount[w]||0)+1; }));
+
+const bigramCount = {};
+CORPUS_SENTENCES.forEach(s => {
+  for (let i = 0; i < s.length-1; i++) {
+    const pair = s[i]+'→'+s[i+1];
+    bigramCount[pair] = (bigramCount[pair]||0)+1;
+  }
+});
+
+const transitions = {};
+Object.entries(bigramCount).forEach(([pair, cnt]) => {
+  const [w1, w2] = pair.split('→');
+  if (!transitions[w1]) transitions[w1] = [];
+  transitions[w1].push({ next:w2, count:cnt, prob: cnt/wordCount[w1] });
+});
+Object.values(transitions).forEach(arr => arr.sort((a,b)=>b.prob-a.prob));
+
+const BAR_COLORS = ['#e63946','#457b9d','#2a9d8f','#f4a261','#8338ec','#fb8500'];
+
+// ══════════════════════════════════════════
+// SECTION 1
+// ══════════════════════════════════════════
+function checkSpelling() {
+  const words = document.getElementById('spellInput').value.trim().split(/\s+/).filter(Boolean);
+  const container = document.getElementById('tokenDisplay');
+  container.innerHTML = '';
+  words.forEach((w, i) => {
+    const clean = w.replace(/[^a-zA-Z']/g,'').toLowerCase();
+    const ok = DICT.has(clean);
+    const div = document.createElement('div');
+    div.className = 'token ' + (ok ? 'ok' : 'err');
+    div.textContent = w;
+    div.title = ok ? '✅ Found in dictionary' : '❌ Not in dictionary';
+    div.style.opacity = '0';
+    setTimeout(() => { div.style.opacity=''; }, i*70);
+    container.appendChild(div);
+  });
+}
+
+['a','and','bed','he','house','is','man','red','store','the','to','went','she','walk','run','with'].forEach(w => {
+  const el = document.createElement('span');
+  el.className = 'dict-word'; el.textContent = w;
+  document.getElementById('dictSample').appendChild(el);
+});
+const more = document.createElement('span');
+more.className='dict-word'; more.textContent='… 235,976 more'; more.style.color='#999';
+document.getElementById('dictSample').appendChild(more);
+checkSpelling();
+
+// ══════════════════════════════════════════
+// SUFFIX CARD INTERACTIONS (Section 2)
+// ══════════════════════════════════════════
+const SUFFIX_EXAMPLES = {
+  root: {
+    tamil: 'அவன் கடை திறந்தான்.',
+    eng: 'avan kadai thirandhaan  →  He opened the shop.',
+    note: '"கடை" alone — the root, used directly as the object.'
+  },
+  kku: {
+    tamil: 'அவன் கடைக்கு சென்றான்.',
+    eng: 'avan kadaikku sendraan  →  He went to the shop.',
+    note: 'The suffix -கு marks the destination (like "to" in English).'
+  },
+  il: {
+    tamil: 'அவள் கடையில் நின்றாள்.',
+    eng: 'aval kadaiyil nindraals  →  She stood in the shop.',
+    note: 'The suffix -இல் marks location (like "in" or "at" in English).'
+  },
+  ilirundhu: {
+    tamil: 'அவன் கடையிலிருந்து வந்தான்.',
+    eng: 'avan kadaiyilirundhu vandhaan  →  He came from the shop.',
+    note: 'The suffix -இலிருந்து marks the origin point (like "from" in English).'
+  },
+  kal: {
+    tamil: 'அந்த தெருவில் கடைகள் நிறைய உள்ளன.',
+    eng: 'andha theruvil kadaikal niraya ullana  →  That street has many shops.',
+    note: 'The suffix -கள் marks the plural (like adding "-s" in English).'
+  }
+};
+
+function showSuffixExample(key) {
+  // toggle: clicking the same card again hides it
+  const box = document.getElementById('suffixExampleBox');
+  const allCards = document.querySelectorAll('.suffix-card');
+  const clickedCard = document.getElementById('scard-'+key);
+  const wasActive = clickedCard.classList.contains('active-card');
+
+  allCards.forEach(c => c.classList.remove('active-card'));
+
+  if (wasActive) {
+    box.style.display = 'none';
+    return;
+  }
+
+  clickedCard.classList.add('active-card');
+  const ex = SUFFIX_EXAMPLES[key];
+  document.getElementById('suffixExampleTamil').textContent = ex.tamil;
+  document.getElementById('suffixExampleEng').textContent = ex.eng;
+  document.getElementById('suffixExampleNote').textContent = '→ ' + ex.note;
+  box.style.display = 'block';
+}
+
+
+const TAMIL_CHARS = [
+  {
+    text: 'வானம்',
+    roman: 'vaanam = sky',
+    status: 'bad',
+    thought: '"வானம்" means sky — a perfectly valid Tamil word on its own. Let\'s see what the next word is...',
+    alarm: false
+  },
+  {
+    text: 'கடைக்கு',
+    roman: 'kadaikku = to the shop',
+    status: 'bad',
+    thought: '🚨 "வானம் கடைக்கு" — the sky going to a shop? This word pair has never appeared in any Tamil text. The computer flags this as an error. The correct word should have been "அவன்" (avan = he).',
+    alarm: true
+  },
+  {
+    text: 'சென்றான்',
+    roman: 'sendraan = he went',
+    status: 'ok',
+    thought: '✅ "சென்றான்" (sendraan = he went) — a complete, natural Tamil verb form. Perfectly fine on its own.',
+    alarm: false
+  },
+];
+
+let tamilStep=-1, tamilTimer=null;
+
+function startTamilReveal() {
+  document.getElementById('tamilStage').innerHTML = '';
+  TAMIL_CHARS.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'tchar';
+    div.innerHTML = c.text + '<span class="tchar-label">' + c.roman + '</span>';
+    document.getElementById('tamilStage').appendChild(div);
+  });
+  document.getElementById('revealBtn').disabled = true;
+  tamilStep = 0;
+  (function next() {
+    if (tamilStep < TAMIL_CHARS.length) {
+      const c = TAMIL_CHARS[tamilStep];
+      const chars = document.getElementById('tamilStage').querySelectorAll('.tchar');
+      chars[tamilStep].classList.add('visible', c.status==='bad' ? 'bad-char' : 'ok-char');
+      document.getElementById('thoughtText').textContent = c.thought;
+      const th = document.getElementById('tamilThought');
+      th.className = 'tamil-thought' + (c.alarm ? ' alarmed' : '');
+      document.querySelector('.thought-icon').textContent = c.alarm ? '🚨' : '🧠';
+      tamilStep++;
+      tamilTimer = setTimeout(next, 1700);
+    } else {
+      document.getElementById('revealBtn').disabled = false;
+    }
+  })();
+}
+
+function resetTamil() {
+  clearTimeout(tamilTimer); tamilStep=-1;
+  document.getElementById('tamilStage').innerHTML = '';
+  document.getElementById('thoughtText').textContent = 'Press "Reveal" to start reading the sentence word by word...';
+  document.getElementById('tamilThought').className = 'tamil-thought';
+  document.querySelector('.thought-icon').textContent = '🧠';
+  document.getElementById('revealBtn').disabled = false;
+}
+
+// ══════════════════════════════════════════
+// SECTION 3 — BIGRAM
+// ══════════════════════════════════════════
+let bigramsBuilt = false;
+
+function renderCorpus() {
+  const c = document.getElementById('corpusDisplay');
+  c.innerHTML = '';
+  CORPUS_SENTENCES.forEach(sent => {
+    const row = document.createElement('div'); row.className='corpus-sent';
+    sent.forEach(w => {
+      const sp = document.createElement('span');
+      sp.className='corpus-word'; sp.textContent=w; sp.dataset.word=w;
+      sp.addEventListener('click', () => bigramsBuilt && showWordDistribution(w, sp));
+      row.appendChild(sp);
+    });
+    c.appendChild(row);
+  });
+}
+renderCorpus();
+
+function showWordDistribution(word, clickedEl) {
+  document.querySelectorAll('.corpus-word').forEach(el=>el.classList.remove('selected'));
+  clickedEl.classList.add('selected');
+
+  const panel=document.getElementById('distPanel');
+  const title=document.getElementById('distTitle');
+  const rows=document.getElementById('distRows');
+  const opts = transitions[word];
+
+  panel.style.display='block';
+
+  if (!opts || opts.length===0) {
+    title.textContent=`"${word}" — no following words recorded (appears only at sentence end).`;
+    rows.innerHTML=''; return;
+  }
+
+  title.textContent=`AFTER "${word.toUpperCase()}" — WHAT COMES NEXT?`;
+  rows.innerHTML='';
+
+  // highlight matching bigram table rows
+  document.querySelectorAll('#bigramTbody tr').forEach(tr => {
+    const txt = tr.querySelector('.pair-col')?.textContent||'';
+    tr.classList.toggle('lit', txt.startsWith(word+' →'));
+    tr.classList.toggle('dimmed', !txt.startsWith(word+' →'));
+  });
+
+  opts.forEach((opt,i) => {
+    const row=document.createElement('div'); row.className='dist-row';
+    row.innerHTML=`
+      <span class="dist-label">${opt.next}</span>
+      <div class="dist-bar-bg"><div class="dist-bar" id="db${i}" style="width:0;background:${BAR_COLORS[i%BAR_COLORS.length]};">${Math.round(opt.prob*100)}%</div></div>
+      <span class="dist-pct">${Math.round(opt.prob*100)}%</span>`;
+    rows.appendChild(row);
+  });
+
+  // a few zero-prob words for contrast
+  const allW=[...new Set(CORPUS_SENTENCES.flat())];
+  const seen=new Set(opts.map(o=>o.next));
+  allW.filter(w=>!seen.has(w)&&w!==word).slice(0,3).forEach(w=>{
+    const row=document.createElement('div'); row.className='dist-row dist-zero';
+    row.innerHTML=`<span class="dist-label">${w}</span><div class="dist-bar-bg"><div class="dist-bar" style="width:0;background:#334155;"></div></div><span class="dist-pct">0%</span>`;
+    rows.appendChild(row);
+  });
+
+  setTimeout(()=>{ opts.forEach((_,i)=>{ const b=document.getElementById('db'+i); if(b) b.style.width=Math.max(opts[i].prob*100,5)+'%'; }); }, 80);
+}
+
+function buildBigrams() {
+  bigramsBuilt=true;
+  const tbody=document.getElementById('bigramTbody'); tbody.innerHTML='';
+  ['bigramTableWrap','tableCallout','errorTestCard','clickHint'].forEach(id=>document.getElementById(id).style.display='');
+  document.getElementById('distPanel').style.display='none';
+
+  Object.entries(bigramCount).sort((a,b)=>b[1]-a[1]).forEach(([pair,cnt],idx)=>{
+    const [w1,w2]=pair.split('→');
+    const prob=cnt/wordCount[w1];
+    const tr=document.createElement('tr');
+    tr.className='row-anim'; tr.dataset.w1=w1;
+    tr.style.animationDelay=(idx*0.04)+'s';
+    tr.innerHTML=`
+      <td class="pair-col">${w1} → ${w2}</td>
+      <td class="count-col">${cnt}</td>
+      <td class="prob-col">${Math.round(prob*100)}%</td>
+      <td class="bar-col"><div class="prob-bar-bg"><div class="prob-bar" style="width:0" data-w="${prob*100}"></div></div></td>`;
+    tbody.appendChild(tr);
+  });
+  setTimeout(()=>document.querySelectorAll('.prob-bar').forEach(b=>b.style.width=b.dataset.w+'%'), 100);
+
+  document.querySelectorAll('.corpus-word').forEach((el,i)=>{
+    setTimeout(()=>{ el.classList.add('highlight'); setTimeout(()=>el.classList.remove('highlight'),400); }, i*70);
+  });
+}
+
+function clearBigrams() {
+  bigramsBuilt=false;
+  document.getElementById('bigramTbody').innerHTML='';
+  ['bigramTableWrap','tableCallout','errorTestCard','distPanel','clickHint'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('bigramTestResult').innerHTML='';
+  document.querySelectorAll('.corpus-word').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('#bigramTbody tr').forEach(tr=>tr.classList.remove('dimmed','lit'));
+}
+
+function testSentence() {
+  const words=document.getElementById('bigramTestInput').value.trim().split(/\s+/).filter(w=>w.match(/[a-zA-Z]/));
+  const pairs=[];
+  for(let i=0;i<words.length-1;i++){
+    const W1=words[i].charAt(0).toUpperCase()+words[i].slice(1).toLowerCase();
+    const W2=words[i+1].toLowerCase();
+    const key=W1+'→'+W2;
+    pairs.push({w1:words[i],w2:words[i+1],W1,key,found:bigramCount[key]!==undefined});
+  }
+  const overallOk=pairs.every(p=>p.found);
+  let html='<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;">';
+  words.forEach((w,i)=>{
+    const bad=i<words.length-1&&!pairs[i].found;
+    html+=`<span class="token ${bad?'err':'ok'}" style="animation:none;">${w}</span>`;
+    if(i<words.length-1){
+      const p=pairs[i];
+      if(!p.found) html+=`<span style="color:var(--accent);font-family:'Space Mono',monospace;font-size:0.75rem;">✗ 0%</span>`;
+      else { const pr=Math.round(bigramCount[p.key]/wordCount[p.W1]*100); html+=`<span style="color:var(--teal);font-family:'Space Mono',monospace;font-size:0.75rem;">${pr}%</span>`; }
+    }
+  });
+  html+='</div>';
+  if(overallOk) html+=`<div style="background:#d1fae5;color:#065f46;padding:12px 16px;border-radius:8px;font-size:0.88rem;">✅ <strong>Sentence looks fine!</strong> All word pairs have been seen in the corpus before.</div>`;
+  else {
+    const bad=pairs.find(p=>!p.found);
+    html+=`<div style="background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:8px;font-size:0.88rem;">🚨 <strong>Possible error detected!</strong> The pair "<code>${bad.w1} → ${bad.w2}</code>" has <strong>0% probability</strong> — never seen in the corpus. Caught purely by counting, with no grammar rules.</div>`;
+  }
+  document.getElementById('bigramTestResult').innerHTML=html;
+}
+
+// ══════════════════════════════════════════
+// SECTION 4 — GENERATOR
+// ══════════════════════════════════════════
+let genWords=[];
+
+function startGeneration(word){
+  genWords=[word];
+  document.getElementById('genDone').style.display='none';
+  renderGenDisplay(); showNextOptions();
+}
+
+function renderGenDisplay(){
+  const d=document.getElementById('genDisplay'); d.innerHTML='';
+  genWords.forEach((w,i)=>{
+    const s=document.createElement('span');
+    s.className='gen-word '+(i===genWords.length-1?'new-word':'old-word');
+    s.textContent=w; d.appendChild(s);
+  });
+}
+
+function showNextOptions(){
+  const last=genWords[genWords.length-1];
+  const opts=transitions[last];
+  const wrap=document.getElementById('probPickerWrap');
+  if(!opts||!opts.length){ wrap.style.display='none'; showGenDone(); return; }
+  wrap.style.display='';
+  document.getElementById('probPickerTitle').textContent=`After "${last}", the possible next words are:`;
+  const oc=document.getElementById('probOptions'); oc.innerHTML='';
+  opts.forEach((opt,i)=>{
+    const div=document.createElement('div'); div.className='prob-option';
+    div.innerHTML=`<span class="word-label">${opt.next}</span><div class="prob-bar-wrap"><div class="prob-bar-bg2"><div class="prob-bar2" id="pb${i}" style="width:0;background:${BAR_COLORS[i%BAR_COLORS.length]};">${Math.round(opt.prob*100)}%</div></div></div>`;
+    oc.appendChild(div);
+  });
+  setTimeout(()=>opts.forEach((_,i)=>{ const b=document.getElementById('pb'+i); if(b) b.style.width=Math.max(opts[i].prob*100,8)+'%'; }),80);
+  document.getElementById('genStatus').textContent='Choose how to pick the next word';
+  document.getElementById('pickRandomBtn').disabled=false;
+  document.getElementById('pickBestBtn').disabled=false;
+}
+
+function pickRandom(){
+  const opts=transitions[genWords[genWords.length-1]]; if(!opts) return;
+  const r=Math.random(); let cum=0, chosen=opts[opts.length-1].next;
+  for(const o of opts){ cum+=o.prob; if(r<=cum){chosen=o.next;break;} }
+  addWord(chosen,'random');
+}
+
+function pickBest(){
+  const opts=transitions[genWords[genWords.length-1]]; if(!opts) return;
+  addWord(opts[0].next,'best');
+}
+
+function addWord(word,method){
+  genWords.push(word); renderGenDisplay();
+  document.getElementById('genStatus').textContent=`"${word}" added — ${method==='random'?'randomly, weighted by probability':'most likely next word'}`;
+  document.getElementById('pickRandomBtn').disabled=true;
+  document.getElementById('pickBestBtn').disabled=true;
+  setTimeout(showNextOptions,650);
+}
+
+function showGenDone(){
+  document.getElementById('genDone').style.display='';
+  const sentence=genWords.join(' ')+'.';
+  const isCorpus=CORPUS_SENTENCES.some(s=>s.join(' ')===genWords.join(' '));
+  document.getElementById('genDoneText').innerHTML=
+    `Generated: <strong>"${sentence}"</strong><br>
+    <span style="font-size:0.84rem;opacity:0.8;">${isCorpus
+      ?'This matches one of the 5 corpus sentences.'
+      :'A sentence that was never explicitly written — created from probability alone.'
+    }</span>
+    <br><br>
+    <span style="font-size:0.82rem; color:#4a6fa5; display:block; background:rgba(69,123,157,0.1); border-radius:8px; padding:10px 14px; margin-top:4px;">
+      💡 <strong>Why do you keep getting similar sentences?</strong> Our corpus has only 5 sentences and 11 words, so there are very few possible paths through the probability table. With a real language model trained on billions of sentences, the number of possible paths is astronomically large — repetition essentially never happens.
+    </span>`;
+}
+
+function resetGenerator(){
+  genWords=[];
+  document.getElementById('genDisplay').innerHTML='<span style="color:#6b7280;font-size:1rem;font-weight:400;">Pick a starting word above ↑</span>';
+  document.getElementById('probPickerWrap').style.display='none';
+  document.getElementById('genDone').style.display='none';
+}
+
+// NAV HIGHLIGHT
+const navLinks=document.querySelectorAll('.nav-step');
+window.addEventListener('scroll',()=>{
+  let cur='s1';
+  ['s1','s2','s3','s4','s5'].forEach(id=>{ const el=document.getElementById(id); if(el&&el.getBoundingClientRect().top<120) cur=id; });
+  navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+cur));
+});
+</script>
+</body>
+</html>
