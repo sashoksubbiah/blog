@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backpropagation — Interactive Visual Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;600&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1a1410;
+  --paper: #f5f0e8;
+  --paper2: #ede8dc;
+  --cream: #faf7f2;
+  --panel-bg: #0f1117;
+  --panel-bg2: #171b25;
+  --panel-border: #2a3045;
+  --accent: #e8803a;
+  --accent2: #4db8a0;
+  --accent3: #c45c8a;
+  --accent-glow: rgba(232,128,58,0.25);
+  --text-dim: #6b7280;
+  --text-bright: #f0ead8;
+  --text-code: #a8d8b0;
+  --nav-h: 56px;
+  --gold: #d4a847;
+  --serif: 'Source Serif 4', Georgia, serif;
+  --display: 'Playfair Display', Georgia, serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.75;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  height: var(--nav-h);
+  background: rgba(15,17,23,0.96);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--panel-border);
+  display: flex; align-items: center; padding: 0 1.5rem;
+  gap: 0;
+  overflow-x: auto;
+}
+nav::-webkit-scrollbar { height: 0; }
+.nav-logo {
+  font-family: var(--mono); font-size: 0.7rem; color: var(--accent);
+  letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+  margin-right: 1.5rem; flex-shrink: 0;
+  border: 1px solid var(--accent); padding: 3px 8px; border-radius: 2px;
+}
+.nav-item {
+  font-family: var(--mono); font-size: 0.65rem; color: #6b7280;
+  text-decoration: none; white-space: nowrap; padding: 0.3rem 0.75rem;
+  border-radius: 3px; transition: all 0.2s; letter-spacing: 0.05em;
+  text-transform: uppercase; flex-shrink: 0;
+}
+.nav-item:hover, .nav-item.active { color: var(--accent); background: rgba(232,128,58,0.1); }
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  background: var(--panel-bg);
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: calc(var(--nav-h) + 3rem) 2rem 4rem;
+  text-align: center; position: relative; overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(232,128,58,0.08) 0%, transparent 70%),
+              radial-gradient(ellipse 40% 40% at 20% 80%, rgba(77,184,160,0.06) 0%, transparent 60%);
+}
+.hero-tag {
+  font-family: var(--mono); font-size: 0.7rem; color: var(--accent);
+  letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 1.5rem;
+  position: relative;
+}
+.hero h1 {
+  font-family: var(--display); font-size: clamp(2.5rem, 8vw, 6rem);
+  color: var(--text-bright); font-weight: 900; line-height: 1.05;
+  position: relative; margin-bottom: 1.5rem;
+}
+.hero h1 span { color: var(--accent); }
+.hero-sub {
+  font-family: var(--serif); font-size: clamp(1rem, 2vw, 1.2rem);
+  color: #9ca3af; max-width: 600px; position: relative; margin-bottom: 3rem;
+  font-style: italic; font-weight: 300;
+}
+.hero-scroll {
+  font-family: var(--mono); font-size: 0.65rem; color: #4b5563;
+  letter-spacing: 0.15em; text-transform: uppercase; position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+}
+.hero-scroll::after {
+  content: '↓'; font-size: 1.2rem; animation: bounce 2s infinite;
+}
+@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+
+/* ── SECTIONS ── */
+section { scroll-margin-top: calc(var(--nav-h) + 1rem); }
+
+.reading-section {
+  background: var(--paper); padding: 5rem 2rem;
+}
+.reading-section:nth-child(even) { background: var(--paper2); }
+
+.panel-section {
+  background: var(--panel-bg); padding: 5rem 2rem;
+}
+
+.section-inner {
+  max-width: 780px; margin: 0 auto;
+}
+
+.section-label {
+  font-family: var(--mono); font-size: 0.65rem; color: var(--accent);
+  letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 0.75rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--accent); opacity: 0.3; }
+
+h2 {
+  font-family: var(--display); font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 700; line-height: 1.15; margin-bottom: 1.5rem;
+}
+.reading-section h2 { color: var(--ink); }
+.panel-section h2 { color: var(--text-bright); }
+
+h3 {
+  font-family: var(--display); font-size: 1.25rem; font-weight: 700;
+  margin-bottom: 0.75rem; margin-top: 2rem;
+}
+.reading-section h3 { color: var(--ink); }
+.panel-section h3 { color: var(--text-bright); }
+
+p { margin-bottom: 1.25rem; font-size: 1.05rem; }
+.reading-section p { color: #2d2420; }
+.panel-section p { color: #9ca3af; }
+
+.bridge {
+  background: var(--panel-bg2);
+  border-left: 3px solid var(--accent2);
+  padding: 1.25rem 1.5rem;
+  margin: 3rem 0 0;
+  border-radius: 0 6px 6px 0;
+}
+.bridge p {
+  font-style: italic; color: var(--accent2) !important;
+  margin: 0; font-size: 0.95rem;
+}
+.reading-section .bridge { background: #e8f4f0; border-left-color: var(--accent2); }
+.reading-section .bridge p { color: #2a7a68 !important; }
+
+.analogy-box {
+  background: var(--paper); border: 1px solid #d4c9b8;
+  border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0;
+  position: relative;
+}
+.analogy-box::before {
+  content: '💡 Analogy';
+  font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--gold);
+  position: absolute; top: -0.6rem; left: 1rem;
+  background: var(--paper); padding: 0 0.5rem;
+}
+.panel-section .analogy-box { background: var(--panel-bg2); border-color: var(--panel-border); }
+.panel-section .analogy-box p { color: #b0bac8; }
+.panel-section .analogy-box::before { background: var(--panel-bg2); }
+
+.tamil-example {
+  background: linear-gradient(135deg, #1a2535 0%, #1e2d40 100%);
+  border: 1px solid #2a4060; border-radius: 8px; padding: 1.5rem;
+  margin: 1.5rem 0;
+}
+.tamil-example .label {
+  font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent2); margin-bottom: 0.75rem;
+}
+.tamil-text { font-size: 1.4rem; color: var(--text-bright); font-family: 'Noto Sans Tamil', var(--serif); margin-bottom: 0.25rem; }
+.tamil-roman { font-family: var(--mono); font-size: 0.9rem; color: var(--accent); }
+.tamil-trans { font-size: 0.9rem; color: #6b7280; font-style: italic; margin-top: 0.25rem; }
+.reading-section .tamil-example { background: #f0f7ff; border-color: #b8d4f0; }
+.reading-section .tamil-text { color: #1a3560; }
+.reading-section .tamil-roman { color: #2a6080; }
+.reading-section .tamil-trans { color: #6080a0; }
+
+.caveat-box {
+  border: 1px dashed #c45c8a55;
+  border-radius: 8px; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  background: rgba(196,92,138,0.05);
+}
+.caveat-box .caveat-title {
+  font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent3); margin-bottom: 0.75rem;
+}
+.caveat-box ul { list-style: none; padding: 0; }
+.caveat-box li {
+  padding: 0.4rem 0 0.4rem 1.5rem; position: relative;
+  font-size: 0.95rem; color: #c45c8a; border-bottom: 1px solid rgba(196,92,138,0.1);
+}
+.caveat-box li:last-child { border-bottom: none; }
+.caveat-box li::before { content: '⚠'; position: absolute; left: 0; font-size: 0.8rem; }
+.reading-section .caveat-box { background: #fff5f8; border-color: #f0b0c8; }
+.reading-section .caveat-box li { color: #a0305a; }
+
+/* ── INTERACTIVE PANELS ── */
+.interactive-panel {
+  background: var(--panel-bg2);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px; padding: 2rem; margin: 2rem 0;
+}
+.panel-instruction {
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #4b5563; margin-bottom: 1.25rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.panel-instruction::before { content: '▶'; color: var(--accent); }
+
+/* Buttons */
+.btn {
+  font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 0.6rem 1.25rem; border: none;
+  border-radius: 4px; cursor: pointer; transition: all 0.2s; font-weight: 600;
+}
+.btn-primary {
+  background: var(--accent); color: #fff;
+}
+.btn-primary:hover { background: #d06a20; transform: translateY(-1px); }
+.btn-secondary {
+  background: transparent; color: var(--accent); border: 1px solid var(--accent);
+}
+.btn-secondary:hover { background: rgba(232,128,58,0.1); }
+.btn-teal { background: var(--accent2); color: #fff; }
+.btn-teal:hover { background: #3a9a84; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+/* Input */
+.styled-input {
+  font-family: var(--mono); font-size: 0.9rem;
+  background: var(--panel-bg); color: var(--text-bright);
+  border: 1px solid var(--panel-border); border-radius: 6px;
+  padding: 0.6rem 1rem; width: 100%; outline: none;
+  transition: border-color 0.2s;
+}
+.styled-input:focus { border-color: var(--accent); }
+
+/* Number badge */
+.num-badge {
+  display: inline-block; background: var(--accent); color: #fff;
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
+  padding: 0.15rem 0.5rem; border-radius: 3px; margin: 0 2px;
+}
+.num-badge.teal { background: var(--accent2); }
+.num-badge.pink { background: var(--accent3); }
+
+/* ─────────────── SECTION 1: WHY DERIVATIVES ─────────────── */
+.derivative-live {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+}
+@media(max-width:600px){ .derivative-live { grid-template-columns: 1fr; } }
+
+.deriv-output {
+  background: var(--panel-bg); border: 1px solid var(--panel-border);
+  border-radius: 8px; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;
+}
+.deriv-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 0.85rem; color: #9ca3af;
+}
+.deriv-val { color: var(--text-bright); font-weight: 600; }
+.deriv-highlight { color: var(--accent); font-size: 1.1rem; }
+
+/* ─────────────── SECTION 2: CHAIN RULE ─────────────── */
+.chain-machine {
+  display: flex; align-items: center; gap: 0; margin: 1.5rem 0;
+  flex-wrap: wrap; justify-content: center;
+}
+.chain-box {
+  background: var(--panel-bg); border: 2px solid var(--panel-border);
+  border-radius: 8px; padding: 1rem 1.25rem; text-align: center;
+  min-width: 100px; transition: all 0.4s; position: relative;
+}
+.chain-box.active { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
+.chain-box .box-label {
+  font-family: var(--mono); font-size: 0.6rem; color: #4b5563;
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.35rem;
+}
+.chain-box .box-val {
+  font-family: var(--mono); font-size: 1.4rem; color: var(--text-bright); font-weight: 700;
+}
+.chain-box .box-rule { font-size: 0.7rem; color: #4b5563; font-family: var(--mono); margin-top: 0.25rem; }
+.chain-arrow {
+  font-size: 1.5rem; color: #2a3045; margin: 0 0.25rem;
+  transition: color 0.4s;
+}
+.chain-arrow.active { color: var(--accent); }
+.chain-deriv-row {
+  display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0;
+  font-family: var(--mono); font-size: 0.85rem;
+}
+.step-commentary {
+  background: rgba(232,128,58,0.08); border-left: 3px solid var(--accent);
+  padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0;
+  font-size: 0.9rem; color: #c0a882; min-height: 3rem;
+  transition: all 0.3s;
+}
+
+/* ─────────────── SECTION 3: FORWARD PASS ─────────────── */
+.forward-grid {
+  display: grid; gap: 0.75rem; margin: 1.5rem 0;
+}
+.forward-row {
+  display: grid; grid-template-columns: 0.8fr 1fr 1fr;
+  gap: 0.5rem; align-items: center; font-family: var(--mono); font-size: 0.8rem;
+}
+@media(max-width:500px){ .forward-row { grid-template-columns: 1fr; } }
+.forward-cell {
+  background: var(--panel-bg); border: 1px solid var(--panel-border);
+  border-radius: 6px; padding: 0.5rem 0.75rem; color: #9ca3af;
+}
+.forward-cell.result { color: var(--text-bright); font-weight: 700; border-color: #3a4560; }
+.forward-cell.loss { color: var(--accent); font-weight: 700; border-color: var(--accent); text-align: center; }
+
+/* ─────────────── SECTION 4: BACKWARD PASS ─────────────── */
+.backward-step {
+  background: var(--panel-bg); border: 1px solid var(--panel-border);
+  border-radius: 8px; padding: 1.25rem; margin: 0.75rem 0;
+  display: none; animation: fadeIn 0.4s ease;
+}
+.backward-step.visible { display: block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.backward-step .step-num {
+  font-family: var(--mono); font-size: 0.6rem; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;
+}
+.backward-step .step-equation {
+  font-family: var(--mono); font-size: 1rem; color: var(--text-bright);
+  background: var(--panel-bg2); padding: 0.6rem 1rem; border-radius: 4px;
+  margin: 0.5rem 0; border-left: 3px solid var(--accent);
+}
+.backward-step p { color: #9ca3af; font-size: 0.9rem; margin: 0.5rem 0 0; }
+.grad-result {
+  background: linear-gradient(135deg, rgba(232,128,58,0.15), rgba(77,184,160,0.1));
+  border: 1px solid var(--accent); border-radius: 8px; padding: 1.5rem;
+  text-align: center; margin-top: 1.5rem; display: none;
+}
+.grad-result.visible { display: block; animation: fadeIn 0.4s ease; }
+.grad-result .result-row { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+.grad-result .result-item { font-family: var(--mono); }
+.grad-result .result-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; }
+.grad-result .result-val { font-size: 2rem; color: var(--accent); font-weight: 700; }
+
+/* ─────────────── SECTION 5: TRAINING LOOP ─────────────── */
+.training-canvas-wrap { position: relative; width: 100%; }
+#trainingCanvas {
+  width: 100%; border-radius: 8px; background: var(--panel-bg);
+  border: 1px solid var(--panel-border); display: block;
+}
+.training-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 1rem;
+}
+@media(max-width:500px){ .training-stats { grid-template-columns: 1fr 1fr; } }
+.stat-box {
+  background: var(--panel-bg); border: 1px solid var(--panel-border);
+  border-radius: 6px; padding: 0.75rem; text-align: center;
+}
+.stat-label { font-family: var(--mono); font-size: 0.55rem; color: #4b5563; text-transform: uppercase; letter-spacing: 0.1em; }
+.stat-val { font-family: var(--mono); font-size: 1.3rem; color: var(--text-bright); font-weight: 700; margin-top: 0.25rem; }
+.stat-val.accent { color: var(--accent); }
+.stat-val.teal { color: var(--accent2); }
+
+/* ─────────────── SECTION 6: BIG PICTURE ─────────────── */
+.big-picture-section {
+  background: var(--panel-bg); padding: 6rem 2rem;
+}
+.journey-map {
+  display: flex; flex-direction: column; gap: 0; margin: 2rem 0;
+  position: relative;
+}
+.journey-map::before {
+  content: ''; position: absolute; left: 2rem; top: 0; bottom: 0;
+  width: 2px; background: linear-gradient(to bottom, var(--accent), var(--accent2), var(--accent3));
+}
+.journey-item {
+  display: flex; gap: 1.5rem; padding: 1.5rem 0;
+  cursor: pointer; transition: all 0.3s;
+}
+.journey-item:hover .journey-content { transform: translateX(4px); }
+.journey-dot {
+  width: 2rem; height: 2rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+  flex-shrink: 0; z-index: 1; margin-top: 0.25rem;
+  border: 2px solid;
+}
+.journey-content { flex: 1; }
+.journey-content h4 {
+  font-family: var(--display); font-size: 1rem; font-weight: 700;
+  color: var(--text-bright); margin-bottom: 0.25rem;
+}
+.journey-content p { font-size: 0.85rem; color: #6b7280; margin: 0; }
+.journey-detail {
+  max-height: 0; overflow: hidden; transition: max-height 0.4s ease;
+  font-size: 0.85rem; color: #9ca3af; padding-left: 0;
+}
+.journey-detail.open { max-height: 200px; padding-top: 0.5rem; }
+
+.complexity-table {
+  width: 100%; border-collapse: collapse; margin: 2rem 0;
+  font-family: var(--mono); font-size: 0.8rem;
+}
+.complexity-table th {
+  background: var(--panel-bg2); color: var(--accent);
+  padding: 0.75rem 1rem; text-align: left; text-transform: uppercase;
+  letter-spacing: 0.1em; font-size: 0.65rem; border-bottom: 1px solid var(--panel-border);
+}
+.complexity-table td {
+  padding: 0.75rem 1rem; color: #9ca3af;
+  border-bottom: 1px solid rgba(42,48,69,0.5);
+}
+.complexity-table tr:hover td { background: rgba(232,128,58,0.04); }
+.complexity-table .name { color: var(--text-bright); font-weight: 600; }
+.bar-cell { min-width: 120px; }
+.bar { height: 8px; border-radius: 4px; background: var(--accent); }
+
+.final-sentence {
+  text-align: center; margin-top: 4rem; padding: 3rem;
+  border: 1px solid var(--panel-border); border-radius: 12px;
+  background: radial-gradient(ellipse at center, rgba(232,128,58,0.07) 0%, transparent 70%);
+}
+.final-sentence blockquote {
+  font-family: var(--display); font-size: clamp(1.2rem, 3vw, 1.8rem);
+  font-style: italic; color: var(--text-bright); line-height: 1.4;
+}
+
+/* ─── MISC ─── */
+.range-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+input[type=range] {
+  flex: 1; accent-color: var(--accent); min-width: 100px;
+}
+.range-val {
+  font-family: var(--mono); color: var(--accent); font-size: 0.9rem;
+  min-width: 60px; text-align: right;
+}
+
+code {
+  font-family: var(--mono); font-size: 0.85em;
+  background: rgba(168,216,176,0.1); color: var(--text-code);
+  padding: 0.1em 0.35em; border-radius: 3px;
+}
+
+@media(max-width:600px){
+  .section-inner { padding: 0 0.5rem; }
+  .interactive-panel { padding: 1.25rem; }
+  .chain-machine { gap: 0.25rem; }
+  .chain-box { min-width: 75px; padding: 0.7rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Backprop</div>
+  <a class="nav-item" href="#why">The Problem</a>
+  <a class="nav-item" href="#chain">Chain Rule</a>
+  <a class="nav-item" href="#forward">Forward Pass</a>
+  <a class="nav-item" href="#backward">Backward Pass</a>
+  <a class="nav-item" href="#training">Training Loop</a>
+  <a class="nav-item" href="#bigpicture">Big Picture</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-tag">Interactive Visual Guide</div>
+  <h1>Back<span>propagation</span></h1>
+  <p class="hero-sub">How neural networks learn from their mistakes — explained from first principles with no jargon</p>
+  <div class="hero-scroll">scroll to begin</div>
+</section>
+
+<!-- ══════════ SECTION 1: THE PROBLEM ══════════ -->
+<section id="why" class="reading-section">
+  <div class="section-inner">
+    <div class="section-label">Section 01</div>
+    <h2>The Problem with Going Forward</h2>
+
+    <p>Imagine you are training an AI model with <strong>one billion weights</strong>. A "weight" is just a number the model multiplies your input by — think of it like a dial on a machine that you can turn up or down. To teach the model, you need to know: <em>for each dial, which direction should I turn it, and by how much?</em></p>
+
+    <p>To answer that, you need the <strong>partial derivative</strong> of the loss with respect to each weight. A partial derivative sounds scary, but it just means: <em>"If I nudge this one dial a tiny bit, how much does the error change?"</em></p>
+
+    <p>The naïve approach: compute the answer for weight #1 (treat all others as frozen), then for weight #2, then for weight #3… and so on for a billion weights. Each calculation costs roughly the same effort as computing the error in the first place. Total cost: <strong>a billion times the cost of one forward pass</strong>. That is catastrophically slow.</p>
+
+    <div class="analogy-box">
+      <p><strong>The maze analogy.</strong> You have a maze with 1,000 entrances and one exit at the centre. If you start from each entrance one-by-one and trace to the centre, you repeat nearly all the work every time. But if you start from the centre and trace <em>outward</em>, you find all the paths in a single exploration — you share the common route from the centre across all paths.</p>
+      <p>Backpropagation does exactly this: it starts from the error (the centre) and traces backward to every weight simultaneously, sharing work along the way.</p>
+    </div>
+
+    <div class="tamil-example">
+      <div class="label">Tamil everyday example</div>
+      <div class="tamil-text">தவறை திருத்து</div>
+      <div class="tamil-roman">tavaṟai tirutthu</div>
+      <div class="tamil-trans">"Correct the mistake" — this is the spirit of backpropagation. You look at the final wrong answer and work backwards to find which step went wrong.</div>
+    </div>
+
+    <h3>Try it: The Scaling Disaster</h3>
+    <p>Slide the number of weights below and watch how the naïve approach explodes in cost.</p>
+
+    <!-- INTERACTIVE 1: LIVE SCALING DEMO -->
+    <div class="interactive-panel">
+      <div class="panel-instruction">Slide to change the number of weights</div>
+      <div class="range-row">
+        <span style="font-family:var(--mono);font-size:0.8rem;color:#6b7280">Weights:</span>
+        <input type="range" id="weightSlider" min="1" max="9" value="3" step="1">
+        <span class="range-val" id="weightDisplay">1,000</span>
+      </div>
+      <div style="margin-top:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="deriv-output">
+          <div style="font-family:var(--mono);font-size:0.6rem;color:var(--accent3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem">❌ Naïve Approach</div>
+          <div class="deriv-row"><span>Cost multiplier</span><span class="deriv-val" id="naiveCost" style="color:var(--accent3)">—</span></div>
+          <div class="deriv-row"><span>Equivalent passes</span><span class="deriv-val" id="naivePasses">—</span></div>
+        </div>
+        <div class="deriv-output">
+          <div style="font-family:var(--mono);font-size:0.6rem;color:var(--accent2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem">✅ Backpropagation</div>
+          <div class="deriv-row"><span>Cost multiplier</span><span class="deriv-val" id="backpropCost" style="color:var(--accent2)">—</span></div>
+          <div class="deriv-row"><span>Equivalent passes</span><span class="deriv-val" id="backpropPasses">—</span></div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;font-family:var(--mono);font-size:0.75rem;color:#6b7280;text-align:center" id="scalingVerdict"></div>
+    </div>
+
+    <div class="caveat-box">
+      <div class="caveat-title">⚠ Limitations of derivatives in ML</div>
+      <ul>
+        <li>Derivatives tell you the <em>local</em> slope — they cannot guarantee you find the global best answer, only improve from where you are.</li>
+        <li>If the loss landscape has many valleys, gradient descent can get trapped in a suboptimal valley (local minimum).</li>
+        <li>Partial derivatives assume smooth, differentiable operations. Some functions (like <code>max(0,x)</code>) have no derivative at exactly one point — this requires careful handling.</li>
+      </ul>
+    </div>
+
+    <div class="bridge">
+      <p>Now we know <em>why</em> we need a smarter approach. But how exactly does computing backwards save so much work? The key is a mathematical tool called the <strong>chain rule</strong> — which lets us multiply local effects together to get the global effect.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SECTION 2: CHAIN RULE ══════════ -->
+<section id="chain" class="panel-section">
+  <div class="section-inner">
+    <div class="section-label" style="color:var(--accent2)">Section 02</div>
+    <h2>The Chain Rule — Multiplying Local Effects</h2>
+
+    <p>Suppose you have a two-step machine. Step A squares its input (<code>x²</code>). Step B cubes its input (<code>x³</code>). Feed 3 into A, get 9; feed 9 into B, get 729. If you nudge the original 3 a tiny bit, how much does 729 change? The chain rule answers this by multiplying the local sensitivity of each step together.</p>
+
+    <div class="analogy-box">
+      <p><strong>The courier relay analogy.</strong> Imagine a parcel moving through three couriers. The first courier is 6× faster than expected, so the parcel arrives at depot 2 six times earlier. From depot 2, the second courier is 243× faster. The total speed-up to the destination is 6 × 243 = 1,458×. Each courier only needs to know their own speed — they multiply, and the overall effect compounds.</p>
+    </div>
+
+    <p>Mathematically: if <code>f(x) = (x²)³</code>, the derivative is <code>6x⁵</code>. At <code>x = 3</code>, that's <code>6 × 3⁵ = 1,458</code>. Nudge 3 by 0.01 → output changes by ≈ 14.58. Let's verify that now.</p>
+
+    <!-- INTERACTIVE 2: CHAIN RULE STEP-BY-STEP REVEAL -->
+    <div class="interactive-panel">
+      <div class="panel-instruction">Press "Next Step" to reveal the chain rule one piece at a time</div>
+
+      <div class="chain-machine" id="chainMachine">
+        <div class="chain-box" id="cb-input">
+          <div class="box-label">Input x</div>
+          <div class="box-val" id="chain-x">3</div>
+          <div class="box-rule">—</div>
+        </div>
+        <div class="chain-arrow" id="ca1">→</div>
+        <div class="chain-box" id="cb-A">
+          <div class="box-label">Step A</div>
+          <div class="box-val" id="chain-a">?</div>
+          <div class="box-rule">x²</div>
+        </div>
+        <div class="chain-arrow" id="ca2">→</div>
+        <div class="chain-box" id="cb-B">
+          <div class="box-label">Step B</div>
+          <div class="box-val" id="chain-b">?</div>
+          <div class="box-rule">x³</div>
+        </div>
+        <div class="chain-arrow" id="ca3">→</div>
+        <div class="chain-box" id="cb-out">
+          <div class="box-label">Output</div>
+          <div class="box-val" id="chain-out">?</div>
+          <div class="box-rule">f(3)</div>
+        </div>
+      </div>
+
+      <div class="step-commentary" id="stepCommentary">Click "Next Step" to start walking through the forward pass, then the backward pass.</div>
+
+      <div style="margin-top:1rem;display:grid;gap:0.5rem" id="derivSteps"></div>
+
+      <div style="display:flex;gap:0.75rem;margin-top:1.25rem;flex-wrap:wrap">
+        <button class="btn btn-primary" id="chainNext">Next Step →</button>
+        <button class="btn btn-secondary" id="chainReset">Reset</button>
+      </div>
+      <div style="margin-top:0.75rem;font-family:var(--mono);font-size:0.7rem;color:#4b5563" id="chainStepCounter">Step 0 / 6</div>
+
+      <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--panel-border)">
+        <div class="panel-instruction">Try a different x value — see the chain rule recalculate live</div>
+        <div class="range-row">
+          <span style="font-family:var(--mono);font-size:0.8rem;color:#6b7280">x =</span>
+          <input type="range" id="xSlider" min="1" max="5" value="3" step="0.5">
+          <span class="range-val" id="xDisplay">3</span>
+        </div>
+        <div style="margin-top:0.75rem;display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem">
+          <div class="deriv-output">
+            <div class="deriv-row"><span>A output (x²)</span></div>
+            <div class="deriv-row"><span class="deriv-highlight" id="live-a">9</span></div>
+          </div>
+          <div class="deriv-output">
+            <div class="deriv-row"><span>B output (x⁶)</span></div>
+            <div class="deriv-row"><span class="deriv-highlight" id="live-b">729</span></div>
+          </div>
+          <div class="deriv-output">
+            <div class="deriv-row"><span>Derivative (6x⁵)</span></div>
+            <div class="deriv-row"><span class="deriv-highlight" id="live-d" style="color:var(--accent2)">1458</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caveat-box">
+      <div class="caveat-title">⚠ What the chain rule cannot do</div>
+      <ul>
+        <li>It requires every function in the chain to be differentiable at the point you evaluate it. Not all activation functions are (though workarounds exist).</li>
+        <li>In very deep chains (hundreds of steps), repeatedly multiplying small numbers makes the gradient shrink to near-zero — the <strong>vanishing gradient</strong> problem. Modern architectures work hard to avoid this.</li>
+        <li>Conversely, if numbers are large, gradients can <strong>explode</strong> — the network update becomes wildly unstable.</li>
+      </ul>
+    </div>
+
+    <div class="bridge" style="background:var(--panel-bg);border-left-color:var(--accent);">
+      <p style="color:var(--accent) !important">The chain rule gives us the mathematical backbone. Now let's apply it to a real model with weights, data, and a loss function — seeing both the forward and backward passes in action.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SECTION 3: FORWARD PASS ══════════ -->
+<section id="forward" class="reading-section">
+  <div class="section-inner">
+    <div class="section-label">Section 03</div>
+    <h2>The Forward Pass — Computing the Error</h2>
+
+    <p>Before we can go backward, we must go forward. The forward pass is the model making its <strong>prediction</strong> and computing how wrong it is (the <strong>loss</strong>). Think of it as an accountant tallying up the bill before they figure out where the money went.</p>
+
+    <p>Let's use a simplified example: a model that predicts <strong>idli batter fermentation time</strong> (in hours) from two measurements — the temperature of the kitchen (in °C) and the ratio of urad dal to rice. The model uses two weights, <code>w1</code> (temperature weight) and <code>w2</code> (ratio weight).</p>
+
+    <div class="analogy-box">
+      <p><strong>The recipe dial analogy.</strong> Imagine you have two dials on a pressure cooker — one controls the heat (w1) and one controls the steam valve (w2). You run a batch of idlis and the cook time is wrong. Before you can fix the dials, you first need to measure <em>how wrong</em> the output was. That measurement is the loss. The forward pass is the cooking run; the backward pass is the diagnosis.</p>
+    </div>
+
+    <div class="tamil-example">
+      <div class="label">Tamil example: predicting idli fermentation</div>
+      <div class="tamil-text">இட்லி மாவு புளிக்கும் நேரம்</div>
+      <div class="tamil-roman">iṭli māvu puḷikkum nēram</div>
+      <div class="tamil-trans">"The time for idli batter to ferment" — our prediction target. Two inputs: kitchen temperature and batter ratio. We multiply each by a weight and sum them to get our predicted fermentation hours.</div>
+    </div>
+
+    <!-- INTERACTIVE 3: BUILD-IT-YOURSELF FORWARD PASS -->
+    <div class="interactive-panel" style="background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:12px;padding:2rem">
+      <div class="panel-instruction">Adjust the weights, then press "Run Forward Pass" to calculate loss step-by-step</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+        <div>
+          <label style="font-family:var(--mono);font-size:0.7rem;color:#6b7280;display:block;margin-bottom:0.4rem">w1 (temperature weight)</label>
+          <div class="range-row">
+            <input type="range" id="w1Slider" min="0" max="5" value="2" step="0.5">
+            <span class="range-val" id="w1Display">2.0</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:0.7rem;color:#6b7280;display:block;margin-bottom:0.4rem">w2 (ratio weight)</label>
+          <div class="range-row">
+            <input type="range" id="w2Slider" min="0" max="10" value="4" step="0.5">
+            <span class="range-val" id="w2Display">4.0</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="runForward">▶ Run Forward Pass</button>
+
+      <div style="margin-top:1.25rem" id="forwardSteps"></div>
+    </div>
+
+    <div class="caveat-box">
+      <div class="caveat-title">⚠ What the forward pass alone cannot tell you</div>
+      <ul>
+        <li>The loss number tells you <em>how wrong</em> you are, not <em>which weight to blame</em> or which direction to adjust it.</li>
+        <li>Squaring the error (which is standard) means a prediction that's too high and one that's too low look equally bad — you still don't know the direction without backprop.</li>
+        <li>Loss computed on a small batch of examples may not represent how the model performs overall — this is the <strong>generalisation</strong> problem, a separate challenge.</li>
+      </ul>
+    </div>
+
+    <div class="bridge">
+      <p>We have the error. Now the real magic: we run the calculation <em>backwards</em> through each step, accumulating how much each weight contributed to that error. This is backpropagation.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SECTION 4: BACKWARD PASS ══════════ -->
+<section id="backward" class="panel-section">
+  <div class="section-inner">
+    <div class="section-label" style="color:var(--accent2)">Section 04</div>
+    <h2>The Backward Pass — Tracing Blame</h2>
+
+    <p>Now we run the same data <em>backwards</em>. Starting from the loss (a single number), we apply the chain rule at each step, multiplying local derivatives together as we flow toward each weight. The result at each weight is its <strong>gradient</strong> — the exact number that tells us how much the loss will change if we nudge that weight.</p>
+
+    <div class="analogy-box">
+      <p><strong>The blame-tracing analogy.</strong> A cricket match is lost by 5 runs. The coach doesn't just say "we lost" — they trace backward: the last over cost 14 runs, and in that over, one bowler conceded a wide that cost 3. Backpropagation does the same: it attributes a share of the total loss to each decision (weight) in the model, most-recent decisions first.</p>
+    </div>
+
+    <div class="tamil-example">
+      <div class="label">Tamil everyday example</div>
+      <div class="tamil-text">தப்பு யாரால் வந்தது?</div>
+      <div class="tamil-roman">tappu yārāl vantathu?</div>
+      <div class="tamil-trans">"Who caused the mistake?" — the question backpropagation answers for each weight, precisely and efficiently.</div>
+    </div>
+
+    <!-- INTERACTIVE 4: STEP-BY-STEP BACKWARD PASS REVEAL -->
+    <div class="interactive-panel">
+      <div class="panel-instruction">Press "Reveal Next Step" to walk through the backward pass one calculation at a time</div>
+
+      <div style="background:var(--panel-bg);border-radius:8px;padding:1rem;margin-bottom:1rem;font-family:var(--mono);font-size:0.8rem;color:#6b7280">
+        <span style="color:var(--accent2)">Setup: </span>
+        Using w1 = 2, w2 = 4 | Data: temp = 30°C, ratio = 3 | Actual fermentation = 18 hrs<br>
+        <span style="color:#4b5563">Prediction = w1×temp + w2×ratio = 2×30 + 4×3 = 72. Error = 72−18 = 54. Loss = 54² = 2,916</span>
+      </div>
+
+      <div id="backwardStepsContainer"></div>
+
+      <div class="grad-result" id="gradResult">
+        <div style="font-family:var(--mono);font-size:0.65rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Gradients Computed ✓</div>
+        <div class="result-row">
+          <div class="result-item">
+            <div class="result-label">∂Loss / ∂w1</div>
+            <div class="result-val">3,240</div>
+            <div style="font-size:0.75rem;color:#6b7280;font-family:var(--mono)">nudge w1 up → loss rises</div>
+          </div>
+          <div class="result-item">
+            <div class="result-label">∂Loss / ∂w2</div>
+            <div class="result-val">324</div>
+            <div style="font-size:0.75rem;color:#6b7280;font-family:var(--mono)">nudge w2 up → loss rises</div>
+          </div>
+        </div>
+        <div style="margin-top:1rem;font-size:0.85rem;color:#9ca3af;">
+          Since both gradients are <em>positive</em>, we should <em>decrease</em> both w1 and w2 to reduce the loss. We subtract a small fraction of the gradient from each weight.
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.75rem;margin-top:1.25rem;flex-wrap:wrap">
+        <button class="btn btn-teal" id="backNext">Reveal Next Step →</button>
+        <button class="btn btn-secondary" id="backReset">Reset</button>
+      </div>
+      <div style="margin-top:0.75rem;font-family:var(--mono);font-size:0.7rem;color:#4b5563" id="backStepCounter">Step 0 / 5</div>
+    </div>
+
+    <div style="margin-top:2rem;background:var(--panel-bg2);border-radius:8px;padding:1.5rem">
+      <h3 style="font-size:1rem;margin-top:0">Why do multiple paths to the same weight get <em>added</em>?</h3>
+      <p style="font-size:0.9rem;">If w1 flows through three separate data points (like three batches of idli batter), each one independently tells you how the loss would change. The total effect is the sum — because an increase in w1 simultaneously affects all three data points, and their effects on the loss stack up.</p>
+    </div>
+
+    <div class="caveat-box">
+      <div class="caveat-title">⚠ What backpropagation cannot guarantee</div>
+      <ul>
+        <li>Backprop computes the gradient exactly, but using that gradient to update weights (gradient descent) still requires choosing a <strong>learning rate</strong> — too large and you overshoot, too small and training takes forever.</li>
+        <li>Backprop requires storing all intermediate values from the forward pass in memory. For very deep networks, this memory cost is enormous.</li>
+        <li>Backprop works backward through time in sequences, but very long sequences cause the vanishing/exploding gradient problem — this is one reason transformers replaced older recurrent networks.</li>
+      </ul>
+    </div>
+
+    <div class="bridge" style="background:var(--panel-bg);border-left-color:var(--accent);">
+      <p style="color:var(--accent) !important">We can compute the gradient. Now let's put it all together and watch a model actually <em>learn</em> — forward pass, gradients, weight update, and repeat.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SECTION 5: TRAINING LOOP ══════════ -->
+<section id="training" class="reading-section">
+  <div class="section-inner">
+    <div class="section-label">Section 05</div>
+    <h2>The Training Loop — Iterate Until Right</h2>
+
+    <p>All the pieces come together in the <strong>training loop</strong>. It's a four-step cycle that repeats thousands or millions of times:</p>
+
+    <p><strong>1.</strong> Run the forward pass → get the loss. &nbsp;<strong>2.</strong> Run the backward pass → get the gradients. &nbsp;<strong>3.</strong> Update each weight by subtracting a small fraction of its gradient. &nbsp;<strong>4.</strong> Repeat.</p>
+
+    <div class="analogy-box">
+      <p><strong>The dosai temperature analogy.</strong> You're learning to make the perfect dosai. You cook one (forward pass), taste it and note how far off it is (loss). You think about which factor — tawa heat, batter thickness — was most responsible (backward pass). You adjust each dial slightly (weight update). You cook another dosai. Over many batches, you converge on the perfect settings — even if your first few attempts were terrible.</p>
+    </div>
+
+    <!-- INTERACTIVE 5: TRAINING LOOP SIMULATOR -->
+    <div class="interactive-panel" style="background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:12px;padding:2rem">
+      <div class="panel-instruction">Press "Run Training" to simulate gradient descent and watch the loss fall</div>
+
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.25rem">
+        <div>
+          <label style="font-family:var(--mono);font-size:0.65rem;color:#6b7280;display:block;margin-bottom:0.4rem">Learning Rate</label>
+          <div class="range-row">
+            <input type="range" id="lrSlider" min="1" max="5" value="3" step="1">
+            <span class="range-val" id="lrDisplay">0.001</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:0.65rem;color:#6b7280;display:block;margin-bottom:0.4rem">Data points</label>
+          <div class="range-row">
+            <input type="range" id="dataSlider" min="3" max="20" value="8" step="1">
+            <span class="range-val" id="dataDisplay">8</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.25rem">
+        <button class="btn btn-primary" id="trainBtn">▶ Run Training</button>
+        <button class="btn btn-secondary" id="trainReset">Reset</button>
+      </div>
+
+      <div class="training-canvas-wrap">
+        <canvas id="trainingCanvas" height="220"></canvas>
+      </div>
+
+      <div class="training-stats">
+        <div class="stat-box">
+          <div class="stat-label">Step</div>
+          <div class="stat-val accent" id="trainStep">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Current Loss</div>
+          <div class="stat-val" id="trainLoss">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Reduction</div>
+          <div class="stat-val teal" id="trainReduction">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caveat-box">
+      <div class="caveat-title">⚠ What can go wrong during training</div>
+      <ul>
+        <li><strong>Learning rate too high:</strong> The loss bounces around and never settles — you overshoot the minimum every time.</li>
+        <li><strong>Learning rate too low:</strong> Training converges, but it takes so long it is impractical.</li>
+        <li><strong>Overfitting:</strong> The model learns the training data so well that it fails on new data — it has memorised examples rather than learned general patterns.</li>
+        <li><strong>Convergence to local minima:</strong> The gradient descent gets stuck in a local dip that is not the globally best solution.</li>
+      </ul>
+    </div>
+
+    <div class="bridge">
+      <p>You've now seen every piece of the puzzle. Let's step back and map all of these concepts onto a single visual landscape — and see where they fit in the bigger story of how modern AI is trained.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SECTION 6: BIG PICTURE ══════════ -->
+<section id="bigpicture" class="big-picture-section">
+  <div class="section-inner">
+    <div class="section-label" style="color:var(--gold)">Section 06</div>
+    <h2 style="color:var(--text-bright)">The Big Picture</h2>
+    <p>Every concept we covered is a link in a single chain. Click each stop on the journey to expand it.</p>
+
+    <div class="journey-map">
+      <div class="journey-item" onclick="toggleJourney(0)">
+        <div class="journey-dot" style="background:rgba(232,128,58,0.2);border-color:var(--accent);color:var(--accent)">1</div>
+        <div class="journey-content">
+          <h4>Weights & Loss</h4>
+          <p>The model has dials (weights). The error is measured as loss.</p>
+          <div class="journey-detail" id="jd0">The loss is a single number summarising how wrong the model's predictions are across all training examples. Minimising it is the entire goal of training. Without a clear error signal, there is nothing to learn from.</div>
+        </div>
+      </div>
+      <div class="journey-item" onclick="toggleJourney(1)">
+        <div class="journey-dot" style="background:rgba(77,184,160,0.2);border-color:var(--accent2);color:var(--accent2)">2</div>
+        <div class="journey-content">
+          <h4>Partial Derivatives</h4>
+          <p>For each weight, we ask: nudge it a tiny bit — does the loss go up or down, and by how much?</p>
+          <div class="journey-detail" id="jd1">This is the partial derivative of the loss with respect to that weight. It gives us both the direction (positive = increase the loss, so go the other way) and the magnitude of the effect. Calculating this for billions of weights naïvely is catastrophically expensive.</div>
+        </div>
+      </div>
+      <div class="journey-item" onclick="toggleJourney(2)">
+        <div class="journey-dot" style="background:rgba(212,168,71,0.2);border-color:var(--gold);color:var(--gold)">3</div>
+        <div class="journey-content">
+          <h4>The Chain Rule</h4>
+          <p>Derivatives of chained functions multiply together — like compounding relay speeds.</p>
+          <div class="journey-detail" id="jd2">The chain rule is the mathematical insight that makes backpropagation possible. It says: the derivative of the whole pipeline is the product of the derivative at each individual step. This lets us compute local sensitivities and combine them, rather than re-deriving everything from scratch for each weight.</div>
+        </div>
+      </div>
+      <div class="journey-item" onclick="toggleJourney(3)">
+        <div class="journey-dot" style="background:rgba(196,92,138,0.2);border-color:var(--accent3);color:var(--accent3)">4</div>
+        <div class="journey-content">
+          <h4>Backpropagation</h4>
+          <p>By starting from the loss and flowing backward, we compute ALL gradients in ~2× the cost of one forward pass.</p>
+          <div class="journey-detail" id="jd3">Instead of computing each partial derivative separately (which would multiply the cost by the number of weights), backpropagation computes all gradients in a single backward sweep. It reuses intermediate results — like solving a maze from the centre. This is what made training large neural networks feasible.</div>
+        </div>
+      </div>
+      <div class="journey-item" onclick="toggleJourney(4)">
+        <div class="journey-dot" style="background:rgba(232,128,58,0.2);border-color:var(--accent);color:var(--accent)">5</div>
+        <div class="journey-content">
+          <h4>Gradient Descent</h4>
+          <p>Each weight is nudged slightly in the direction that reduces loss. Repeat thousands of times.</p>
+          <div class="journey-detail" id="jd4">Gradient descent uses the computed gradients to update weights: new_weight = old_weight − learning_rate × gradient. The learning rate controls the step size. Over many iterations, the model gradually converges to weights that produce accurate predictions.</div>
+        </div>
+      </div>
+      <div class="journey-item" onclick="toggleJourney(5)">
+        <div class="journey-dot" style="background:rgba(77,184,160,0.2);border-color:var(--accent2);color:var(--accent2)">6</div>
+        <div class="journey-content">
+          <h4>Training at Scale</h4>
+          <p>The same loop — forward, backward, update — trains models with trillions of parameters.</p>
+          <div class="journey-detail" id="jd5">Modern large language models use this exact training loop, applied to vast datasets with trillions of weights. The mathematics is identical to our simple two-weight example — only the scale differs. Specialised hardware (GPUs/TPUs) parallelises the forward and backward passes across thousands of cores simultaneously.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text-bright);margin-top:3rem">Scale & Complexity Comparison</h3>
+    <table class="complexity-table">
+      <thead>
+        <tr>
+          <th>Concept</th>
+          <th>Complexity</th>
+          <th>Relative Cost</th>
+          <th>What it needs</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="name">Single derivative (manual)</td>
+          <td>Very Low</td>
+          <td class="bar-cell"><div class="bar" style="width:8%"></div></td>
+          <td>Pencil &amp; paper</td>
+        </tr>
+        <tr>
+          <td class="name">Naïve partial derivatives (N weights)</td>
+          <td>Very High</td>
+          <td class="bar-cell"><div class="bar" style="width:95%;background:var(--accent3)"></div></td>
+          <td>N × forward-pass time</td>
+        </tr>
+        <tr>
+          <td class="name">Chain rule (2-step)</td>
+          <td>Low</td>
+          <td class="bar-cell"><div class="bar" style="width:12%"></div></td>
+          <td>2 multiplications</td>
+        </tr>
+        <tr>
+          <td class="name">Backpropagation (all gradients)</td>
+          <td>Low</td>
+          <td class="bar-cell"><div class="bar" style="width:18%;background:var(--accent2)"></div></td>
+          <td>~2× one forward pass</td>
+        </tr>
+        <tr>
+          <td class="name">Training loop (1,000 steps)</td>
+          <td>Medium</td>
+          <td class="bar-cell"><div class="bar" style="width:40%;background:var(--gold)"></div></td>
+          <td>Backprop × 1,000</td>
+        </tr>
+        <tr>
+          <td class="name">Modern LLM training</td>
+          <td>Enormous</td>
+          <td class="bar-cell"><div class="bar" style="width:100%;background:linear-gradient(to right,var(--accent),var(--accent3))"></div></td>
+          <td>Months on thousands of GPUs</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="final-sentence">
+      <blockquote>
+        Backpropagation is the art of learning from a single number — the total error — by tracing it backward through every decision that produced it, so that every weight in the network knows, precisely and simultaneously, how much it was responsible for being wrong.
+      </blockquote>
+    </div>
+  </div>
+</section>
+
+<script>
+// ── NAV SCROLL HIGHLIGHT ──
+const navItems = document.querySelectorAll('.nav-item');
+const sections = document.querySelectorAll('section[id]');
+function updateNav() {
+  let current = '';
+  sections.forEach(s => {
+    const top = s.getBoundingClientRect().top;
+    if (top < 100) current = s.id;
+  });
+  navItems.forEach(n => {
+    n.classList.toggle('active', n.getAttribute('href') === '#' + current);
+  });
+}
+window.addEventListener('scroll', updateNav, { passive: true });
+
+// ── SECTION 1: SCALING DEMO ──
+const weightSteps = [1e3,1e4,1e5,1e6,1e7,1e8,1e9,1e10,1e11];
+function fmt(n) {
+  if (n >= 1e12) return (n/1e12).toFixed(1)+'T';
+  if (n >= 1e9) return (n/1e9).toFixed(0)+'B';
+  if (n >= 1e6) return (n/1e6).toFixed(0)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
+  return n.toString();
+}
+document.getElementById('weightSlider').addEventListener('input', function() {
+  const n = weightSteps[+this.value - 1];
+  document.getElementById('weightDisplay').textContent = fmt(n);
+  document.getElementById('naiveCost').textContent = fmt(n) + '×';
+  document.getElementById('naivePasses').textContent = fmt(n);
+  document.getElementById('backpropCost').textContent = '~2×';
+  document.getElementById('backpropPasses').textContent = '~2';
+  document.getElementById('scalingVerdict').textContent =
+    `Backpropagation is ${fmt(n/2)} times cheaper than the naïve approach for ${fmt(n)} weights.`;
+});
+document.getElementById('weightSlider').dispatchEvent(new Event('input'));
+
+// ── SECTION 2: CHAIN RULE STEP-BY-STEP ──
+const chainSteps = [
+  {
+    fwd: true, highlight: 'cb-A', arrow: 'ca1',
+    val: { 'chain-a': '9' },
+    commentary: 'FORWARD: Step A squares the input. 3² = 9. The value 9 flows into Step B.',
+    deriv: null
+  },
+  {
+    fwd: true, highlight: 'cb-B', arrow: 'ca2',
+    val: { 'chain-b': '9', 'chain-out': '729' },
+    commentary: 'FORWARD: Step B cubes its input. 9³ = 729. This is f(3) = (3²)³ = 729. Forward pass complete.',
+    deriv: null
+  },
+  {
+    fwd: false, highlight: 'cb-out', arrow: 'ca3',
+    val: {},
+    commentary: "BACKWARD START: We seed the backward pass with 1. The output\u2019s sensitivity to itself is always 1 \u2014 if the output goes up by \u03b5, it goes up by \u03b5.",
+    deriv: '<div class="chain-deriv-row"><span style="color:#4b5563">Start:</span> <span class="num-badge">1</span> <span style="color:#4b5563">→ (seeded from loss)</span></div>'
+  },
+  {
+    fwd: false, highlight: 'cb-B', arrow: 'ca2',
+    val: {},
+    commentary: "BACKWARD through B: B computed x\u00b3, so its local derivative is 3x\u00b2. At the B-input of 9, that\u2019s 3\u00d79\u00b2 = 243. Multiply incoming 1 by 243 \u2192 pass 243 leftward.",
+    deriv: '<div class="chain-deriv-row"><span style="color:#4b5563">B local derivative: 3×9²=</span><span class="num-badge">243</span></div><div class="chain-deriv-row"><span style="color:#4b5563">Pass backward: 1 × 243 =</span><span class="num-badge">243</span></div>'
+  },
+  {
+    fwd: false, highlight: 'cb-A', arrow: 'ca1',
+    val: {},
+    commentary: 'BACKWARD through A: A computed x\u00b2, so its local derivative is 2x. At the A-input of 3, that\u2019s 2\u00d73 = 6. Multiply incoming 243 by 6 \u2192 pass 1458 leftward.',
+    deriv: '<div class="chain-deriv-row"><span style="color:#4b5563">A local derivative: 2×3=</span><span class="num-badge">6</span></div><div class="chain-deriv-row"><span style="color:#4b5563">Pass backward: 243 × 6 =</span><span class="num-badge">1458</span></div>'
+  },
+  {
+    fwd: false, highlight: 'cb-input', arrow: null,
+    val: {},
+    commentary: '✓ RESULT: The derivative of f(x)=(x²)³ at x=3 is 1,458. This matches the analytical answer 6x⁵ = 6×243 = 1,458. Nudge x by 0.01 → output changes by ≈14.58.',
+    deriv: '<div class="chain-deriv-row"><span style="color:var(--accent2)">df/dx at x=3 =</span><span class="num-badge teal">1458</span></div>'
+  }
+];
+
+let chainStep = 0;
+function renderChain() {
+  // Reset highlights
+  ['cb-input','cb-A','cb-B','cb-out','ca1','ca2','ca3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  const s = chainSteps[chainStep - 1];
+  if (!s) return;
+  document.getElementById(s.highlight)?.classList.add('active');
+  if (s.arrow) document.getElementById(s.arrow)?.classList.add('active');
+  Object.entries(s.val).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  });
+  document.getElementById('stepCommentary').textContent = s.commentary;
+  const ds = document.getElementById('derivSteps');
+  if (s.deriv) ds.innerHTML += s.deriv;
+  document.getElementById('chainStepCounter').textContent = `Step ${chainStep} / ${chainSteps.length}`;
+  document.getElementById('chainNext').disabled = chainStep >= chainSteps.length;
+}
+document.getElementById('chainNext').addEventListener('click', () => { if (chainStep < chainSteps.length) { chainStep++; renderChain(); }});
+document.getElementById('chainReset').addEventListener('click', () => {
+  chainStep = 0;
+  ['chain-a','chain-b','chain-out'].forEach(id => document.getElementById(id).textContent = '?');
+  document.getElementById('stepCommentary').textContent = 'Click "Next Step" to start walking through the forward pass, then the backward pass.';
+  document.getElementById('derivSteps').innerHTML = '';
+  document.getElementById('chainStepCounter').textContent = 'Step 0 / 6';
+  document.getElementById('chainNext').disabled = false;
+  ['cb-input','cb-A','cb-B','cb-out','ca1','ca2','ca3'].forEach(id => {
+    document.getElementById(id)?.classList.remove('active');
+  });
+});
+
+// Live x slider
+document.getElementById('xSlider').addEventListener('input', function() {
+  const x = parseFloat(this.value);
+  document.getElementById('xDisplay').textContent = x.toFixed(1);
+  document.getElementById('live-a').textContent = (x*x).toFixed(2);
+  document.getElementById('live-b').textContent = Math.pow(x,6).toFixed(2);
+  document.getElementById('live-d').textContent = (6*Math.pow(x,5)).toFixed(2);
+});
+
+// ── SECTION 3: FORWARD PASS BUILD-IT ──
+const data3 = [
+  { temp: 30, ratio: 3, actual: 18 },
+  { temp: 25, ratio: 4, actual: 20 },
+  { temp: 28, ratio: 2, actual: 14 }
+];
+let w1=2, w2=4;
+document.getElementById('w1Slider').addEventListener('input', function() {
+  w1 = parseFloat(this.value);
+  document.getElementById('w1Display').textContent = w1.toFixed(1);
+});
+document.getElementById('w2Slider').addEventListener('input', function() {
+  w2 = parseFloat(this.value);
+  document.getElementById('w2Display').textContent = w2.toFixed(1);
+});
+document.getElementById('runForward').addEventListener('click', function() {
+  const container = document.getElementById('forwardSteps');
+  container.innerHTML = '';
+  let totalLoss = 0;
+  data3.forEach((d, i) => {
+    const pred = w1 * d.temp + w2 * d.ratio;
+    const err = pred - d.actual;
+    const sq = err * err;
+    totalLoss += sq;
+    const row = document.createElement('div');
+    row.style.cssText = 'background:var(--panel-bg2);border:1px solid var(--panel-border);border-radius:6px;padding:0.85rem 1rem;margin:0.4rem 0;font-family:var(--mono);font-size:0.78rem;color:#9ca3af;animation:fadeIn 0.4s ease;animation-delay:' + (i*0.15) + 's;opacity:0;animation-fill-mode:forwards';
+    row.innerHTML = '<span style="color:var(--accent2)">Batch ' + (i+1) + ':</span> &nbsp;' + w1.toFixed(1) + ' &times; ' + d.temp + ' + ' + w2.toFixed(1) + ' &times; ' + d.ratio + ' = <span style="color:var(--text-bright)">' + pred.toFixed(1) + '</span> &nbsp;| actual=' + d.actual + ' &nbsp;error=<span style="color:' + (Math.abs(err)>5?'var(--accent3)':'var(--text-bright)') + '">' + err.toFixed(1) + '</span> &nbsp;| squared=<span style="color:var(--gold)">' + sq.toFixed(1) + '</span>';
+    container.appendChild(row);
+  });
+  const total = document.createElement('div');
+  total.style.cssText = 'background:rgba(232,128,58,0.1);border:1px solid var(--accent);border-radius:6px;padding:1rem;margin:0.75rem 0 0;text-align:center;font-family:var(--mono);animation:fadeIn 0.4s ease 0.5s;opacity:0;animation-fill-mode:forwards';
+  total.innerHTML = `<span style="color:#6b7280;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em">Total Loss (sum of squared errors)</span><br><span style="font-size:2rem;color:var(--accent);font-weight:700">${totalLoss.toFixed(1)}</span>`;
+  container.appendChild(total);
+});
+
+// ── SECTION 4: BACKWARD PASS REVEAL ──
+// Using concrete values: w1=2, w2=4, 1 data point: temp=30, ratio=3, actual=18
+// pred = 72, error = 54, loss = 2916
+// dLoss/dError = 2*error = 108
+// dLoss/dPred = 108 (since dPred/dError = 1)
+// dLoss/dw1 = 108 * temp = 108*30 = 3240
+// dLoss/dw2 = 108 * ratio = 108*3 = 324
+const backSteps = [
+  {
+    num: 'Step 1 / 5',
+    title: 'Start at the loss',
+    eq: 'Loss = Error² = 54² = 2,916',
+    text: 'We start at the very end — the loss node. We seed the backward pass with a 1 (the derivative of the loss with respect to itself is always 1).',
+  },
+  {
+    num: 'Step 2 / 5',
+    title: 'Backprop through the squaring step',
+    eq: 'd(Error²)/d(Error) = 2 × Error = 2 × 54 = 108',
+    text: 'The squaring box has derivative 2×input. The input during the forward pass was 54 (the error). So we multiply incoming gradient (1) by 108. Value flowing further back: 108.',
+  },
+  {
+    num: 'Step 3 / 5',
+    title: 'Backprop through the subtraction step',
+    eq: 'd(pred − actual)/d(pred) = 1',
+    text: 'Subtracting the actual value (18) from the prediction is linear — its derivative is simply 1. We multiply 108 by 1 = 108 flowing back toward the prediction.',
+  },
+  {
+    num: 'Step 4 / 5',
+    title: 'Backprop to w1 (temperature branch)',
+    eq: '∂Loss/∂w1 = 108 × temp = 108 × 30 = 3,240',
+    text: 'The prediction included the term w1 × temp. The derivative with respect to w1 is simply temp = 30. Multiply the incoming gradient 108 by 30 → gradient for w1 is 3,240.',
+  },
+  {
+    num: 'Step 5 / 5',
+    title: 'Backprop to w2 (ratio branch)',
+    eq: '∂Loss/∂w2 = 108 × ratio = 108 × 3 = 324',
+    text: 'Similarly, the term w2 × ratio has derivative w.r.t. w2 equal to ratio = 3. Multiply 108 by 3 → gradient for w2 is 324. All gradients computed in one backward sweep!',
+  }
+];
+
+let backStep = 0;
+const bsc = document.getElementById('backwardStepsContainer');
+document.getElementById('backNext').addEventListener('click', function() {
+  if (backStep < backSteps.length) {
+    const s = backSteps[backStep];
+    const div = document.createElement('div');
+    div.className = 'backward-step visible';
+    div.innerHTML = '<div class="step-num">' + s.num + ' \u2014 ' + s.title + '</div><div class="step-equation">' + s.eq + '</div><p>' + s.text + '</p>';
+    bsc.appendChild(div);
+    backStep++;
+    document.getElementById('backStepCounter').textContent = `Step ${backStep} / ${backSteps.length}`;
+    if (backStep === backSteps.length) {
+      document.getElementById('gradResult').classList.add('visible');
+      this.disabled = true;
+    }
+    div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+});
+document.getElementById('backReset').addEventListener('click', function() {
+  backStep = 0;
+  bsc.innerHTML = '';
+  document.getElementById('gradResult').classList.remove('visible');
+  document.getElementById('backNext').disabled = false;
+  document.getElementById('backStepCounter').textContent = 'Step 0 / 5';
+});
+
+// ── SECTION 5: TRAINING LOOP SIMULATOR ──
+const lrValues = [0.00005, 0.0001, 0.001, 0.005, 0.02];
+const lrLabels = ['0.00005','0.0001','0.001','0.005','0.02'];
+let lrIdx = 2;
+document.getElementById('lrSlider').addEventListener('input', function() {
+  lrIdx = +this.value - 1;
+  document.getElementById('lrDisplay').textContent = lrLabels[lrIdx];
+});
+document.getElementById('dataSlider').addEventListener('input', function() {
+  document.getElementById('dataDisplay').textContent = this.value;
+});
+
+let trainAnim = null;
+let lossHistory = [];
+
+function genData(n) {
+  // y = 1.5*x1 + 2.5*x2 + noise; x1,x2 in [10,40]
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = 10 + Math.random()*30;
+    const x2 = 1 + Math.random()*5;
+    const y = 1.5*x1 + 2.5*x2 + (Math.random()-0.5)*4;
+    data.push({x1, x2, y});
+  }
+  return data;
+}
+
+function drawCanvas(history, step) {
+  const canvas = document.getElementById('trainingCanvas');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = 220;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, 0, W, H);
+
+  if (history.length < 2) return;
+
+  const pad = { t:20, r:20, b:40, l:55 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+
+  const maxLoss = Math.max(...history);
+  const minLoss = Math.min(...history);
+  const range = maxLoss - minLoss || 1;
+
+  // Grid
+  ctx.strokeStyle = '#1e2533'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (ph * i / 4);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
+    ctx.fillStyle = '#3a4555'; ctx.font = `${Math.round(9*dpr)/dpr}px IBM Plex Mono`;
+    const val = maxLoss - range * (i/4);
+    ctx.fillText(val.toFixed(1), 4, y + 4);
+  }
+
+  // X axis
+  ctx.fillStyle = '#3a4555'; ctx.font = `${Math.round(9*dpr)/dpr}px IBM Plex Mono`;
+  for (let i = 0; i <= 4; i++) {
+    const x = pad.l + pw * i / 4;
+    const idx = Math.round(history.length * i / 4);
+    ctx.fillText(idx.toString(), x - 8, H - 8);
+  }
+
+  // Axis labels
+  ctx.fillStyle = '#6b7280'; ctx.font = `${Math.round(9*dpr)/dpr}px IBM Plex Mono`;
+  ctx.fillText('Loss', 4, pad.t - 4);
+  ctx.fillText('Step', pad.l + pw/2 - 10, H - 2);
+
+  // Loss curve
+  const grad = ctx.createLinearGradient(pad.l, 0, pad.l + pw, 0);
+  grad.addColorStop(0, '#e8803a');
+  grad.addColorStop(1, '#4db8a0');
+  ctx.strokeStyle = grad; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  history.forEach((loss, i) => {
+    const x = pad.l + (i / (history.length - 1)) * pw;
+    const y = pad.t + ph * (1 - (loss - minLoss) / range);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Current dot
+  if (history.length > 0) {
+    const last = history[history.length-1];
+    const cx = pad.l + pw;
+    const cy = pad.t + ph * (1 - (last - minLoss) / range);
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2);
+    ctx.fillStyle = '#4db8a0'; ctx.fill();
+  }
+}
+
+let trainData = [];
+let trW1 = 0, trW2 = 0;
+let trStep = 0, initialLoss = null;
+
+document.getElementById('trainBtn').addEventListener('click', function() {
+  if (trainAnim) { cancelAnimationFrame(trainAnim); trainAnim = null; }
+  const n = +document.getElementById('dataSlider').value;
+  const lr = lrValues[lrIdx];
+  trainData = genData(n);
+  lossHistory = [];
+  trW1 = Math.random() * 3; trW2 = Math.random() * 5;
+  trStep = 0; initialLoss = null;
+  this.disabled = true;
+
+  function computeLoss() {
+    let L = 0;
+    trainData.forEach(d => { const e = (trW1*d.x1 + trW2*d.x2) - d.y; L += e*e; });
+    return L / trainData.length;
+  }
+
+  function step() {
+    // SGD
+    let g1 = 0, g2 = 0;
+    trainData.forEach(d => {
+      const e = (trW1*d.x1 + trW2*d.x2) - d.y;
+      g1 += 2*e*d.x1 / trainData.length;
+      g2 += 2*e*d.x2 / trainData.length;
+    });
+    trW1 -= lr * g1;
+    trW2 -= lr * g2;
+    trStep++;
+    const L = computeLoss();
+    lossHistory.push(L);
+    if (!initialLoss) initialLoss = lossHistory[0];
+    drawCanvas(lossHistory, trStep);
+    document.getElementById('trainStep').textContent = trStep;
+    document.getElementById('trainLoss').textContent = L.toFixed(2);
+    const red = initialLoss ? ((1 - L/initialLoss)*100).toFixed(1) + '%' : '—';
+    document.getElementById('trainReduction').textContent = red;
+    if (trStep < 300) {
+      trainAnim = requestAnimationFrame(step);
+    } else {
+      document.getElementById('trainBtn').disabled = false;
+    }
+  }
+  lossHistory.push(computeLoss());
+  initialLoss = lossHistory[0];
+  trainAnim = requestAnimationFrame(step);
+});
+
+document.getElementById('trainReset').addEventListener('click', function() {
+  if (trainAnim) { cancelAnimationFrame(trainAnim); trainAnim = null; }
+  lossHistory = []; trStep = 0; initialLoss = null;
+  document.getElementById('trainStep').textContent = '0';
+  document.getElementById('trainLoss').textContent = '—';
+  document.getElementById('trainReduction').textContent = '—';
+  document.getElementById('trainBtn').disabled = false;
+  drawCanvas([], 0);
+});
+
+// ── SECTION 6: JOURNEY MAP ──
+function toggleJourney(i) {
+  const el = document.getElementById('jd' + i);
+  el.classList.toggle('open');
+}
+
+// Init canvas
+drawCanvas([], 0);
+</script>
+</body>
+</html>
